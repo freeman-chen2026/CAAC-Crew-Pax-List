@@ -2,12 +2,11 @@ import streamlit as st
 import pandas as pd
 from io import BytesIO
 from openpyxl import load_workbook
-from openpyxl.utils import get_column_letter
 import re
 
-st.set_page_config(page_title="通用声明 → 备案表生成器", layout="wide")
-st.title("🛫 通用声明 → 公务飞行计划信息备案表")
-st.markdown("上传通用声明 Excel，自动提取机组和乘客信息，填入备案表模板。")
+st.set_page_config(page_title="GD单 → 备案表生成器", layout="wide")
+st.title("🛫 GD单 → 公务飞行计划信息备案表")
+st.markdown("上传 GD单（General Declaration）Excel，自动提取机组和乘客信息，填入备案表模板。")
 
 # ---------- 国籍映射 ----------
 NATION_MAP = {
@@ -28,7 +27,6 @@ def get_nation_name(code):
     return NATION_MAP.get(code, code)
 
 def extract_chinese_name(full_name):
-    """优先提取中文姓名，若无则返回全名"""
     if not full_name:
         return ""
     parts = full_name.split()
@@ -39,7 +37,6 @@ def extract_chinese_name(full_name):
         return full_name
 
 def parse_document_type(passport_no, doc_type):
-    """根据证件号和证件类型判断：身份证 or 护照"""
     doc_type_str = str(doc_type).strip() if pd.notna(doc_type) else ""
     if "身份证" in doc_type_str or "居民身份证" in doc_type_str:
         return "身份证"
@@ -52,7 +49,24 @@ def parse_document_type(passport_no, doc_type):
     else:
         return "护照"
 
-# ---------- 解析通用声明 ----------
+# ---------- 安全写入合并单元格 ----------
+def safe_set_cell_value(ws, row, col, value):
+    """
+    如果目标单元格属于合并区域，则找到合并区域的左上角并赋值；
+    否则直接赋值。
+    """
+    # 检查是否有合并区域包含该单元格
+    for merged_range in ws.merged_cells.ranges:
+        if row in merged_range and col in merged_range:
+            # 获取左上角行列
+            top_row = merged_range.min_row
+            top_col = merged_range.min_col
+            ws.cell(row=top_row, column=top_col).value = value
+            return
+    # 不在合并区域内，直接赋值
+    ws.cell(row=row, column=col).value = value
+
+# ---------- 解析 GD单 ----------
 def parse_general_declaration(file_bytes):
     wb = load_workbook(file_bytes)
     ws = wb.active
@@ -136,8 +150,6 @@ def parse_general_declaration(file_bytes):
 
 # ---------- 填充模板 ----------
 def fill_template(template_bytes, data, crew_list, passenger_list):
-    # 检查模板文件是否为有效的 .xlsx / .xlsm
-    # 使用 try-except 捕获 BadZipFile 错误并给出明确提示
     try:
         wb = load_workbook(template_bytes)
     except Exception as e:
@@ -154,19 +166,15 @@ def fill_template(template_bytes, data, crew_list, passenger_list):
             if cell.value and isinstance(cell.value, str):
                 val = cell.value.strip()
                 if "机型" in val:
-                    target = ws.cell(row=cell.row, column=cell.column+1)
-                    target.value = data.get("ac_type", "")
+                    safe_set_cell_value(ws, cell.row, cell.column+1, data.get("ac_type", ""))
                 elif "注册号" in val:
-                    target = ws.cell(row=cell.row, column=cell.column+1)
-                    target.value = data.get("reg", "")
+                    safe_set_cell_value(ws, cell.row, cell.column+1, data.get("reg", ""))
                 elif "航班号" in val:
-                    target = ws.cell(row=cell.row, column=cell.column+1)
-                    target.value = data.get("flt", "")
+                    safe_set_cell_value(ws, cell.row, cell.column+1, data.get("flt", ""))
                 elif "航班行程" in val:
-                    target = ws.cell(row=cell.row, column=cell.column+1)
                     from_ = data.get("from", "")
                     to_ = data.get("to", "")
-                    target.value = f"{from_}-{to_}" if from_ and to_ else ""
+                    safe_set_cell_value(ws, cell.row, cell.column+1, f"{from_}-{to_}" if from_ and to_ else "")
 
     # 2. 机组
     crew_positions = ["机长", "副驾驶", "乘务", "机务"]
@@ -179,11 +187,11 @@ def fill_template(template_bytes, data, crew_list, passenger_list):
                 if cell.value and isinstance(cell.value, str) and position in cell.value:
                     row_num = cell.row
                     # 姓名列（第2列）
-                    ws.cell(row=row_num, column=2).value = extract_chinese_name(crew["name"])
+                    safe_set_cell_value(ws, row_num, 2, extract_chinese_name(crew["name"]))
                     # 性别列（第3列）
-                    ws.cell(row=row_num, column=3).value = crew.get("gender", "")
+                    safe_set_cell_value(ws, row_num, 3, crew.get("gender", ""))
                     # 出生日期列（第4列）
-                    ws.cell(row=row_num, column=4).value = crew.get("dob", "")
+                    safe_set_cell_value(ws, row_num, 4, crew.get("dob", ""))
                     # 证件号码、执照号码、联系方式不填
                     break
 
@@ -213,19 +221,19 @@ def fill_template(template_bytes, data, crew_list, passenger_list):
         for i in range(20):
             row_num = passenger_start_row + i
             for col in range(1, 7):
-                ws.cell(row=row_num, column=col).value = None
+                safe_set_cell_value(ws, row_num, col, None)
         # 写入新数据
         for i, pax in enumerate(passenger_list):
             if i >= 20:
                 break
             row_num = passenger_start_row + i
-            ws.cell(row=row_num, column=1).value = extract_chinese_name(pax["name"])
-            ws.cell(row=row_num, column=2).value = pax.get("gender", "")
-            ws.cell(row=row_num, column=3).value = pax.get("dob", "")
-            ws.cell(row=row_num, column=4).value = get_nation_name(pax.get("nationality", ""))
+            safe_set_cell_value(ws, row_num, 1, extract_chinese_name(pax["name"]))
+            safe_set_cell_value(ws, row_num, 2, pax.get("gender", ""))
+            safe_set_cell_value(ws, row_num, 3, pax.get("dob", ""))
+            safe_set_cell_value(ws, row_num, 4, get_nation_name(pax.get("nationality", "")))
             doc_type = parse_document_type(pax.get("passport_no", ""), pax.get("doc_type", ""))
-            ws.cell(row=row_num, column=5).value = doc_type
-            ws.cell(row=row_num, column=6).value = pax.get("passport_no", "")
+            safe_set_cell_value(ws, row_num, 5, doc_type)
+            safe_set_cell_value(ws, row_num, 6, pax.get("passport_no", ""))
 
     output = BytesIO()
     wb.save(output)
@@ -236,7 +244,7 @@ def fill_template(template_bytes, data, crew_list, passenger_list):
 st.subheader("📂 上传文件")
 st.info("⚠️ 注意：模板文件必须是 **.xlsx** 格式（不是 .xls），否则无法打开。如果您的模板是 .xls，请用 Excel 另存为 .xlsx 后再上传。")
 
-data_file = st.file_uploader("上传通用声明 Excel（.xlsx）", type=["xlsx"], key="data")
+data_file = st.file_uploader("上传 GD单（General Declaration）Excel（.xlsx）", type=["xlsx"], key="data")
 template_file = st.file_uploader("上传备案表模板 Excel（必须是 .xlsx）", type=["xlsx"], key="template")
 
 if data_file and template_file:
