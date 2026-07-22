@@ -38,14 +38,18 @@ def extract_chinese_name(full_name):
         return full_name
 
 def parse_document_type(passport_no, doc_type):
+    """根据证件类型和号码判断：身份证 / 通行证 / 护照"""
     doc_type_str = str(doc_type).strip() if pd.notna(doc_type) else ""
+    if "通行证" in doc_type_str:
+        return "通行证"
     if "身份证" in doc_type_str or "居民身份证" in doc_type_str:
         return "身份证"
-    if "通行证" in doc_type_str or "护照" in doc_type_str or "passport" in doc_type_str.lower():
+    if "护照" in doc_type_str or "passport" in doc_type_str.lower():
         return "护照"
+    # 若证件类型无法判断，根据号码格式
     pn = str(passport_no).strip() if pd.notna(passport_no) else ""
     pn = re.sub(r'\s+', '', pn)
-    if re.match(r'^[0-9]{15}$', pn) or re.match(r'^[0-9]{17}[0-9Xx]$', pn):
+    if re.match(r'^[0-9]{15}$', pn) or re.match(r''^[0-9]{17}[0-9Xx]$'', pn):
         return "身份证"
     else:
         return "护照"
@@ -68,7 +72,6 @@ def get_value_right(ws, row, start_col):
 def parse_utc_to_beijing(utc_str, date_str):
     """将UTC时间转换为北京时间字符串 HHMM"""
     try:
-        # 处理 "0130Z" 格式
         time_part = utc_str.replace('Z', '').strip()
         if len(time_part) == 4:
             hour = int(time_part[:2])
@@ -78,22 +81,19 @@ def parse_utc_to_beijing(utc_str, date_str):
             minute = int(time_part[1:])
         else:
             return "0000"
-        # 创建UTC datetime
         day = int(re.search(r'\d+', date_str).group()) if re.search(r'\d+', date_str) else 1
         month_map = {"Jan": 1, "Feb": 2, "Mar": 3, "Apr": 4, "May": 5, "Jun": 6,
                      "Jul": 7, "Aug": 8, "Sep": 9, "Oct": 10, "Nov": 11, "Dec": 12}
         month_str = re.search(r'[A-Za-z]{3}', date_str).group() if re.search(r'[A-Za-z]{3}', date_str) else "Jan"
         month = month_map.get(month_str[:3], 1)
-        year = 2026  # 默认
+        year = 2026
         dt = datetime(year, month, day, hour, minute)
-        # 加8小时
         dt_beijing = dt + timedelta(hours=8)
         return dt_beijing.strftime("%H%M")
     except:
         return "0000"
 
 def parse_date_display(date_str):
-    """将 '23Jul' 转换为 '7月23日'"""
     try:
         day = re.search(r'\d+', date_str).group()
         month_str = re.search(r'[A-Za-z]{3}', date_str).group()
@@ -131,15 +131,10 @@ def parse_general_declaration(file_bytes):
                 elif "DATE/TIME:" in val:
                     date_time = get_value_right(ws, cell.row, cell.column+1)
                     data["date_time"] = date_time
-                    # 尝试解析UTC时间和日期
                     if date_time:
                         parts = date_time.split()
-                        if len(parts) >= 2:
-                            data["utc_time"] = parts[0]
-                            data["date_str"] = parts[1]
-                        else:
-                            data["utc_time"] = ""
-                            data["date_str"] = date_time
+                        data["utc_time"] = parts[0] if len(parts) > 0 else ""
+                        data["date_str"] = parts[1] if len(parts) > 1 else ""
 
     crew_data = []
     passenger_data = []
@@ -199,7 +194,21 @@ def fill_template(template_bytes, data, crew_list, passenger_list):
 
     ws = wb.active
 
-    # 1. 基础信息：查找“机型”所在行，往下一行写入数据
+    # ----- 0. 飞行目的 -----
+    if not passenger_list:
+        # 没有乘客 → 调机
+        for row in ws.iter_rows(min_row=1, max_row=10):
+            for cell in row:
+                if cell.value and isinstance(cell.value, str) and "飞行目的" in cell.value:
+                    # 下一行（通常第5行）是选项，修改为“调机”
+                    target_row = cell.row + 1
+                    safe_set_cell_value(ws, target_row, 2, "调机")  # 假设选项在B列
+                    break
+            else:
+                continue
+            break
+
+    # ----- 1. 基础信息 -----
     info_row = None
     for row in ws.iter_rows(min_row=1, max_row=20):
         for cell in row:
@@ -217,7 +226,6 @@ def fill_template(template_bytes, data, crew_list, passenger_list):
         safe_set_cell_value(ws, data_row, 3, data.get("reg", ""))
         safe_set_cell_value(ws, data_row, 4, data.get("flt", ""))
 
-        # 生成航班行程显示：7月23日 ZGSZ 0930 XXXX ZLXY
         from_code = data.get("from", "")
         to_code = data.get("to", "")
         date_str = data.get("date_str", "")
@@ -235,7 +243,7 @@ def fill_template(template_bytes, data, crew_list, passenger_list):
 
         safe_set_cell_value(ws, data_row, 5, route_display)
 
-    # 2. 机组信息
+    # ----- 2. 机组信息 -----
     crew_positions = ["机长", "副驾驶", "乘务", "机务"]
     for idx, position in enumerate(crew_positions):
         if idx >= len(crew_list):
@@ -250,7 +258,7 @@ def fill_template(template_bytes, data, crew_list, passenger_list):
                     safe_set_cell_value(ws, row_num, 4, crew.get("dob", ""))
                     break
 
-    # 3. 乘客信息
+    # ----- 3. 乘客信息 -----
     passenger_start_row = None
     for row in ws.iter_rows(min_row=1, max_row=100):
         for cell in row:
