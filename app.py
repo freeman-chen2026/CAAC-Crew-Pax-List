@@ -49,7 +49,7 @@ def parse_document_type(passport_no, doc_type):
     # 若证件类型无法判断，根据号码格式
     pn = str(passport_no).strip() if pd.notna(passport_no) else ""
     pn = re.sub(r'\s+', '', pn)
-    if re.match(r'^[0-9]{15}$', pn) or re.match(r''^[0-9]{17}[0-9Xx]$'', pn):
+    if re.match(r'^[0-9]{15}$', pn) or re.match(r'^[0-9]{17}[0-9Xx]$', pn):
         return "身份证"
     else:
         return "护照"
@@ -200,9 +200,8 @@ def fill_template(template_bytes, data, crew_list, passenger_list):
         for row in ws.iter_rows(min_row=1, max_row=10):
             for cell in row:
                 if cell.value and isinstance(cell.value, str) and "飞行目的" in cell.value:
-                    # 下一行（通常第5行）是选项，修改为“调机”
                     target_row = cell.row + 1
-                    safe_set_cell_value(ws, target_row, 2, "调机")  # 假设选项在B列
+                    safe_set_cell_value(ws, target_row, 2, "调机")
                     break
             else:
                 continue
