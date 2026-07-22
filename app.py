@@ -44,7 +44,6 @@ def parse_document_type(passport_no, doc_type):
     doc_type_str = str(doc_type).strip() if pd.notna(doc_type) else ""
     if doc_type_str:
         return doc_type_str
-    # 若证件类型为空，根据号码格式判断
     pn = str(passport_no).strip() if pd.notna(passport_no) else ""
     pn = re.sub(r'\s+', '', pn)
     if re.match(r'^[0-9]{15}$', pn) or re.match(r'^[0-9]{17}[0-9Xx]$', pn):
@@ -68,7 +67,6 @@ def get_value_right(ws, row, start_col):
     return ""
 
 def parse_utc_to_beijing(utc_str, date_str):
-    """将UTC时间转换为北京时间字符串 HHMM"""
     try:
         time_part = utc_str.replace('Z', '').strip()
         if len(time_part) == 4:
@@ -194,7 +192,6 @@ def fill_template(template_bytes, data, crew_list, passenger_list):
 
     # ----- 0. 飞行目的 -----
     if not passenger_list:
-        # 没有乘客 → 调机
         for row in ws.iter_rows(min_row=1, max_row=10):
             for cell in row:
                 if cell.value and isinstance(cell.value, str) and "飞行目的" in cell.value:
@@ -253,6 +250,9 @@ def fill_template(template_bytes, data, crew_list, passenger_list):
                     safe_set_cell_value(ws, row_num, 2, extract_chinese_name(crew["name"]))
                     safe_set_cell_value(ws, row_num, 3, crew.get("gender", ""))
                     safe_set_cell_value(ws, row_num, 4, crew.get("dob", ""))
+                    # 证件号码（第5列）
+                    safe_set_cell_value(ws, row_num, 5, crew.get("passport_no", ""))
+                    # 执照号码、联系方式留空
                     break
 
     # ----- 3. 乘客信息 -----
@@ -285,12 +285,10 @@ def fill_template(template_bytes, data, crew_list, passenger_list):
             safe_set_cell_value(ws, row_num, 2, pax.get("gender", ""))
             safe_set_cell_value(ws, row_num, 3, pax.get("dob", ""))
             safe_set_cell_value(ws, row_num, 4, get_nation_name(pax.get("nationality", "")))
-            # 证件类型直接使用原始值
             doc_type = pax.get("doc_type", "")
             if pd.notna(doc_type) and str(doc_type).strip():
                 safe_set_cell_value(ws, row_num, 5, str(doc_type).strip())
             else:
-                # 若无原始值，根据号码判断
                 safe_set_cell_value(ws, row_num, 5, parse_document_type(pax.get("passport_no", ""), ""))
             safe_set_cell_value(ws, row_num, 6, pax.get("passport_no", ""))
 
@@ -315,7 +313,6 @@ if data_file and template_file:
         if passenger_list:
             st.write("提取的乘客信息（前5行）：", pd.DataFrame(passenger_list).head(5))
 
-        # 显示提取的航班信息
         st.subheader("📋 提取的航班信息")
         from_code = data.get("from", "")
         to_code = data.get("to", "")
