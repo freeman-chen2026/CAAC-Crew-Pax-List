@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 from io import BytesIO
 from openpyxl import load_workbook
+from openpyxl.utils import get_column_letter
 import re
 from datetime import datetime, timedelta
 
@@ -175,6 +176,20 @@ def parse_general_declaration(file_bytes):
                         })
     return data, crew_data, passenger_data
 
+# ---------- 辅助函数：复制行样式 ----------
+def copy_row_style(ws, source_row, target_row, max_col=7):
+    """复制source_row的样式到target_row"""
+    for col in range(1, max_col+1):
+        source_cell = ws.cell(row=source_row, column=col)
+        target_cell = ws.cell(row=target_row, column=col)
+        if source_cell.has_style:
+            target_cell.font = source_cell.font.copy()
+            target_cell.border = source_cell.border.copy()
+            target_cell.fill = source_cell.fill.copy()
+            target_cell.number_format = source_cell.number_format
+            target_cell.protection = source_cell.protection.copy()
+            target_cell.alignment = source_cell.alignment.copy()
+
 # ---------- 填充模板 ----------
 def fill_template(template_bytes, data, crew_list, passenger_list):
     try:
@@ -234,78 +249,106 @@ def fill_template(template_bytes, data, crew_list, passenger_list):
 
         safe_set_cell_value(ws, data_row, 5, route_display)
 
-    # ----- 2. 机组信息 -----
-    # 模板行：机长、副驾驶、乘务、机务
-    if len(crew_list) >= 1:
-        # 机长
-        for row in ws.iter_rows(min_row=1, max_row=50):
-            for cell in row:
-                if cell.value and isinstance(cell.value, str) and "机长" in cell.value:
-                    row_num = cell.row
-                    safe_set_cell_value(ws, row_num, 2, extract_chinese_name(crew_list[0]["name"]))
-                    safe_set_cell_value(ws, row_num, 3, crew_list[0].get("gender", ""))
-                    safe_set_cell_value(ws, row_num, 4, crew_list[0].get("dob", ""))
-                    safe_set_cell_value(ws, row_num, 5, crew_list[0].get("passport_no", ""))
-                    break
-            else:
-                continue
+    # ----- 2. 机组信息（支持自动插入乘务行） -----
+    # 先找到各职位行
+    captain_row = None
+    copilot_row = None
+    cabin_row = None   # 乘务行
+    mechanic_row = None # 机务行
+
+    for row in ws.iter_rows(min_row=1, max_row=50):
+        for cell in row:
+            if cell.value and isinstance(cell.value, str):
+                val = cell.value.strip()
+                if "机长" in val:
+                    captain_row = cell.row
+                elif "副驾驶" in val:
+                    copilot_row = cell.row
+                elif "乘务" in val and "信息" not in val:  # 避免匹配到“乘客信息”
+                    cabin_row = cell.row
+                elif "机务" in val:
+                    mechanic_row = cell.row
+        if captain_row and copilot_row and cabin_row and mechanic_row:
             break
 
-    if len(crew_list) >= 2:
+    # 如果没有找到全部，停止处理机组
+    if not (captain_row and copilot_row and cabin_row and mechanic_row):
+        st.warning("未在模板中找到完整的机组行，请检查模板。")
+    else:
+        # 写入机长
+        if len(crew_list) >= 1:
+            crew = crew_list[0]
+            safe_set_cell_value(ws, captain_row, 2, extract_chinese_name(crew["name"]))
+            safe_set_cell_value(ws, captain_row, 3, crew.get("gender", ""))
+            safe_set_cell_value(ws, captain_row, 4, crew.get("dob", ""))
+            safe_set_cell_value(ws, captain_row, 5, crew.get("passport_no", ""))
+
         # 副驾驶
-        for row in ws.iter_rows(min_row=1, max_row=50):
-            for cell in row:
-                if cell.value and isinstance(cell.value, str) and "副驾驶" in cell.value:
-                    row_num = cell.row
-                    safe_set_cell_value(ws, row_num, 2, extract_chinese_name(crew_list[1]["name"]))
-                    safe_set_cell_value(ws, row_num, 3, crew_list[1].get("gender", ""))
-                    safe_set_cell_value(ws, row_num, 4, crew_list[1].get("dob", ""))
-                    safe_set_cell_value(ws, row_num, 5, crew_list[1].get("passport_no", ""))
-                    break
-            else:
-                continue
-            break
+        if len(crew_list) >= 2:
+            crew = crew_list[1]
+            safe_set_cell_value(ws, copilot_row, 2, extract_chinese_name(crew["name"]))
+            safe_set_cell_value(ws, copilot_row, 3, crew.get("gender", ""))
+            safe_set_cell_value(ws, copilot_row, 4, crew.get("dob", ""))
+            safe_set_cell_value(ws, copilot_row, 5, crew.get("passport_no", ""))
 
-    if len(crew_list) >= 3:
-        # 乘务：第3个机组，职务写“乘务”（不写“乘务员”）
-        for row in ws.iter_rows(min_row=1, max_row=50):
-            for cell in row:
-                if cell.value and isinstance(cell.value, str) and "乘务" in cell.value:
-                    row_num = cell.row
-                    # 如果该行是“乘务”行（不是“乘务员”），但模板里是“乘务”，所以直接找到包含“乘务”的行即可
-                    # 但注意不要匹配到“乘务员”，因为模板里可能也有“乘务员”？但用户要求统一为“乘务”
-                    # 直接找到包含“乘务”的行，然后写入
-                    safe_set_cell_value(ws, row_num, 1, "乘务")  # 职务列写“乘务”
-                    safe_set_cell_value(ws, row_num, 2, extract_chinese_name(crew_list[2]["name"]))
-                    safe_set_cell_value(ws, row_num, 3, crew_list[2].get("gender", ""))
-                    safe_set_cell_value(ws, row_num, 4, crew_list[2].get("dob", ""))
-                    safe_set_cell_value(ws, row_num, 5, crew_list[2].get("passport_no", ""))
-                    break
-            else:
-                continue
-            break
+        # 乘务行（第3个机组）
+        if len(crew_list) >= 3:
+            crew = crew_list[2]
+            safe_set_cell_value(ws, cabin_row, 1, "乘务")   # 职务列写“乘务”
+            safe_set_cell_value(ws, cabin_row, 2, extract_chinese_name(crew["name"]))
+            safe_set_cell_value(ws, cabin_row, 3, crew.get("gender", ""))
+            safe_set_cell_value(ws, cabin_row, 4, crew.get("dob", ""))
+            safe_set_cell_value(ws, cabin_row, 5, crew.get("passport_no", ""))
 
-    # 机务：从第4个机组开始往后找第一个男性
-    if len(crew_list) >= 4:
+            # 检查是否有第4个机组（额外乘务或机务）
+            if len(crew_list) >= 4:
+                # 第4个机组
+                extra_crew = crew_list[3]
+                # 判断第4个是否为女性，若是则作为乘务插入新行，否则作为机务候选（但机务由后面逻辑处理）
+                gender = str(extra_crew.get("gender", "")).strip()
+                if gender in ["女", "Female", "F"]:
+                    # 在乘务行下方插入新行
+                    new_row = cabin_row + 1
+                    ws.insert_rows(new_row)
+                    # 复制乘务行的样式到新行
+                    copy_row_style(ws, cabin_row, new_row, max_col=7)
+                    # 填入数据
+                    safe_set_cell_value(ws, new_row, 1, "乘务")
+                    safe_set_cell_value(ws, new_row, 2, extract_chinese_name(extra_crew["name"]))
+                    safe_set_cell_value(ws, new_row, 3, extra_crew.get("gender", ""))
+                    safe_set_cell_value(ws, new_row, 4, extra_crew.get("dob", ""))
+                    safe_set_cell_value(ws, new_row, 5, extra_crew.get("passport_no", ""))
+                    # 注意：插入行后，机务行行号会+1，但我们之后会重新查找，所以暂时不处理
+                # 如果第4个是男性，则可能作为机务（但后面会从第4个及以后找第一个男性）
+
+        # 机务：从第4个机组开始（如果第4个已被插入，则从第5个开始）找第一个男性
         mechanic = None
-        for i in range(3, len(crew_list)):
+        start_idx = 3  # 第4个机组索引（从0开始）
+        # 如果第4个是女性且已被插入，则从第5个开始
+        if len(crew_list) >= 4:
+            gender4 = str(crew_list[3].get("gender", "")).strip()
+            if gender4 in ["女", "Female", "F"]:
+                start_idx = 4
+        for i in range(start_idx, len(crew_list)):
             gender = str(crew_list[i].get("gender", "")).strip()
             if gender in ["男", "Male", "M"]:
                 mechanic = crew_list[i]
                 break
         if mechanic:
+            # 重新查找机务行（因为可能插入了新行，行号变化）
+            mechanic_row_new = None
             for row in ws.iter_rows(min_row=1, max_row=50):
                 for cell in row:
                     if cell.value and isinstance(cell.value, str) and "机务" in cell.value:
-                        row_num = cell.row
-                        safe_set_cell_value(ws, row_num, 2, extract_chinese_name(mechanic["name"]))
-                        safe_set_cell_value(ws, row_num, 3, mechanic.get("gender", ""))
-                        safe_set_cell_value(ws, row_num, 4, mechanic.get("dob", ""))
-                        safe_set_cell_value(ws, row_num, 5, mechanic.get("passport_no", ""))
+                        mechanic_row_new = cell.row
                         break
-                else:
-                    continue
-                break
+                if mechanic_row_new:
+                    break
+            if mechanic_row_new:
+                safe_set_cell_value(ws, mechanic_row_new, 2, extract_chinese_name(mechanic["name"]))
+                safe_set_cell_value(ws, mechanic_row_new, 3, mechanic.get("gender", ""))
+                safe_set_cell_value(ws, mechanic_row_new, 4, mechanic.get("dob", ""))
+                safe_set_cell_value(ws, mechanic_row_new, 5, mechanic.get("passport_no", ""))
 
     # ----- 3. 乘客信息 -----
     passenger_start_row = None
