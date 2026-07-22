@@ -52,15 +52,21 @@ def parse_document_type(passport_no, doc_type):
         return "护照"
 
 def safe_set_cell_value(ws, row, col, value):
-    """
-    安全设置单元格值，如果目标单元格属于合并区域，则设置合并区域的左上角。
-    """
+    """安全设置单元格值，如果目标单元格属于合并区域，则设置合并区域的左上角。"""
     for merged_range in ws.merged_cells.ranges:
         if merged_range.min_row <= row <= merged_range.max_row and \
            merged_range.min_col <= col <= merged_range.max_col:
             ws.cell(row=merged_range.min_row, column=merged_range.min_col).value = value
             return
     ws.cell(row=row, column=col).value = value
+
+def get_value_right(ws, row, start_col):
+    """从指定行、指定列开始向右搜索第一个非空值"""
+    for col in range(start_col, start_col + 10):
+        cell = ws.cell(row=row, column=col)
+        if cell.value and str(cell.value).strip():
+            return str(cell.value).strip()
+    return ""
 
 # ---------- 解析GD单 ----------
 def parse_general_declaration(file_bytes):
@@ -72,26 +78,23 @@ def parse_general_declaration(file_bytes):
             if cell.value and isinstance(cell.value, str):
                 val = cell.value.strip()
                 if "OPERATOR:" in val:
-                    target = ws.cell(row=cell.row, column=cell.column+1)
-                    data["operator"] = target.value.strip() if target.value else ""
+                    data["operator"] = get_value_right(ws, cell.row, cell.column+1)
                 elif "REG NO./FLT NO.:" in val:
-                    target = ws.cell(row=cell.row, column=cell.column+1)
-                    reg_val = target.value.strip() if target.value else ""
+                    reg_val = get_value_right(ws, cell.row, cell.column+1)
+                    # MLLIN 既当注册号也当航班号
                     parts = reg_val.split()
-                    data["reg"] = parts[0] if parts else ""
-                    data["flt"] = parts[1] if len(parts) > 1 else ""
+                    data["reg"] = parts[0] if parts else reg_val
+                    data["flt"] = parts[0] if parts else reg_val  # 没有第二个值就用同一个
+                    if len(parts) > 1:
+                        data["flt"] = parts[1]
                 elif "AC TYPE:" in val:
-                    target = ws.cell(row=cell.row, column=cell.column+1)
-                    data["ac_type"] = target.value.strip() if target.value else ""
+                    data["ac_type"] = get_value_right(ws, cell.row, cell.column+1)
                 elif "FROM:" in val:
-                    target = ws.cell(row=cell.row, column=cell.column+1)
-                    data["from"] = target.value.strip() if target.value else ""
+                    data["from"] = get_value_right(ws, cell.row, cell.column+1)
                 elif "TO:" in val:
-                    target = ws.cell(row=cell.row, column=cell.column+1)
-                    data["to"] = target.value.strip() if target.value else ""
+                    data["to"] = get_value_right(ws, cell.row, cell.column+1)
                 elif "DATE/TIME:" in val:
-                    target = ws.cell(row=cell.row, column=cell.column+1)
-                    data["date_time"] = target.value.strip() if target.value else ""
+                    data["date_time"] = get_value_right(ws, cell.row, cell.column+1)
 
     crew_data = []
     passenger_data = []
@@ -152,13 +155,12 @@ def fill_template(template_bytes, data, crew_list, passenger_list):
     ws = wb.active
 
     # 1. 基础信息：查找“机型”所在行，往下一行写入数据
-    target_keywords = ["机型", "注册号", "航班号", "航班行程"]
     info_row = None
     for row in ws.iter_rows(min_row=1, max_row=20):
         for cell in row:
             if cell.value and isinstance(cell.value, str):
                 val = cell.value.strip()
-                if val in target_keywords:
+                if val in ["机型", "注册号", "航班号", "航班行程"]:
                     info_row = cell.row
                     break
         if info_row:
@@ -214,7 +216,6 @@ def fill_template(template_bytes, data, crew_list, passenger_list):
                 break
 
     if passenger_start_row:
-        # 只覆盖实际乘客数据行
         for i, pax in enumerate(passenger_list):
             row_num = passenger_start_row + i
             for col in range(1, 7):
