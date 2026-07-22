@@ -38,9 +38,7 @@ def extract_chinese_name(full_name):
         return full_name
 
 def parse_document_type(passport_no, doc_type):
-    """
-    直接返回原始证件类型，若为空则根据号码格式判断
-    """
+    """直接返回原始证件类型，若为空则根据号码格式判断"""
     doc_type_str = str(doc_type).strip() if pd.notna(doc_type) else ""
     if doc_type_str:
         return doc_type_str
@@ -243,17 +241,25 @@ def fill_template(template_bytes, data, crew_list, passenger_list):
         if idx >= len(crew_list):
             break
         crew = crew_list[idx]
+        # 对于第4个（索引3），若性别为女，则改为“乘务员”
+        search_position = position
+        if idx == 3 and crew.get("gender", "").strip() in ["女", "Female", "F"]:
+            search_position = "机务"  # 查找“机务”行
         for row in ws.iter_rows(min_row=1, max_row=50):
             for cell in row:
-                if cell.value and isinstance(cell.value, str) and position in cell.value:
+                if cell.value and isinstance(cell.value, str) and search_position in cell.value:
                     row_num = cell.row
+                    # 如果第4个且为女性，修改职务列为“乘务员”
+                    if idx == 3 and crew.get("gender", "").strip() in ["女", "Female", "F"]:
+                        safe_set_cell_value(ws, row_num, 1, "乘务员")
                     safe_set_cell_value(ws, row_num, 2, extract_chinese_name(crew["name"]))
                     safe_set_cell_value(ws, row_num, 3, crew.get("gender", ""))
                     safe_set_cell_value(ws, row_num, 4, crew.get("dob", ""))
-                    # 证件号码（第5列）
                     safe_set_cell_value(ws, row_num, 5, crew.get("passport_no", ""))
-                    # 执照号码、联系方式留空
                     break
+            else:
+                continue
+            break
 
     # ----- 3. 乘客信息 -----
     passenger_start_row = None
