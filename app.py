@@ -151,24 +151,31 @@ def fill_template(template_bytes, data, crew_list, passenger_list):
 
     ws = wb.active
 
-    # 1. 基础信息：写入数据行（关键词所在行的下一行）
-    keywords = ["机型", "注册号", "航班号", "航班行程"]
+    # 1. 基础信息：查找“机型”所在行，往下一行写入数据
+    target_keywords = ["机型", "注册号", "航班号", "航班行程"]
     info_row = None
     for row in ws.iter_rows(min_row=1, max_row=20):
         for cell in row:
-            if cell.value and isinstance(cell.value, str) and cell.value.strip() in keywords:
-                info_row = cell.row
-                break
+            if cell.value and isinstance(cell.value, str):
+                val = cell.value.strip()
+                if val in target_keywords:
+                    info_row = cell.row
+                    break
         if info_row:
             break
+
     if info_row:
         data_row = info_row + 1
-        safe_set_cell_value(ws, data_row, 2, data.get("ac_type", ""))   # 机型
-        safe_set_cell_value(ws, data_row, 3, data.get("reg", ""))       # 注册号
-        safe_set_cell_value(ws, data_row, 4, data.get("flt", ""))       # 航班号
+        # B列: 机型
+        safe_set_cell_value(ws, data_row, 2, data.get("ac_type", ""))
+        # C列: 注册号
+        safe_set_cell_value(ws, data_row, 3, data.get("reg", ""))
+        # D列: 航班号
+        safe_set_cell_value(ws, data_row, 4, data.get("flt", ""))
+        # E列: 航班行程 (FROM-TO)
         from_ = data.get("from", "")
         to_ = data.get("to", "")
-        safe_set_cell_value(ws, data_row, 5, f"{from_}-{to_}" if from_ and to_ else "")  # 航班行程
+        safe_set_cell_value(ws, data_row, 5, f"{from_}-{to_}" if from_ and to_ else "")
 
     # 2. 机组信息
     crew_positions = ["机长", "副驾驶", "乘务", "机务"]
@@ -207,10 +214,9 @@ def fill_template(template_bytes, data, crew_list, passenger_list):
                 break
 
     if passenger_start_row:
-        # 只覆盖实际乘客数据行，不预先清空大段区域
+        # 只覆盖实际乘客数据行
         for i, pax in enumerate(passenger_list):
             row_num = passenger_start_row + i
-            # 先清空该行前6列（避免旧数据残留）
             for col in range(1, 7):
                 safe_set_cell_value(ws, row_num, col, None)
             safe_set_cell_value(ws, row_num, 1, extract_chinese_name(pax["name"]))
@@ -220,9 +226,6 @@ def fill_template(template_bytes, data, crew_list, passenger_list):
             doc_type = parse_document_type(pax.get("passport_no", ""), pax.get("doc_type", ""))
             safe_set_cell_value(ws, row_num, 5, doc_type)
             safe_set_cell_value(ws, row_num, 6, pax.get("passport_no", ""))
-
-        # 若乘客数少于模板预留行，我们不清除多余行，保留原样（避免影响电子章）
-        # 但为了整洁，可以清除剩余行的内容（谨慎，可能影响电子章），这里不做清除
 
     output = BytesIO()
     wb.save(output)
