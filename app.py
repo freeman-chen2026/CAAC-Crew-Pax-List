@@ -4,7 +4,7 @@ from io import BytesIO
 from openpyxl import load_workbook
 import re
 
-st.set_page_config(page_title="GD单 → 备案表生成器", layout="wide")
+st.set_page_config(page_title="GD单 → 公务飞行计划信息备案表", layout="wide")
 st.title("🛫 GD单 → 公务飞行计划信息备案表")
 st.markdown("上传 GD单（General Declaration）Excel，自动提取机组和乘客信息，填入备案表模板。")
 
@@ -27,6 +27,7 @@ def get_nation_name(code):
     return NATION_MAP.get(code, code)
 
 def extract_chinese_name(full_name):
+    """优先提取中文姓名，若无则返回全名"""
     if not full_name:
         return ""
     parts = full_name.split()
@@ -37,6 +38,7 @@ def extract_chinese_name(full_name):
         return full_name
 
 def parse_document_type(passport_no, doc_type):
+    """根据证件号和证件类型判断：身份证 or 护照"""
     doc_type_str = str(doc_type).strip() if pd.notna(doc_type) else ""
     if "身份证" in doc_type_str or "居民身份证" in doc_type_str:
         return "身份证"
@@ -49,24 +51,22 @@ def parse_document_type(passport_no, doc_type):
     else:
         return "护照"
 
-# ---------- 安全写入合并单元格 ----------
 def safe_set_cell_value(ws, row, col, value):
     """
-    如果目标单元格属于合并区域，则找到合并区域的左上角并赋值；
-    否则直接赋值。
+    安全设置单元格值，如果目标单元格属于合并区域，则设置合并区域的左上角。
     """
-    # 检查是否有合并区域包含该单元格
+    target_cell = ws.cell(row=row, column=col)
+    # 检查是否在合并区域内
     for merged_range in ws.merged_cells.ranges:
-        if row in merged_range and col in merged_range:
-            # 获取左上角行列
-            top_row = merged_range.min_row
-            top_col = merged_range.min_col
-            ws.cell(row=top_row, column=top_col).value = value
+        if merged_range.contains(row, col):
+            # 写入到合并区域的左上角
+            top_left = ws.cell(row=merged_range.min_row, column=merged_range.min_col)
+            top_left.value = value
             return
-    # 不在合并区域内，直接赋值
-    ws.cell(row=row, column=col).value = value
+    # 未合并，直接写入
+    target_cell.value = value
 
-# ---------- 解析 GD单 ----------
+# ---------- 解析GD单 ----------
 def parse_general_declaration(file_bytes):
     wb = load_workbook(file_bytes)
     ws = wb.active
@@ -160,7 +160,7 @@ def fill_template(template_bytes, data, crew_list, passenger_list):
 
     ws = wb.active
 
-    # 1. 基础信息
+    # 1. 基础信息：通过关键词定位并写入
     for row in ws.iter_rows(min_row=1, max_row=30):
         for cell in row:
             if cell.value and isinstance(cell.value, str):
@@ -176,7 +176,7 @@ def fill_template(template_bytes, data, crew_list, passenger_list):
                     to_ = data.get("to", "")
                     safe_set_cell_value(ws, cell.row, cell.column+1, f"{from_}-{to_}" if from_ and to_ else "")
 
-    # 2. 机组
+    # 2. 机组信息
     crew_positions = ["机长", "副驾驶", "乘务", "机务"]
     for idx, position in enumerate(crew_positions):
         if idx >= len(crew_list):
@@ -186,16 +186,13 @@ def fill_template(template_bytes, data, crew_list, passenger_list):
             for cell in row:
                 if cell.value and isinstance(cell.value, str) and position in cell.value:
                     row_num = cell.row
-                    # 姓名列（第2列）
                     safe_set_cell_value(ws, row_num, 2, extract_chinese_name(crew["name"]))
-                    # 性别列（第3列）
                     safe_set_cell_value(ws, row_num, 3, crew.get("gender", ""))
-                    # 出生日期列（第4列）
                     safe_set_cell_value(ws, row_num, 4, crew.get("dob", ""))
                     # 证件号码、执照号码、联系方式不填
                     break
 
-    # 3. 乘客
+    # 3. 乘客信息
     passenger_start_row = None
     for row in ws.iter_rows(min_row=1, max_row=100):
         for cell in row:
@@ -218,7 +215,7 @@ def fill_template(template_bytes, data, crew_list, passenger_list):
 
     if passenger_start_row:
         # 清空旧数据（保留表头，清空数据行）
-        for i in range(20):
+        for i in range(20):  # 最多清空20行
             row_num = passenger_start_row + i
             for col in range(1, 7):
                 safe_set_cell_value(ws, row_num, col, None)
