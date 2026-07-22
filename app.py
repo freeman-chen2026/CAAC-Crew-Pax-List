@@ -38,15 +38,13 @@ def extract_chinese_name(full_name):
         return full_name
 
 def parse_document_type(passport_no, doc_type):
-    """根据证件类型和号码判断：身份证 / 通行证 / 护照"""
+    """
+    直接返回原始证件类型，若为空则根据号码格式判断
+    """
     doc_type_str = str(doc_type).strip() if pd.notna(doc_type) else ""
-    if "通行证" in doc_type_str:
-        return "通行证"
-    if "身份证" in doc_type_str or "居民身份证" in doc_type_str:
-        return "身份证"
-    if "护照" in doc_type_str or "passport" in doc_type_str.lower():
-        return "护照"
-    # 若证件类型无法判断，根据号码格式
+    if doc_type_str:
+        return doc_type_str
+    # 若证件类型为空，根据号码格式判断
     pn = str(passport_no).strip() if pd.notna(passport_no) else ""
     pn = re.sub(r'\s+', '', pn)
     if re.match(r'^[0-9]{15}$', pn) or re.match(r'^[0-9]{17}[0-9Xx]$', pn):
@@ -287,8 +285,13 @@ def fill_template(template_bytes, data, crew_list, passenger_list):
             safe_set_cell_value(ws, row_num, 2, pax.get("gender", ""))
             safe_set_cell_value(ws, row_num, 3, pax.get("dob", ""))
             safe_set_cell_value(ws, row_num, 4, get_nation_name(pax.get("nationality", "")))
-            doc_type = parse_document_type(pax.get("passport_no", ""), pax.get("doc_type", ""))
-            safe_set_cell_value(ws, row_num, 5, doc_type)
+            # 证件类型直接使用原始值
+            doc_type = pax.get("doc_type", "")
+            if pd.notna(doc_type) and str(doc_type).strip():
+                safe_set_cell_value(ws, row_num, 5, str(doc_type).strip())
+            else:
+                # 若无原始值，根据号码判断
+                safe_set_cell_value(ws, row_num, 5, parse_document_type(pax.get("passport_no", ""), ""))
             safe_set_cell_value(ws, row_num, 6, pax.get("passport_no", ""))
 
     output = BytesIO()
