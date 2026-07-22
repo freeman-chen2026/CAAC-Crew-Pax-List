@@ -3,6 +3,7 @@ import pandas as pd
 from io import BytesIO
 from openpyxl import load_workbook
 import re
+from datetime import datetime, timedelta
 
 st.set_page_config(page_title="GD单 → 公务飞行计划信息备案表", layout="wide")
 st.title("🛫 GD单 → 公务飞行计划信息备案表")
@@ -27,7 +28,6 @@ def get_nation_name(code):
     return NATION_MAP.get(code, code)
 
 def extract_chinese_name(full_name):
-    """优先提取中文姓名，若无则返回全名"""
     if not full_name:
         return ""
     parts = full_name.split()
@@ -38,7 +38,6 @@ def extract_chinese_name(full_name):
         return full_name
 
 def parse_document_type(passport_no, doc_type):
-    """根据证件号和证件类型判断：身份证 or 护照"""
     doc_type_str = str(doc_type).strip() if pd.notna(doc_type) else ""
     if "身份证" in doc_type_str or "居民身份证" in doc_type_str:
         return "身份证"
@@ -52,7 +51,6 @@ def parse_document_type(passport_no, doc_type):
         return "护照"
 
 def safe_set_cell_value(ws, row, col, value):
-    """安全设置单元格值，如果目标单元格属于合并区域，则设置合并区域的左上角。"""
     for merged_range in ws.merged_cells.ranges:
         if merged_range.min_row <= row <= merged_range.max_row and \
            merged_range.min_col <= col <= merged_range.max_col:
@@ -61,12 +59,50 @@ def safe_set_cell_value(ws, row, col, value):
     ws.cell(row=row, column=col).value = value
 
 def get_value_right(ws, row, start_col):
-    """从指定行、指定列开始向右搜索第一个非空值"""
     for col in range(start_col, start_col + 10):
         cell = ws.cell(row=row, column=col)
         if cell.value and str(cell.value).strip():
             return str(cell.value).strip()
     return ""
+
+def parse_utc_to_beijing(utc_str, date_str):
+    """将UTC时间转换为北京时间字符串 HHMM"""
+    try:
+        # 处理 "0130Z" 格式
+        time_part = utc_str.replace('Z', '').strip()
+        if len(time_part) == 4:
+            hour = int(time_part[:2])
+            minute = int(time_part[2:])
+        elif len(time_part) == 3:
+            hour = int(time_part[:1])
+            minute = int(time_part[1:])
+        else:
+            return "0000"
+        # 创建UTC datetime
+        day = int(re.search(r'\d+', date_str).group()) if re.search(r'\d+', date_str) else 1
+        month_map = {"Jan": 1, "Feb": 2, "Mar": 3, "Apr": 4, "May": 5, "Jun": 6,
+                     "Jul": 7, "Aug": 8, "Sep": 9, "Oct": 10, "Nov": 11, "Dec": 12}
+        month_str = re.search(r'[A-Za-z]{3}', date_str).group() if re.search(r'[A-Za-z]{3}', date_str) else "Jan"
+        month = month_map.get(month_str[:3], 1)
+        year = 2026  # 默认
+        dt = datetime(year, month, day, hour, minute)
+        # 加8小时
+        dt_beijing = dt + timedelta(hours=8)
+        return dt_beijing.strftime("%H%M")
+    except:
+        return "0000"
+
+def parse_date_display(date_str):
+    """将 '23Jul' 转换为 '7月23日'"""
+    try:
+        day = re.search(r'\d+', date_str).group()
+        month_str = re.search(r'[A-Za-z]{3}', date_str).group()
+        month_map = {"Jan": 1, "Feb": 2, "Mar": 3, "Apr": 4, "May": 5, "Jun": 6,
+                     "Jul": 7, "Aug": 8, "Sep": 9, "Oct": 10, "Nov": 11, "Dec": 12}
+        month = month_map.get(month_str[:3], 1)
+        return f"{month}月{int(day)}日"
+    except:
+        return date_str
 
 # ---------- 解析GD单 ----------
 def parse_general_declaration(file_bytes):
@@ -81,10 +117,9 @@ def parse_general_declaration(file_bytes):
                     data["operator"] = get_value_right(ws, cell.row, cell.column+1)
                 elif "REG NO./FLT NO.:" in val:
                     reg_val = get_value_right(ws, cell.row, cell.column+1)
-                    # MLLIN 既当注册号也当航班号
                     parts = reg_val.split()
                     data["reg"] = parts[0] if parts else reg_val
-                    data["flt"] = parts[0] if parts else reg_val  # 没有第二个值就用同一个
+                    data["flt"] = parts[0] if parts else reg_val
                     if len(parts) > 1:
                         data["flt"] = parts[1]
                 elif "AC TYPE:" in val:
@@ -94,7 +129,17 @@ def parse_general_declaration(file_bytes):
                 elif "TO:" in val:
                     data["to"] = get_value_right(ws, cell.row, cell.column+1)
                 elif "DATE/TIME:" in val:
-                    data["date_time"] = get_value_right(ws, cell.row, cell.column+1)
+                    date_time = get_value_right(ws, cell.row, cell.column+1)
+                    data["date_time"] = date_time
+                    # 尝试解析UTC时间和日期
+                    if date_time:
+                        parts = date_time.split()
+                        if len(parts) >= 2:
+                            data["utc_time"] = parts[0]
+                            data["date_str"] = parts[1]
+                        else:
+                            data["utc_time"] = ""
+                            data["date_str"] = date_time
 
     crew_data = []
     passenger_data = []
@@ -168,16 +213,27 @@ def fill_template(template_bytes, data, crew_list, passenger_list):
 
     if info_row:
         data_row = info_row + 1
-        # B列: 机型
         safe_set_cell_value(ws, data_row, 2, data.get("ac_type", ""))
-        # C列: 注册号
         safe_set_cell_value(ws, data_row, 3, data.get("reg", ""))
-        # D列: 航班号
         safe_set_cell_value(ws, data_row, 4, data.get("flt", ""))
-        # E列: 航班行程 (FROM-TO)
-        from_ = data.get("from", "")
-        to_ = data.get("to", "")
-        safe_set_cell_value(ws, data_row, 5, f"{from_}-{to_}" if from_ and to_ else "")
+
+        # 生成航班行程显示：7月23日 ZGSZ 0930 XXXX ZLXY
+        from_code = data.get("from", "")
+        to_code = data.get("to", "")
+        date_str = data.get("date_str", "")
+        utc_time = data.get("utc_time", "")
+
+        if date_str and from_code and to_code:
+            date_display = parse_date_display(date_str)
+            if utc_time:
+                bj_time = parse_utc_to_beijing(utc_time, date_str)
+            else:
+                bj_time = "0000"
+            route_display = f"{date_display} {from_code} {bj_time} XXXX {to_code}"
+        else:
+            route_display = f"{from_code}-{to_code}" if from_code and to_code else ""
+
+        safe_set_cell_value(ws, data_row, 5, route_display)
 
     # 2. 机组信息
     crew_positions = ["机长", "副驾驶", "乘务", "机务"]
@@ -248,6 +304,21 @@ if data_file and template_file:
             st.write("提取的机组信息：", pd.DataFrame(crew_list))
         if passenger_list:
             st.write("提取的乘客信息（前5行）：", pd.DataFrame(passenger_list).head(5))
+
+        # 显示提取的航班信息
+        st.subheader("📋 提取的航班信息")
+        from_code = data.get("from", "")
+        to_code = data.get("to", "")
+        date_str = data.get("date_str", "")
+        utc_time = data.get("utc_time", "")
+        if date_str and from_code and to_code:
+            date_display = parse_date_display(date_str)
+            if utc_time:
+                bj_time = parse_utc_to_beijing(utc_time, date_str)
+            else:
+                bj_time = "0000"
+            route_display = f"{date_display} {from_code} {bj_time} XXXX {to_code}"
+            st.info(f"✈️ 航班行程将显示为：{route_display}")
 
         result_bytes = fill_template(template_file, data, crew_list, passenger_list)
 
