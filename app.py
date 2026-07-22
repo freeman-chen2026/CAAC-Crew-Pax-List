@@ -55,16 +55,15 @@ def safe_set_cell_value(ws, row, col, value):
     """
     安全设置单元格值，如果目标单元格属于合并区域，则设置合并区域的左上角。
     """
-    target_cell = ws.cell(row=row, column=col)
     # 检查是否在合并区域内
     for merged_range in ws.merged_cells.ranges:
-        if merged_range.contains(row, col):
+        if merged_range.min_row <= row <= merged_range.max_row and \
+           merged_range.min_col <= col <= merged_range.max_col:
             # 写入到合并区域的左上角
-            top_left = ws.cell(row=merged_range.min_row, column=merged_range.min_col)
-            top_left.value = value
+            ws.cell(row=merged_range.min_row, column=merged_range.min_col).value = value
             return
     # 未合并，直接写入
-    target_cell.value = value
+    ws.cell(row=row, column=col).value = value
 
 # ---------- 解析GD单 ----------
 def parse_general_declaration(file_bytes):
