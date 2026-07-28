@@ -234,66 +234,62 @@ def fill_template(template_bytes, data, crew_list, passenger_list):
 
         safe_set_cell_value(ws, data_row, 5, route_display)
 
-    # ----- 2. 机组信息（智能分配） -----
-    # 机长 = 第1位
-    pilot = crew_list[0] if len(crew_list) >= 1 else None
-    # 副驾驶 = 第2位
-    copilot = crew_list[1] if len(crew_list) >= 2 else None
-    # 乘务 = 从剩余机组中找第一个女性（索引2开始）
-    cabin = None
-    mechanic = None
-    remaining = crew_list[2:] if len(crew_list) > 2 else []
-    for crew in remaining:
-        gender = str(crew.get("gender", "")).strip()
-        if gender in ["女", "Female", "F"]:
-            if cabin is None:
-                cabin = crew
-        elif gender in ["男", "Male", "M"]:
-            if mechanic is None:
-                mechanic = crew
-    # 若没找到乘务，则设为None
-    # 若没找到机务，则设为None
-
-    # 写入机长
-    if pilot:
+    # ----- 2. 机组信息 -----
+    # 机长
+    if len(crew_list) >= 1:
+        crew = crew_list[0]
         for row in ws.iter_rows(min_row=1, max_row=50):
             for cell in row:
                 if cell.value and isinstance(cell.value, str) and "机长" in cell.value:
                     row_num = cell.row
-                    safe_set_cell_value(ws, row_num, 2, extract_chinese_name(pilot["name"]))
-                    safe_set_cell_value(ws, row_num, 3, pilot.get("gender", ""))
-                    safe_set_cell_value(ws, row_num, 4, pilot.get("dob", ""))
-                    safe_set_cell_value(ws, row_num, 5, pilot.get("passport_no", ""))
+                    safe_set_cell_value(ws, row_num, 2, extract_chinese_name(crew["name"]))
+                    safe_set_cell_value(ws, row_num, 3, crew.get("gender", ""))
+                    safe_set_cell_value(ws, row_num, 4, crew.get("dob", ""))
+                    safe_set_cell_value(ws, row_num, 5, crew.get("passport_no", ""))
                     break
             else:
                 continue
             break
 
-    # 写入副驾驶
-    if copilot:
+    # 副驾驶
+    if len(crew_list) >= 2:
+        crew = crew_list[1]
         for row in ws.iter_rows(min_row=1, max_row=50):
             for cell in row:
                 if cell.value and isinstance(cell.value, str) and "副驾驶" in cell.value:
                     row_num = cell.row
-                    safe_set_cell_value(ws, row_num, 2, extract_chinese_name(copilot["name"]))
-                    safe_set_cell_value(ws, row_num, 3, copilot.get("gender", ""))
-                    safe_set_cell_value(ws, row_num, 4, copilot.get("dob", ""))
-                    safe_set_cell_value(ws, row_num, 5, copilot.get("passport_no", ""))
+                    safe_set_cell_value(ws, row_num, 2, extract_chinese_name(crew["name"]))
+                    safe_set_cell_value(ws, row_num, 3, crew.get("gender", ""))
+                    safe_set_cell_value(ws, row_num, 4, crew.get("dob", ""))
+                    safe_set_cell_value(ws, row_num, 5, crew.get("passport_no", ""))
                     break
             else:
                 continue
             break
 
-    # 写入乘务
+    # 乘务、机务：从第3位开始遍历，分别取第一个女性和第一个男性
+    cabin_crew = None
+    mechanic = None
+    for i in range(2, len(crew_list)):
+        crew = crew_list[i]
+        gender = str(crew.get("gender", "")).strip()
+        if gender in ["女", "Female", "F"] and cabin_crew is None:
+            cabin_crew = crew
+        elif gender in ["男", "Male", "M"] and mechanic is None:
+            mechanic = crew
+        if cabin_crew and mechanic:
+            break
+
+    # 写入乘务行
     for row in ws.iter_rows(min_row=1, max_row=50):
         for cell in row:
             if cell.value and isinstance(cell.value, str) and "乘务" in cell.value:
                 row_num = cell.row
-                if cabin:
-                    safe_set_cell_value(ws, row_num, 2, extract_chinese_name(cabin["name"]))
-                    safe_set_cell_value(ws, row_num, 3, cabin.get("gender", ""))
-                    safe_set_cell_value(ws, row_num, 4, cabin.get("dob", ""))
-                    safe_set_cell_value(ws, row_num, 5, cabin.get("passport_no", ""))
+                if cabin_crew:
+                    safe_set_cell_value(ws, row_num, 2, extract_chinese_name(cabin_crew["name"]))
+                    safe_set_cell_value(ws, row_num, 3, cabin_crew.get("gender", ""))
+                    safe_set_cell_value(ws, row_num, 4, cabin_crew.get("dob", ""))
+                    safe_set_cell_value(ws, row_num, 5, cabin_crew.get("passport_no", ""))
                 else:
                     safe_set_cell_value(ws, row_num, 2, "无")
                     safe_set_cell_value(ws, row_num, 3, "")
@@ -304,7 +300,7 @@ def fill_template(template_bytes, data, crew_list, passenger_list):
             continue
         break
 
-    # 写入机务
+    # 写入机务行
     for row in ws.iter_rows(min_row=1, max_row=50):
         for cell in row:
             if cell.value and isinstance(cell.value, str) and "机务" in cell.value:
@@ -382,26 +378,38 @@ if data_file and template_file:
         if passenger_list:
             st.write("提取的乘客信息（前5行）：", pd.DataFrame(passenger_list).head(5))
 
-        st.subheader("📋 提取的航班信息")
+        # 生成默认文件名
         from_code = data.get("from", "")
         to_code = data.get("to", "")
         date_str = data.get("date_str", "")
         utc_time = data.get("utc_time", "")
+        default_filename = f"{from_code}-{to_code}"  # 备用
         if date_str and from_code and to_code:
             date_display = parse_date_display(date_str)
             if utc_time:
                 bj_time = parse_utc_to_beijing(utc_time, date_str)
             else:
                 bj_time = "0000"
-            route_display = f"{date_display} {from_code} {bj_time} XXXX {to_code}"
-            st.info(f"✈️ 航班行程将显示为：{route_display}")
+            default_filename = f"{date_display} {from_code} {bj_time} XXXX {to_code}"
+
+        st.subheader("📋 提取的航班信息")
+        st.info(f"✈️ 航班行程将显示为：{default_filename}")
+
+        # 文件名输入框
+        file_name_input = st.text_input("📝 自定义下载文件名（不含扩展名）", value=default_filename)
 
         result_bytes = fill_template(template_file, data, crew_list, passenger_list)
+
+        # 清理文件名中的非法字符（Windows不允许 \ / : * ? " < > |）
+        safe_file_name = re.sub(r'[\\/*?:"<>|]', "_", file_name_input).strip()
+        if not safe_file_name:
+            safe_file_name = "备案表"
+        download_file_name = f"{safe_file_name}.xlsx"
 
         st.download_button(
             label="⬇️ 下载填充后的备案表",
             data=result_bytes,
-            file_name="公务飞行计划信息备案表_生成.xlsx",
+            file_name=download_file_name,
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
     except Exception as e:
