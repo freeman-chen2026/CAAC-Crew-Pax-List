@@ -176,7 +176,7 @@ def parse_general_declaration(file_bytes):
     return data, crew_data, passenger_data
 
 # ---------- 填充模板 ----------
-def fill_template(template_bytes, data, crew_list, passenger_list):
+def fill_template(template_bytes, data, crew_list, passenger_list, route_display):
     try:
         wb = load_workbook(template_bytes)
     except Exception as e:
@@ -216,23 +216,8 @@ def fill_template(template_bytes, data, crew_list, passenger_list):
         safe_set_cell_value(ws, data_row, 2, data.get("ac_type", ""))
         safe_set_cell_value(ws, data_row, 3, data.get("reg", ""))
         safe_set_cell_value(ws, data_row, 4, data.get("flt", ""))
-
-        from_code = data.get("from", "")
-        to_code = data.get("to", "")
-        date_str = data.get("date_str", "")
-        utc_time = data.get("utc_time", "")
-
-        if date_str and from_code and to_code:
-            date_display = parse_date_display(date_str)
-            if utc_time:
-                bj_time = parse_utc_to_beijing(utc_time, date_str)
-            else:
-                bj_time = "0000"
-            route_display = f"{date_display} {from_code} {bj_time} XXXX {to_code}"
-        else:
-            route_display = f"{from_code}-{to_code}" if from_code and to_code else ""
-
-        safe_set_cell_value(ws, data_row, 5, route_display)
+        # 使用用户输入的行程显示（覆盖自动生成）
+        safe_set_cell_value(ws, data_row, 5, route_display if route_display else "")
 
     # ----- 2. 机组信息 -----
     # 机长
@@ -378,30 +363,37 @@ if data_file and template_file:
         if passenger_list:
             st.write("提取的乘客信息（前5行）：", pd.DataFrame(passenger_list).head(5))
 
-        # 生成默认文件名
+        # 生成默认行程显示文本（用于输入框初始值）
         from_code = data.get("from", "")
         to_code = data.get("to", "")
         date_str = data.get("date_str", "")
         utc_time = data.get("utc_time", "")
-        default_filename = f"{from_code}-{to_code}"  # 备用
+        default_route = ""
         if date_str and from_code and to_code:
             date_display = parse_date_display(date_str)
             if utc_time:
                 bj_time = parse_utc_to_beijing(utc_time, date_str)
             else:
                 bj_time = "0000"
-            default_filename = f"{date_display} {from_code} {bj_time} XXXX {to_code}"
+            default_route = f"{date_display} {from_code} {bj_time} XXXX {to_code}"
+        else:
+            default_route = f"{from_code}-{to_code}" if from_code and to_code else ""
 
         st.subheader("📋 提取的航班信息")
-        st.info(f"✈️ 航班行程将显示为：{default_filename}")
+        st.info(f"✈️ 默认航班行程：{default_route}")
 
-        # 文件名输入框
-        file_name_input = st.text_input("📝 自定义下载文件名（不含扩展名）", value=default_filename)
+        # 文件名输入框（同时作为行程显示）
+        file_name_input = st.text_input("📝 自定义航班行程 / 下载文件名", value=default_route)
 
-        result_bytes = fill_template(template_file, data, crew_list, passenger_list)
+        # 行程显示将使用用户输入的内容
+        route_display = file_name_input.strip()
+        if not route_display:
+            route_display = default_route  # 如果用户清空，回退到默认
 
-        # 清理文件名中的非法字符（Windows不允许 \ / : * ? " < > |）
-        safe_file_name = re.sub(r'[\\/*?:"<>|]', "_", file_name_input).strip()
+        result_bytes = fill_template(template_file, data, crew_list, passenger_list, route_display)
+
+        # 清理文件名中的非法字符
+        safe_file_name = re.sub(r'[\\/*?:"<>|]', "_", route_display).strip()
         if not safe_file_name:
             safe_file_name = "备案表"
         download_file_name = f"{safe_file_name}.xlsx"
