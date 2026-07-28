@@ -93,7 +93,8 @@ def parse_date_display(date_str):
         month_map = {"Jan": 1, "Feb": 2, "Mar": 3, "Apr": 4, "May": 5, "Jun": 6,
                      "Jul": 7, "Aug": 8, "Sep": 9, "Oct": 10, "Nov": 11, "Dec": 12}
         month = month_map.get(month_str[:3], 1)
-        return f"{month}月{int(day)}日"
+        # 改为两位数显示，如 "07月26日"
+        return f"{month:02d}月{int(day):02d}日"
     except:
         return date_str
 
@@ -216,7 +217,7 @@ def fill_template(template_bytes, data, crew_list, passenger_list, route_display
         safe_set_cell_value(ws, data_row, 2, data.get("ac_type", ""))
         safe_set_cell_value(ws, data_row, 3, data.get("reg", ""))
         safe_set_cell_value(ws, data_row, 4, data.get("flt", ""))
-        # 使用用户输入的行程显示（覆盖自动生成）
+        # 使用用户输入的行程显示
         safe_set_cell_value(ws, data_row, 5, route_display if route_display else "")
 
     # ----- 2. 机组信息 -----
@@ -363,7 +364,7 @@ if data_file and template_file:
         if passenger_list:
             st.write("提取的乘客信息（前5行）：", pd.DataFrame(passenger_list).head(5))
 
-        # 生成默认行程显示文本（用于输入框初始值）
+        # 生成默认行程显示文本（两位数日期）
         from_code = data.get("from", "")
         to_code = data.get("to", "")
         date_str = data.get("date_str", "")
@@ -382,17 +383,17 @@ if data_file and template_file:
         st.subheader("📋 提取的航班信息")
         st.info(f"✈️ 默认航班行程：{default_route}")
 
-        # 文件名输入框（同时作为行程显示）
+        # 文件名/行程输入框
         file_name_input = st.text_input("📝 自定义航班行程 / 下载文件名", value=default_route)
 
-        # 行程显示将使用用户输入的内容
+        # 行程显示使用用户输入
         route_display = file_name_input.strip()
         if not route_display:
-            route_display = default_route  # 如果用户清空，回退到默认
+            route_display = default_route
 
         result_bytes = fill_template(template_file, data, crew_list, passenger_list, route_display)
 
-        # 清理文件名中的非法字符
+        # 清理文件名非法字符
         safe_file_name = re.sub(r'[\\/*?:"<>|]', "_", route_display).strip()
         if not safe_file_name:
             safe_file_name = "备案表"
