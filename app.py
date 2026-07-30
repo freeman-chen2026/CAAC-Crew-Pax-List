@@ -120,6 +120,16 @@ def extract_chinese_name(full_name):
     else:
         return full_name
 
+def normalize_name(name):
+    """标准化姓名：去除中文、去除逗号、压缩多余空格为单个空格，转小写"""
+    if not name:
+        return ""
+    # 去除中文字符
+    name = re.sub(r'[\u4e00-\u9fff]+', '', name)
+    # 将逗号、多个空格替换为单个空格
+    name = re.sub(r'[,\s]+', ' ', name).strip()
+    return name.lower()
+
 def parse_document_type(passport_no, doc_type):
     doc_type_str = str(doc_type).strip() if pd.notna(doc_type) else ""
     if doc_type_str:
@@ -258,39 +268,23 @@ def parse_general_declaration(file_bytes):
                         })
     return data, crew_data, passenger_data
 
-# ---------- 联系方式匹配函数 ----------
+# ---------- 联系方式匹配函数（已修复） ----------
 def find_contact(crew_name):
     """根据机组姓名从内置映射中查找联系方式"""
-    if not BUILTIN_CONTACT_MAP:
+    if not crew_name or not BUILTIN_CONTACT_MAP:
         return ""
-    # 尝试提取中文名
+    # 先尝试中文名直接匹配
     chinese = extract_chinese_name(crew_name)
-    if chinese:
-        if chinese in BUILTIN_CONTACT_MAP:
-            return BUILTIN_CONTACT_MAP[chinese]
-        # 也尝试小写
-        if chinese.lower() in {k.lower(): v for k, v in BUILTIN_CONTACT_MAP.items()}:
-            for k, v in BUILTIN_CONTACT_MAP.items():
-                if k.lower() == chinese.lower():
-                    return v
-    # 尝试清理后的全名（去除中文）
-    clean = re.sub(r'[\u4e00-\u9fff]+', '', crew_name).strip()
-    if clean:
-        clean = re.sub(r'[,\s]+', ' ', clean).strip()
-        if clean in BUILTIN_CONTACT_MAP:
-            return BUILTIN_CONTACT_MAP[clean]
-        if clean.lower() in {k.lower(): v for k, v in BUILTIN_CONTACT_MAP.items()}:
-            for k, v in BUILTIN_CONTACT_MAP.items():
-                if k.lower() == clean.lower():
-                    return v
-    # 直接使用原始全名（去除多余空格）
-    raw = re.sub(r'[,\s]+', ' ', crew_name).strip()
-    if raw in BUILTIN_CONTACT_MAP:
-        return BUILTIN_CONTACT_MAP[raw]
-    if raw.lower() in {k.lower(): v for k, v in BUILTIN_CONTACT_MAP.items()}:
-        for k, v in BUILTIN_CONTACT_MAP.items():
-            if k.lower() == raw.lower():
-                return v
+    if chinese and chinese in BUILTIN_CONTACT_MAP:
+        return BUILTIN_CONTACT_MAP[chinese]
+    # 标准化姓名
+    norm = normalize_name(crew_name)
+    if not norm:
+        return ""
+    # 遍历字典，将键也标准化后比较
+    for key, val in BUILTIN_CONTACT_MAP.items():
+        if normalize_name(key) == norm:
+            return val
     return ""
 
 # ---------- 填充模板 ----------
