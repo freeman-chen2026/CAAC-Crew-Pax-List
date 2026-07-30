@@ -7,7 +7,90 @@ from datetime import datetime, timedelta
 
 st.set_page_config(page_title="GD单 → 公务飞行计划信息备案表", layout="wide")
 st.title("🛫 GD单 → 公务飞行计划信息备案表")
-st.markdown("上传 GD单（General Declaration）Excel，自动提取机组和乘客信息，填入备案表模板。")
+st.markdown("上传 GD单 和模板，自动生成备案表（联系方式已内置）。")
+
+# ---------- 内置联系方式映射 ----------
+BUILTIN_CONTACT_MAP = {
+    "庚凡": "139 2463 9747",
+    "张永一": "139 0125 9544",
+    "梅峰": "135 0967 8127",
+    "王斌": "139 2527 2867",
+    "王少雄": "186 8387 9841",
+    "苗旺旺": "138 1871 5251",
+    "赵岩松": "186 1161 8385",
+    "Bruce Roderick, WAINES": "186 6532 9796",
+    "Oliver Viktor, RACZ": "186 1197 3165",
+    "蔡国俊": "157 1220 8304",
+    "李庆宏": "135 0909 0503",
+    "宋炜": "136 3256 5565",
+    "昝昭君": "182 9570 0579",
+    "孙浩": "136 7012 1990",
+    "朱正宇": "189 8335 3697",
+    "金尚明": "136 7113 8047",
+    "张哲": "139 0247 5026",
+    "王莹": "159 1009 9069",
+    "赵婷婷": "138 2883 3162",
+    "王凯珮": "852 68588410",
+    "范蕾蕾": "182 1000 6866",
+    "危慧": "152 1349 1328",
+    "廉卓群": "133 5632 3949",
+    "张佳妮": "136 6169 9966",
+    "樊婉程": "186 2017 4817",
+    "姚艳阁": "156 0127 9399",
+    "李潇恩": "158 0599 1600",
+    "赖小燕": "60 1239 05520",
+    "花佩": "186 2631 0634",
+    "丁燕栒": "135 6035 3829",
+    "何静文": "852 6421 0994",
+    "蔡雨桐": "852 6426 7445",
+    "茅邂文": "152 5181 7375",
+    "张欢乐": "186 1652 1529",
+    "詹佩佩": "137 1440 5925",
+    "周丽欢": "152 5710 6140",
+    "于龙飞": "156 5288 0812",
+    "翁英": "130 6785 2000",
+    "李卉妍": "138 5142 0321",
+    "卢江": "158 0045 6521",
+    "AYA, MUGURUMA": "81 8071140700",
+    "梁广煜": "137 9428 7177",
+    "李园": "139 1178 3914",
+    "孔铮": "139 1085 3981",
+    "高峰": "135 8186 9017",
+    "李海": "136 8131 8388",
+    "李阳": "133 6603 6567",
+    "程佳俊": "134 8010 3029",
+    "陈居瑜": "158 8962 6660",
+    "林生": "159 2162 9406",
+    "谢依椿": "159 8942 4501",
+    "廖关荣": "181 0755 9103",
+    "林峰": "135 2260 7955",
+    "丘东": "136 0044 6505",
+    "王庆辉": "134 8013 9352",
+    "姜磊": "135 1006 5318",
+    "黄彦杰": "132 1157 2184",
+    "王珍": "198 6662 9312",
+    "赵国庆": "155 8849 2975",
+    "俞凯": "130 0579 0326",
+    "王军": "853 62666900",
+    "张德桃": "130 2883 6410",
+    "江焰辉": "136 3148 0927",
+    "孙龙": "156 9558 0691",
+    "梁平": "138 2750 6225",
+    "冯仁毫": "185 2028 6463",
+    "焦石军": "139 2388 3525",
+    "万子辰": "177 7005 7193",
+    "卓辉": "157 7070 8632",
+    "万虹波": "133 1297 9906",
+    "王晟磊": "150 2689 7493",
+    "杨杰": "186 1694 8903",
+    "林帅": "138 1156 6711",
+    "苏志斌": "159 0150 7150",
+    "孙辉": "139 1626 9572",
+    "孟周聪": "135 6434 5029",
+    "熊立凌": "135 3821 6276",
+    "赵康": "191 6764 6172",
+    "翟征宇": "134 1448 9793",
+}
 
 # ---------- 国籍映射 ----------
 NATION_MAP = {
@@ -93,7 +176,6 @@ def parse_date_display(date_str):
         month_map = {"Jan": 1, "Feb": 2, "Mar": 3, "Apr": 4, "May": 5, "Jun": 6,
                      "Jul": 7, "Aug": 8, "Sep": 9, "Oct": 10, "Nov": 11, "Dec": 12}
         month = month_map.get(month_str[:3], 1)
-        # 改为两位数显示，如 "07月26日"
         return f"{month:02d}月{int(day):02d}日"
     except:
         return date_str
@@ -176,6 +258,41 @@ def parse_general_declaration(file_bytes):
                         })
     return data, crew_data, passenger_data
 
+# ---------- 联系方式匹配函数 ----------
+def find_contact(crew_name):
+    """根据机组姓名从内置映射中查找联系方式"""
+    if not BUILTIN_CONTACT_MAP:
+        return ""
+    # 尝试提取中文名
+    chinese = extract_chinese_name(crew_name)
+    if chinese:
+        if chinese in BUILTIN_CONTACT_MAP:
+            return BUILTIN_CONTACT_MAP[chinese]
+        # 也尝试小写
+        if chinese.lower() in {k.lower(): v for k, v in BUILTIN_CONTACT_MAP.items()}:
+            for k, v in BUILTIN_CONTACT_MAP.items():
+                if k.lower() == chinese.lower():
+                    return v
+    # 尝试清理后的全名（去除中文）
+    clean = re.sub(r'[\u4e00-\u9fff]+', '', crew_name).strip()
+    if clean:
+        clean = re.sub(r'[,\s]+', ' ', clean).strip()
+        if clean in BUILTIN_CONTACT_MAP:
+            return BUILTIN_CONTACT_MAP[clean]
+        if clean.lower() in {k.lower(): v for k, v in BUILTIN_CONTACT_MAP.items()}:
+            for k, v in BUILTIN_CONTACT_MAP.items():
+                if k.lower() == clean.lower():
+                    return v
+    # 直接使用原始全名（去除多余空格）
+    raw = re.sub(r'[,\s]+', ' ', crew_name).strip()
+    if raw in BUILTIN_CONTACT_MAP:
+        return BUILTIN_CONTACT_MAP[raw]
+    if raw.lower() in {k.lower(): v for k, v in BUILTIN_CONTACT_MAP.items()}:
+        for k, v in BUILTIN_CONTACT_MAP.items():
+            if k.lower() == raw.lower():
+                return v
+    return ""
+
 # ---------- 填充模板 ----------
 def fill_template(template_bytes, data, crew_list, passenger_list, route_display):
     try:
@@ -217,7 +334,6 @@ def fill_template(template_bytes, data, crew_list, passenger_list, route_display
         safe_set_cell_value(ws, data_row, 2, data.get("ac_type", ""))
         safe_set_cell_value(ws, data_row, 3, data.get("reg", ""))
         safe_set_cell_value(ws, data_row, 4, data.get("flt", ""))
-        # 使用用户输入的行程显示
         safe_set_cell_value(ws, data_row, 5, route_display if route_display else "")
 
     # ----- 2. 机组信息 -----
@@ -232,6 +348,8 @@ def fill_template(template_bytes, data, crew_list, passenger_list, route_display
                     safe_set_cell_value(ws, row_num, 3, crew.get("gender", ""))
                     safe_set_cell_value(ws, row_num, 4, crew.get("dob", ""))
                     safe_set_cell_value(ws, row_num, 5, crew.get("passport_no", ""))
+                    contact = find_contact(crew["name"])
+                    safe_set_cell_value(ws, row_num, 7, contact)
                     break
             else:
                 continue
@@ -248,6 +366,8 @@ def fill_template(template_bytes, data, crew_list, passenger_list, route_display
                     safe_set_cell_value(ws, row_num, 3, crew.get("gender", ""))
                     safe_set_cell_value(ws, row_num, 4, crew.get("dob", ""))
                     safe_set_cell_value(ws, row_num, 5, crew.get("passport_no", ""))
+                    contact = find_contact(crew["name"])
+                    safe_set_cell_value(ws, row_num, 7, contact)
                     break
             else:
                 continue
@@ -276,11 +396,14 @@ def fill_template(template_bytes, data, crew_list, passenger_list, route_display
                     safe_set_cell_value(ws, row_num, 3, cabin_crew.get("gender", ""))
                     safe_set_cell_value(ws, row_num, 4, cabin_crew.get("dob", ""))
                     safe_set_cell_value(ws, row_num, 5, cabin_crew.get("passport_no", ""))
+                    contact = find_contact(cabin_crew["name"])
+                    safe_set_cell_value(ws, row_num, 7, contact)
                 else:
                     safe_set_cell_value(ws, row_num, 2, "无")
                     safe_set_cell_value(ws, row_num, 3, "")
                     safe_set_cell_value(ws, row_num, 4, "")
                     safe_set_cell_value(ws, row_num, 5, "")
+                    safe_set_cell_value(ws, row_num, 7, "")
                 break
         else:
             continue
@@ -296,11 +419,14 @@ def fill_template(template_bytes, data, crew_list, passenger_list, route_display
                     safe_set_cell_value(ws, row_num, 3, mechanic.get("gender", ""))
                     safe_set_cell_value(ws, row_num, 4, mechanic.get("dob", ""))
                     safe_set_cell_value(ws, row_num, 5, mechanic.get("passport_no", ""))
+                    contact = find_contact(mechanic["name"])
+                    safe_set_cell_value(ws, row_num, 7, contact)
                 else:
                     safe_set_cell_value(ws, row_num, 2, "无")
                     safe_set_cell_value(ws, row_num, 3, "")
                     safe_set_cell_value(ws, row_num, 4, "")
                     safe_set_cell_value(ws, row_num, 5, "")
+                    safe_set_cell_value(ws, row_num, 7, "")
                 break
         else:
             continue
@@ -350,7 +476,7 @@ def fill_template(template_bytes, data, crew_list, passenger_list, route_display
 
 # ---------- Streamlit UI ----------
 st.subheader("📂 上传文件")
-st.info("⚠️ 注意：模板文件必须是 **.xlsx** 格式（不是 .xls），否则无法打开。如果您的模板是 .xls，请用 Excel 另存为 .xlsx 后再上传。")
+st.info("⚠️ 注意：模板文件必须是 **.xlsx** 格式（非 .xls）。联系方式已内置，无需额外上传。")
 
 data_file = st.file_uploader("上传 GD单（General Declaration）Excel（.xlsx）", type=["xlsx"], key="data")
 template_file = st.file_uploader("上传备案表模板 Excel（必须是 .xlsx）", type=["xlsx"], key="template")
@@ -359,12 +485,13 @@ if data_file and template_file:
     try:
         data, crew_list, passenger_list = parse_general_declaration(data_file)
         st.success(f"✅ 解析成功：机组 {len(crew_list)} 人，乘客 {len(passenger_list)} 人")
+
         if crew_list:
             st.write("提取的机组信息：", pd.DataFrame(crew_list))
         if passenger_list:
             st.write("提取的乘客信息（前5行）：", pd.DataFrame(passenger_list).head(5))
 
-        # 生成默认行程显示文本（两位数日期）
+        # 生成默认行程显示文本
         from_code = data.get("from", "")
         to_code = data.get("to", "")
         date_str = data.get("date_str", "")
@@ -383,17 +510,14 @@ if data_file and template_file:
         st.subheader("📋 提取的航班信息")
         st.info(f"✈️ 默认航班行程：{default_route}")
 
-        # 文件名/行程输入框
         file_name_input = st.text_input("📝 自定义航班行程 / 下载文件名", value=default_route)
 
-        # 行程显示使用用户输入
         route_display = file_name_input.strip()
         if not route_display:
             route_display = default_route
 
         result_bytes = fill_template(template_file, data, crew_list, passenger_list, route_display)
 
-        # 清理文件名非法字符
         safe_file_name = re.sub(r'[\\/*?:"<>|]', "_", route_display).strip()
         if not safe_file_name:
             safe_file_name = "备案表"
@@ -409,4 +533,4 @@ if data_file and template_file:
         st.error(f"❌ 处理失败：{e}")
         st.exception(e)
 else:
-    st.info("👆 请同时上传两个文件。")
+    st.info("👆 请同时上传 GD单 和 模板文件。")
