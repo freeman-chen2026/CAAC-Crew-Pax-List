@@ -31,6 +31,7 @@ BUILTIN_CONTACT_MAP = {
     "刘汇川": "188 5827 2791",
     "于龙飞": "156 5288 0812",
     "林帅": "138 1156 6711",
+    "张佳妮": "136 6169 9966",
     "蔡国俊": "157 1220 8304",
     "李庆宏": "135 0909 0503",
     "宋炜": "136 3256 5565",
@@ -45,7 +46,6 @@ BUILTIN_CONTACT_MAP = {
     "范蕾蕾": "182 1000 6866",
     "危慧": "152 1349 1328",
     "廉卓群": "133 5632 3949",
-    "张佳妮": "136 6169 9966",
     "樊婉程": "186 2017 4817",
     "姚艳阁": "156 0127 9399",
     "李潇恩": "158 0599 1600",
@@ -94,7 +94,6 @@ BUILTIN_CONTACT_MAP = {
     "万虹波": "133 1297 9906",
     "王晟磊": "150 2689 7493",
     "杨杰": "186 1694 8903",
-    "林帅": "138 1156 6711",
     "苏志斌": "159 0150 7150",
     "孙辉": "139 1626 9572",
     "孟周聪": "135 6434 5029",
@@ -109,6 +108,11 @@ BUILTIN_LICENSE_MAP = {
     "刘汇川": "330103199003191618",
     "于龙飞": "ZN00915",
     "林帅": "110227198601130015",
+    "彭罡": "3240393",                          # 新增
+    "Kwan Leung WU": "3025478",                # 新增（胡君量）
+    "Wan Leung WU": "3025478",                 # 以防出现其他拼写
+    "张佳妮": "10183",                         # 新增
+    "Jiani ZHANG": "10183",                    # 英文名也加上
 }
 
 # ---------- 国籍映射 ----------
@@ -370,10 +374,8 @@ def fill_template(template_bytes, data, crew_list, passenger_list, route_display
                     safe_set_cell_value(ws, row_num, 3, crew.get("gender", ""))
                     safe_set_cell_value(ws, row_num, 4, crew.get("dob", ""))
                     safe_set_cell_value(ws, row_num, 5, crew.get("passport_no", ""))
-                    # 执照号码
                     license_num = find_license(crew["name"])
                     safe_set_cell_value(ws, row_num, 6, license_num)
-                    # 联系方式
                     contact = find_contact(crew["name"])
                     safe_set_cell_value(ws, row_num, 7, contact)
                     break
