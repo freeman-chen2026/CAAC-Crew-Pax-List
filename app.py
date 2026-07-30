@@ -66,6 +66,22 @@ BUILTIN_CONTACT_MAP = {
     "Rodolfo BONETTI": "132 6284 1083",
     "危慧": "152 1349 1328",
     "Hui WEI": "152 1349 1328",
+    # 本次新增
+    "李辛欣": "135 5008 8666",
+    "Xinxin LI": "135 5008 8666",
+    "Herve Daniel, STAMM": "183 1709 0300",
+    "Herve Daniel STAMM": "183 1709 0300",
+    "樊婉程": "186 2017 4817",
+    "Wancheng FAN": "186 2017 4817",
+    "刘爽": "138 0125 8789",
+    "Shuang LIU": "138 0125 8789",
+    "刘凯": "135 2157 9157",
+    "Kai LIU": "135 2157 9157",
+    "詹佩佩": "137 1440 5925",
+    "Peipei ZHAN": "137 1440 5925",
+    "花佩": "186 2631 0634",
+    "Pei HUA": "186 2631 0634",
+    # 原有（保留）
     "蔡国俊": "157 1220 8304",
     "李庆宏": "135 0909 0503",
     "宋炜": "136 3256 5565",
@@ -77,17 +93,14 @@ BUILTIN_CONTACT_MAP = {
     "赵婷婷": "138 2883 3162",
     "范蕾蕾": "182 1000 6866",
     "廉卓群": "133 5632 3949",
-    "樊婉程": "186 2017 4817",
     "姚艳阁": "156 0127 9399",
     "李潇恩": "158 0599 1600",
     "赖小燕": "60 1239 05520",
     "Siau Mui LAI": "60 1239 05520",
-    "花佩": "186 2631 0634",
     "丁燕栒": "135 6035 3829",
     "何静文": "852 6421 0994",
     "蔡雨桐": "852 6426 7445",
     "茅邂文": "152 5181 7375",
-    "詹佩佩": "137 1440 5925",
     "周丽欢": "152 5710 6140",
     "翁英": "130 6785 2000",
     "AYA, MUGURUMA": "81 8071140700",
@@ -176,6 +189,25 @@ BUILTIN_LICENSE_MAP = {
     "Rodolfo BONETTI": "12660",
     "危慧": "10137",
     "Hui WEI": "10137",
+    # 本次新增
+    "李辛欣": "4209424",
+    "Xinxin LI": "4209424",
+    "Herve Daniel, STAMM": "2666622",
+    "Herve Daniel STAMM": "2666622",
+    "樊婉程": "ZN00434",
+    "Wancheng FAN": "ZN00434",
+    "刘爽": "4101498",
+    "Shuang LIU": "4101498",
+    "刘凯": "2833670",
+    "Kai LIU": "2833670",
+    "詹佩佩": "10283",
+    "Peipei ZHAN": "10283",
+    "王斌": "3340398",
+    "Bin WANG": "3340398",
+    "Bruce Roderick, WAINES": "3448726",
+    "Bruce Roderick WAINES": "3448726",
+    "花佩": "ZN00495",
+    "Pei HUA": "ZN00495",
 }
 
 # ---------- 国籍映射 ----------
@@ -393,7 +425,6 @@ def fill_template(template_bytes, data, crew_list, passenger_list, route_display
 
     ws = wb.active
 
-    # 飞行目的
     if not passenger_list:
         for row in ws.iter_rows(min_row=1, max_row=10):
             for cell in row:
@@ -405,7 +436,6 @@ def fill_template(template_bytes, data, crew_list, passenger_list, route_display
                 continue
             break
 
-    # 基础信息
     info_row = None
     for row in ws.iter_rows(min_row=1, max_row=20):
         for cell in row:
@@ -424,7 +454,6 @@ def fill_template(template_bytes, data, crew_list, passenger_list, route_display
         safe_set_cell_value(ws, data_row, 4, data.get("flt", ""))
         safe_set_cell_value(ws, data_row, 5, route_display if route_display else "")
 
-    # 机组信息
     # 机长
     if len(crew_list) >= 1:
         crew = crew_list[0]
