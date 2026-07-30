@@ -60,6 +60,12 @@ BUILTIN_CONTACT_MAP = {
     "Siyuan WEI": "133 2110 4588",
     "王晟磊": "150 2689 7493",
     "Shenglei WANG": "150 2689 7493",
+    "Keith Robert, SHERREN": "137 3540 9744",
+    "Keith Robert SHERREN": "137 3540 9744",
+    "Rodolfo, BONETTI": "132 6284 1083",
+    "Rodolfo BONETTI": "132 6284 1083",
+    "危慧": "152 1349 1328",
+    "Hui WEI": "152 1349 1328",
     "蔡国俊": "157 1220 8304",
     "李庆宏": "135 0909 0503",
     "宋炜": "136 3256 5565",
@@ -70,7 +76,6 @@ BUILTIN_CONTACT_MAP = {
     "王莹": "159 1009 9069",
     "赵婷婷": "138 2883 3162",
     "范蕾蕾": "182 1000 6866",
-    "危慧": "152 1349 1328",
     "廉卓群": "133 5632 3949",
     "樊婉程": "186 2017 4817",
     "姚艳阁": "156 0127 9399",
@@ -165,6 +170,12 @@ BUILTIN_LICENSE_MAP = {
     "Siyuan WEI": "3453237",
     "王晟磊": "310109198409264012",
     "Shenglei WANG": "310109198409264012",
+    "Keith Robert, SHERREN": "12262",
+    "Keith Robert SHERREN": "12262",
+    "Rodolfo, BONETTI": "12660",
+    "Rodolfo BONETTI": "12660",
+    "危慧": "10137",
+    "Hui WEI": "10137",
 }
 
 # ---------- 国籍映射 ----------
@@ -196,7 +207,6 @@ def extract_chinese_name(full_name):
         return full_name
 
 def normalize_name(name):
-    """标准化姓名：去除中文、去除逗号、压缩多余空格为单个空格，转小写"""
     if not name:
         return ""
     name = re.sub(r'[\u4e00-\u9fff]+', '', name)
@@ -204,7 +214,6 @@ def normalize_name(name):
     return name.lower()
 
 def find_contact(crew_name):
-    """根据机组姓名从内置映射中查找联系方式"""
     if not crew_name or not BUILTIN_CONTACT_MAP:
         return ""
     chinese = extract_chinese_name(crew_name)
@@ -219,7 +228,6 @@ def find_contact(crew_name):
     return ""
 
 def find_license(crew_name):
-    """根据机组姓名从内置映射中查找执照号码"""
     if not crew_name or not BUILTIN_LICENSE_MAP:
         return ""
     chinese = extract_chinese_name(crew_name)
@@ -234,13 +242,10 @@ def find_license(crew_name):
     return ""
 
 def parse_document_type(passport_no, doc_type):
-    """根据原始证件类型和号码判断，返回最终证件种类（已简化）"""
     doc_type_str = str(doc_type).strip() if pd.notna(doc_type) else ""
     if doc_type_str:
-        # 如果原始是“中华人民共和国居民身份证”，简化
         if "中华人民共和国居民身份证" in doc_type_str:
             return "身份证"
-        # 其他保留原样
         return doc_type_str
     pn = str(passport_no).strip() if pd.notna(passport_no) else ""
     pn = re.sub(r'\s+', '', pn)
@@ -276,8 +281,8 @@ def parse_utc_to_beijing(utc_str, date_str):
         else:
             return "0000"
         day = int(re.search(r'\d+', date_str).group()) if re.search(r'\d+', date_str) else 1
-        month_map = {"Jan": 1, "Feb": 2, "Mar": 3, "Apr": 4, "May": 5, "Jun": 6,
-                     "Jul": 7, "Aug": 8, "Sep": 9, "Oct": 10, "Nov": 11, "Dec": 12}
+        month_map = {"Jan":1,"Feb":2,"Mar":3,"Apr":4,"May":5,"Jun":6,
+                     "Jul":7,"Aug":8,"Sep":9,"Oct":10,"Nov":11,"Dec":12}
         month_str = re.search(r'[A-Za-z]{3}', date_str).group() if re.search(r'[A-Za-z]{3}', date_str) else "Jan"
         month = month_map.get(month_str[:3], 1)
         year = 2026
@@ -291,8 +296,8 @@ def parse_date_display(date_str):
     try:
         day = re.search(r'\d+', date_str).group()
         month_str = re.search(r'[A-Za-z]{3}', date_str).group()
-        month_map = {"Jan": 1, "Feb": 2, "Mar": 3, "Apr": 4, "May": 5, "Jun": 6,
-                     "Jul": 7, "Aug": 8, "Sep": 9, "Oct": 10, "Nov": 11, "Dec": 12}
+        month_map = {"Jan":1,"Feb":2,"Mar":3,"Apr":4,"May":5,"Jun":6,
+                     "Jul":7,"Aug":8,"Sep":9,"Oct":10,"Nov":11,"Dec":12}
         month = month_map.get(month_str[:3], 1)
         return f"{month:02d}月{int(day):02d}日"
     except:
@@ -388,7 +393,7 @@ def fill_template(template_bytes, data, crew_list, passenger_list, route_display
 
     ws = wb.active
 
-    # ----- 0. 飞行目的 -----
+    # 飞行目的
     if not passenger_list:
         for row in ws.iter_rows(min_row=1, max_row=10):
             for cell in row:
@@ -400,7 +405,7 @@ def fill_template(template_bytes, data, crew_list, passenger_list, route_display
                 continue
             break
 
-    # ----- 1. 基础信息 -----
+    # 基础信息
     info_row = None
     for row in ws.iter_rows(min_row=1, max_row=20):
         for cell in row:
@@ -419,7 +424,7 @@ def fill_template(template_bytes, data, crew_list, passenger_list, route_display
         safe_set_cell_value(ws, data_row, 4, data.get("flt", ""))
         safe_set_cell_value(ws, data_row, 5, route_display if route_display else "")
 
-    # ----- 2. 机组信息 -----
+    # 机组信息
     # 机长
     if len(crew_list) >= 1:
         crew = crew_list[0]
@@ -460,7 +465,7 @@ def fill_template(template_bytes, data, crew_list, passenger_list, route_display
                 continue
             break
 
-    # 乘务、机务：从第3位开始遍历，分别取第一个女性和第一个男性
+    # 乘务、机务
     cabin_crew = None
     mechanic = None
     for i in range(2, len(crew_list)):
@@ -473,7 +478,7 @@ def fill_template(template_bytes, data, crew_list, passenger_list, route_display
         if cabin_crew and mechanic:
             break
 
-    # 写入乘务行
+    # 乘务行
     for row in ws.iter_rows(min_row=1, max_row=50):
         for cell in row:
             if cell.value and isinstance(cell.value, str) and "乘务" in cell.value:
@@ -499,7 +504,7 @@ def fill_template(template_bytes, data, crew_list, passenger_list, route_display
             continue
         break
 
-    # 写入机务行
+    # 机务行
     for row in ws.iter_rows(min_row=1, max_row=50):
         for cell in row:
             if cell.value and isinstance(cell.value, str) and "机务" in cell.value:
@@ -525,7 +530,7 @@ def fill_template(template_bytes, data, crew_list, passenger_list, route_display
             continue
         break
 
-    # ----- 3. 乘客信息 -----
+    # 乘客信息
     passenger_start_row = None
     for row in ws.iter_rows(min_row=1, max_row=100):
         for cell in row:
@@ -555,10 +560,8 @@ def fill_template(template_bytes, data, crew_list, passenger_list, route_display
             safe_set_cell_value(ws, row_num, 2, pax.get("gender", ""))
             safe_set_cell_value(ws, row_num, 3, pax.get("dob", ""))
             safe_set_cell_value(ws, row_num, 4, get_nation_name(pax.get("nationality", "")))
-            # 证件类型：使用 parse_document_type 函数自动简化
             doc_type = pax.get("doc_type", "")
             if pd.notna(doc_type) and str(doc_type).strip():
-                # 直接调用 parse_document_type 进行简化
                 doc_type_clean = parse_document_type("", doc_type)
             else:
                 doc_type_clean = parse_document_type(pax.get("passport_no", ""), "")
@@ -587,7 +590,6 @@ if data_file and template_file:
         if passenger_list:
             st.write("提取的乘客信息（前5行）：", pd.DataFrame(passenger_list).head(5))
 
-        # 生成默认行程显示文本
         from_code = data.get("from", "")
         to_code = data.get("to", "")
         date_str = data.get("date_str", "")
