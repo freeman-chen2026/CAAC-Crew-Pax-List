@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 
 st.set_page_config(page_title="GD单 → 公务飞行计划信息备案表", layout="wide")
 st.title("🛫 GD单 → 公务飞行计划信息备案表")
-st.markdown("上传 GD单 和模板，自动生成备案表（联系方式已内置）。")
+st.markdown("上传 GD单 和模板，自动生成备案表（联系方式及执照号码已内置）。")
 
 # ---------- 内置联系方式映射 ----------
 BUILTIN_CONTACT_MAP = {
@@ -25,8 +25,12 @@ BUILTIN_CONTACT_MAP = {
     "李亚民": "133 6632 0878",
     "赵镭": "138 0883 9660",
     "彭罡": "186 1263 1888",
-    "Wan Leung WU": "132 6695 8816",   # 原始拼写
-    "Kwan Leung WU": "132 6695 8816",  # 实际机组拼写（修正）
+    "Wan Leung WU": "132 6695 8816",
+    "Kwan Leung WU": "132 6695 8816",
+    "吴鹏": "136 1110 5901",
+    "刘汇川": "188 5827 2791",
+    "于龙飞": "156 5288 0812",
+    "林帅": "138 1156 6711",
     "蔡国俊": "157 1220 8304",
     "李庆宏": "135 0909 0503",
     "宋炜": "136 3256 5565",
@@ -55,7 +59,6 @@ BUILTIN_CONTACT_MAP = {
     "张欢乐": "186 1652 1529",
     "詹佩佩": "137 1440 5925",
     "周丽欢": "152 5710 6140",
-    "于龙飞": "156 5288 0812",
     "翁英": "130 6785 2000",
     "李卉妍": "138 5142 0321",
     "卢江": "158 0045 6521",
@@ -100,6 +103,14 @@ BUILTIN_CONTACT_MAP = {
     "翟征宇": "134 1448 9793",
 }
 
+# ---------- 内置执照号码映射 ----------
+BUILTIN_LICENSE_MAP = {
+    "吴鹏": "130103197602102115",
+    "刘汇川": "330103199003191618",
+    "于龙飞": "ZN00915",
+    "林帅": "110227198601130015",
+}
+
 # ---------- 国籍映射 ----------
 NATION_MAP = {
     "CHN": "中国", "HKG": "香港", "DEU": "德国", "USA": "美国", "GBR": "英国",
@@ -135,6 +146,36 @@ def normalize_name(name):
     name = re.sub(r'[\u4e00-\u9fff]+', '', name)
     name = re.sub(r'[,\s]+', ' ', name).strip()
     return name.lower()
+
+def find_contact(crew_name):
+    """根据机组姓名从内置映射中查找联系方式"""
+    if not crew_name or not BUILTIN_CONTACT_MAP:
+        return ""
+    chinese = extract_chinese_name(crew_name)
+    if chinese and chinese in BUILTIN_CONTACT_MAP:
+        return BUILTIN_CONTACT_MAP[chinese]
+    norm = normalize_name(crew_name)
+    if not norm:
+        return ""
+    for key, val in BUILTIN_CONTACT_MAP.items():
+        if normalize_name(key) == norm:
+            return val
+    return ""
+
+def find_license(crew_name):
+    """根据机组姓名从内置映射中查找执照号码"""
+    if not crew_name or not BUILTIN_LICENSE_MAP:
+        return ""
+    chinese = extract_chinese_name(crew_name)
+    if chinese and chinese in BUILTIN_LICENSE_MAP:
+        return BUILTIN_LICENSE_MAP[chinese]
+    norm = normalize_name(crew_name)
+    if not norm:
+        return ""
+    for key, val in BUILTIN_LICENSE_MAP.items():
+        if normalize_name(key) == norm:
+            return val
+    return ""
 
 def parse_document_type(passport_no, doc_type):
     doc_type_str = str(doc_type).strip() if pd.notna(doc_type) else ""
@@ -274,25 +315,6 @@ def parse_general_declaration(file_bytes):
                         })
     return data, crew_data, passenger_data
 
-# ---------- 联系方式匹配函数 ----------
-def find_contact(crew_name):
-    """根据机组姓名从内置映射中查找联系方式"""
-    if not crew_name or not BUILTIN_CONTACT_MAP:
-        return ""
-    # 先尝试中文名直接匹配
-    chinese = extract_chinese_name(crew_name)
-    if chinese and chinese in BUILTIN_CONTACT_MAP:
-        return BUILTIN_CONTACT_MAP[chinese]
-    # 标准化姓名
-    norm = normalize_name(crew_name)
-    if not norm:
-        return ""
-    # 遍历字典，将键也标准化后比较
-    for key, val in BUILTIN_CONTACT_MAP.items():
-        if normalize_name(key) == norm:
-            return val
-    return ""
-
 # ---------- 填充模板 ----------
 def fill_template(template_bytes, data, crew_list, passenger_list, route_display):
     try:
@@ -348,6 +370,10 @@ def fill_template(template_bytes, data, crew_list, passenger_list, route_display
                     safe_set_cell_value(ws, row_num, 3, crew.get("gender", ""))
                     safe_set_cell_value(ws, row_num, 4, crew.get("dob", ""))
                     safe_set_cell_value(ws, row_num, 5, crew.get("passport_no", ""))
+                    # 执照号码
+                    license_num = find_license(crew["name"])
+                    safe_set_cell_value(ws, row_num, 6, license_num)
+                    # 联系方式
                     contact = find_contact(crew["name"])
                     safe_set_cell_value(ws, row_num, 7, contact)
                     break
@@ -366,6 +392,8 @@ def fill_template(template_bytes, data, crew_list, passenger_list, route_display
                     safe_set_cell_value(ws, row_num, 3, crew.get("gender", ""))
                     safe_set_cell_value(ws, row_num, 4, crew.get("dob", ""))
                     safe_set_cell_value(ws, row_num, 5, crew.get("passport_no", ""))
+                    license_num = find_license(crew["name"])
+                    safe_set_cell_value(ws, row_num, 6, license_num)
                     contact = find_contact(crew["name"])
                     safe_set_cell_value(ws, row_num, 7, contact)
                     break
@@ -396,6 +424,8 @@ def fill_template(template_bytes, data, crew_list, passenger_list, route_display
                     safe_set_cell_value(ws, row_num, 3, cabin_crew.get("gender", ""))
                     safe_set_cell_value(ws, row_num, 4, cabin_crew.get("dob", ""))
                     safe_set_cell_value(ws, row_num, 5, cabin_crew.get("passport_no", ""))
+                    license_num = find_license(cabin_crew["name"])
+                    safe_set_cell_value(ws, row_num, 6, license_num)
                     contact = find_contact(cabin_crew["name"])
                     safe_set_cell_value(ws, row_num, 7, contact)
                 else:
@@ -403,6 +433,7 @@ def fill_template(template_bytes, data, crew_list, passenger_list, route_display
                     safe_set_cell_value(ws, row_num, 3, "")
                     safe_set_cell_value(ws, row_num, 4, "")
                     safe_set_cell_value(ws, row_num, 5, "")
+                    safe_set_cell_value(ws, row_num, 6, "")
                     safe_set_cell_value(ws, row_num, 7, "")
                 break
         else:
@@ -419,6 +450,8 @@ def fill_template(template_bytes, data, crew_list, passenger_list, route_display
                     safe_set_cell_value(ws, row_num, 3, mechanic.get("gender", ""))
                     safe_set_cell_value(ws, row_num, 4, mechanic.get("dob", ""))
                     safe_set_cell_value(ws, row_num, 5, mechanic.get("passport_no", ""))
+                    license_num = find_license(mechanic["name"])
+                    safe_set_cell_value(ws, row_num, 6, license_num)
                     contact = find_contact(mechanic["name"])
                     safe_set_cell_value(ws, row_num, 7, contact)
                 else:
@@ -426,6 +459,7 @@ def fill_template(template_bytes, data, crew_list, passenger_list, route_display
                     safe_set_cell_value(ws, row_num, 3, "")
                     safe_set_cell_value(ws, row_num, 4, "")
                     safe_set_cell_value(ws, row_num, 5, "")
+                    safe_set_cell_value(ws, row_num, 6, "")
                     safe_set_cell_value(ws, row_num, 7, "")
                 break
         else:
@@ -476,7 +510,7 @@ def fill_template(template_bytes, data, crew_list, passenger_list, route_display
 
 # ---------- Streamlit UI ----------
 st.subheader("📂 上传文件")
-st.info("⚠️ 注意：模板文件必须是 **.xlsx** 格式（非 .xls）。联系方式已内置，无需额外上传。")
+st.info("⚠️ 注意：模板文件必须是 **.xlsx** 格式（非 .xls）。联系方式及部分执照号码已内置，无需额外上传。")
 
 data_file = st.file_uploader("上传 GD单（General Declaration）Excel（.xlsx）", type=["xlsx"], key="data")
 template_file = st.file_uploader("上传备案表模板 Excel（必须是 .xlsx）", type=["xlsx"], key="template")
