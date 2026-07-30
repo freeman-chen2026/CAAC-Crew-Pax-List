@@ -234,8 +234,13 @@ def find_license(crew_name):
     return ""
 
 def parse_document_type(passport_no, doc_type):
+    """根据原始证件类型和号码判断，返回最终证件种类（已简化）"""
     doc_type_str = str(doc_type).strip() if pd.notna(doc_type) else ""
     if doc_type_str:
+        # 如果原始是“中华人民共和国居民身份证”，简化
+        if "中华人民共和国居民身份证" in doc_type_str:
+            return "身份证"
+        # 其他保留原样
         return doc_type_str
     pn = str(passport_no).strip() if pd.notna(passport_no) else ""
     pn = re.sub(r'\s+', '', pn)
@@ -550,11 +555,14 @@ def fill_template(template_bytes, data, crew_list, passenger_list, route_display
             safe_set_cell_value(ws, row_num, 2, pax.get("gender", ""))
             safe_set_cell_value(ws, row_num, 3, pax.get("dob", ""))
             safe_set_cell_value(ws, row_num, 4, get_nation_name(pax.get("nationality", "")))
+            # 证件类型：使用 parse_document_type 函数自动简化
             doc_type = pax.get("doc_type", "")
             if pd.notna(doc_type) and str(doc_type).strip():
-                safe_set_cell_value(ws, row_num, 5, str(doc_type).strip())
+                # 直接调用 parse_document_type 进行简化
+                doc_type_clean = parse_document_type("", doc_type)
             else:
-                safe_set_cell_value(ws, row_num, 5, parse_document_type(pax.get("passport_no", ""), ""))
+                doc_type_clean = parse_document_type(pax.get("passport_no", ""), "")
+            safe_set_cell_value(ws, row_num, 5, doc_type_clean)
             safe_set_cell_value(ws, row_num, 6, pax.get("passport_no", ""))
 
     output = BytesIO()
