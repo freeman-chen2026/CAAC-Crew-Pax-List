@@ -20,6 +20,7 @@ BUILTIN_CONTACT_MAP = {
     "赵岩松": "186 1161 8385",
     "Bruce Roderick, WAINES": "186 6532 9796",
     "Oliver Viktor, RACZ": "186 1197 3165",
+    "Yiftah RAUCH": "186 1045 0563",    # 新增
     "蔡国俊": "157 1220 8304",
     "李庆宏": "135 0909 0503",
     "宋炜": "136 3256 5565",
@@ -39,6 +40,7 @@ BUILTIN_CONTACT_MAP = {
     "姚艳阁": "156 0127 9399",
     "李潇恩": "158 0599 1600",
     "赖小燕": "60 1239 05520",
+    "Siau Mui LAI": "60 1239 05520",   # 英文名映射
     "花佩": "186 2631 0634",
     "丁燕栒": "135 6035 3829",
     "何静文": "852 6421 0994",
@@ -124,9 +126,7 @@ def normalize_name(name):
     """标准化姓名：去除中文、去除逗号、压缩多余空格为单个空格，转小写"""
     if not name:
         return ""
-    # 去除中文字符
     name = re.sub(r'[\u4e00-\u9fff]+', '', name)
-    # 将逗号、多个空格替换为单个空格
     name = re.sub(r'[,\s]+', ' ', name).strip()
     return name.lower()
 
@@ -268,7 +268,7 @@ def parse_general_declaration(file_bytes):
                         })
     return data, crew_data, passenger_data
 
-# ---------- 联系方式匹配函数（已修复） ----------
+# ---------- 联系方式匹配函数 ----------
 def find_contact(crew_name):
     """根据机组姓名从内置映射中查找联系方式"""
     if not crew_name or not BUILTIN_CONTACT_MAP:
