@@ -66,7 +66,6 @@ BUILTIN_CONTACT_MAP = {
     "Rodolfo BONETTI": "132 6284 1083",
     "危慧": "152 1349 1328",
     "Hui WEI": "152 1349 1328",
-    # 本次新增
     "李辛欣": "135 5008 8666",
     "Xinxin LI": "135 5008 8666",
     "Herve Daniel, STAMM": "183 1709 0300",
@@ -81,7 +80,6 @@ BUILTIN_CONTACT_MAP = {
     "Peipei ZHAN": "137 1440 5925",
     "花佩": "186 2631 0634",
     "Pei HUA": "186 2631 0634",
-    # 原有（保留）
     "蔡国俊": "157 1220 8304",
     "李庆宏": "135 0909 0503",
     "宋炜": "136 3256 5565",
@@ -189,7 +187,6 @@ BUILTIN_LICENSE_MAP = {
     "Rodolfo BONETTI": "12660",
     "危慧": "10137",
     "Hui WEI": "10137",
-    # 本次新增
     "李辛欣": "4209424",
     "Xinxin LI": "4209424",
     "Herve Daniel, STAMM": "2666622",
@@ -278,6 +275,8 @@ def parse_document_type(passport_no, doc_type):
     if doc_type_str:
         if "中华人民共和国居民身份证" in doc_type_str:
             return "身份证"
+        if "港澳居民来往内地通行证" in doc_type_str:
+            return "港澳通行证"
         return doc_type_str
     pn = str(passport_no).strip() if pd.notna(passport_no) else ""
     pn = re.sub(r'\s+', '', pn)
