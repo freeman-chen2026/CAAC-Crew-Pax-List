@@ -351,42 +351,61 @@ def parse_date_display(date_str):
     except:
         return date_str
 
-# ========== 新增：自定义行程解析函数 ==========
-def parse_custom_route(input_text, default_date_str):
+# ========== 新增：支持单行输入的智能解析函数 ==========
+def parse_route_text(input_text, date_display):
     """
-    解析用户输入的行程格式，生成标准行程字符串。
-    支持两种输入：
-    1. 标准格式（两行）：
-       注册号 10:00 - 12:00
-       起飞机场 - 降落机场
-    2. 自定义文本（不解析，原样返回）
+    从用户输入中提取时间和机场，生成标准格式。
+    支持单行或多行，自动匹配。
+    输出格式：date_display + 起飞机场起飞时间 + 降落时间落地机场
+    例如：08月02日 成都双流1000 1200格尔木
     """
     if not input_text or not input_text.strip():
         return input_text
-    lines = input_text.strip().split('\n')
-    # 过滤空行
-    lines = [line.strip() for line in lines if line.strip()]
-    if len(lines) >= 2:
-        line1 = lines[0]
-        line2 = lines[1]
-        # 提取时间 (HH:MM)
-        time_matches = re.findall(r'(\d{1,2}:\d{2})', line1)
-        if len(time_matches) >= 2:
-            dep_time = time_matches[0].replace(':', '')
-            arr_time = time_matches[1].replace(':', '')
+
+    text = input_text.strip()
+    # 尝试提取时间：匹配 10:00 - 12:00 或 10:00-12:00 等
+    time_pattern = r'(\d{1,2}:\d{2})\s*[-—–]\s*(\d{1,2}:\d{2})'
+    time_match = re.search(time_pattern, text)
+    if time_match:
+        dep_time = time_match.group(1).replace(':', '')
+        arr_time = time_match.group(2).replace(':', '')
+        # 移除时间部分，剩余文本用于提取机场
+        remaining = re.sub(time_pattern, '', text).strip()
+    else:
+        # 尝试匹配单独的时间对（可能没有连字符）
+        # 例如 "10:00 12:00" 或 "10:00 1200"
+        time_pattern2 = r'(\d{1,2}:\d{2})\s+(\d{1,2}:\d{2})'
+        time_match2 = re.search(time_pattern2, text)
+        if time_match2:
+            dep_time = time_match2.group(1).replace(':', '')
+            arr_time = time_match2.group(2).replace(':', '')
+            remaining = re.sub(time_pattern2, '', text).strip()
         else:
-            dep_time = arr_time = None
-        # 提取机场（按“-”分割）
-        airport_parts = re.split(r'\s*-\s*', line2)
-        if len(airport_parts) >= 2:
-            dep_airport = airport_parts[0].strip()
-            arr_airport = airport_parts[1].strip()
-        else:
-            dep_airport = arr_airport = None
-        if dep_time and arr_time and dep_airport and arr_airport:
-            # 组合成标准格式
-            return f"{default_date_str} {dep_airport}{dep_time} {arr_time}{arr_airport}"
-    # 如果解析失败，返回原文本
+            # 尝试匹配单个时间（可能只给一个时间，则另一个用默认? 但至少需要两个）
+            # 如果没有两个时间，则放弃解析
+            return input_text
+    # 提取机场：查找 "xxx - xxx" 或 "xxx-xxx"
+    # 使用 - 或 —— 分隔
+    # 注意不能匹配到时间的连字符（我们已经移除时间部分）
+    airport_pattern = r'(.+?)\s*[-—–]\s*(.+)'
+    airport_match = re.search(airport_pattern, remaining)
+    if airport_match:
+        dep_airport = airport_match.group(1).strip()
+        arr_airport = airport_match.group(2).strip()
+        # 如果机场名包含 "B652R" 等注册号，去除（注册号可能是单独的）
+        # 简单去除可能存在的注册号：去掉前几个字母数字混合单词
+        # 或直接取最后一个部分
+        # 但我们只保留中文机场名，可以通过正则取中文
+        # 如果提取的机场名包含非中文，尝试提取中文部分
+        def extract_chinese(text):
+            chinese = re.findall(r'[\u4e00-\u9fff]+', text)
+            return ''.join(chinese) if chinese else text
+        dep_airport = extract_chinese(dep_airport)
+        arr_airport = extract_chinese(arr_airport)
+        if dep_airport and arr_airport:
+            return f"{date_display} {dep_airport}{dep_time} {arr_time}{arr_airport}"
+    # 如果机场提取失败，尝试其他方式：可能机场直接是中文，没有连字符，例如 "成都双流 10:00 12:00 格尔木"
+    # 这种情况较复杂，暂不支持，返回原输入
     return input_text
 
 # ---------- 解析GD单 ----------
@@ -695,10 +714,10 @@ if data_file and template_file:
         # 输入框
         file_name_input = st.text_input("📝 自定义航班行程 / 下载文件名", value=default_route)
 
-        # 解析用户输入（如果符合格式则自动转换）
+        # 智能解析用户输入
         raw_route = file_name_input.strip()
-        parsed_route = parse_custom_route(raw_route, date_display)
-        # 如果解析成功且与原输入不同，则使用解析结果；否则保留原输入
+        parsed_route = parse_route_text(raw_route, date_display)
+        # 如果解析结果有效且与原始不同，则使用解析结果；否则保留原输入
         if parsed_route != raw_route and parsed_route is not None:
             route_display = parsed_route
         else:
