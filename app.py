@@ -214,7 +214,6 @@ BUILTIN_LICENSE_MAP = {
     "Lei ZHAO": "440301198204157271",
     "翁英": "ZN00905",
     "Ying WENG": "ZN00905",
-    # 本次新增
     "王莹": "370125199004215621",
     "Ying WANG": "370125199004215621",
     "赵岩松": "410103197004017014",
@@ -351,6 +350,44 @@ def parse_date_display(date_str):
         return f"{month:02d}月{int(day):02d}日"
     except:
         return date_str
+
+# ========== 新增：自定义行程解析函数 ==========
+def parse_custom_route(input_text, default_date_str):
+    """
+    解析用户输入的行程格式，生成标准行程字符串。
+    支持两种输入：
+    1. 标准格式（两行）：
+       注册号 10:00 - 12:00
+       起飞机场 - 降落机场
+    2. 自定义文本（不解析，原样返回）
+    """
+    if not input_text or not input_text.strip():
+        return input_text
+    lines = input_text.strip().split('\n')
+    # 过滤空行
+    lines = [line.strip() for line in lines if line.strip()]
+    if len(lines) >= 2:
+        line1 = lines[0]
+        line2 = lines[1]
+        # 提取时间 (HH:MM)
+        time_matches = re.findall(r'(\d{1,2}:\d{2})', line1)
+        if len(time_matches) >= 2:
+            dep_time = time_matches[0].replace(':', '')
+            arr_time = time_matches[1].replace(':', '')
+        else:
+            dep_time = arr_time = None
+        # 提取机场（按“-”分割）
+        airport_parts = re.split(r'\s*-\s*', line2)
+        if len(airport_parts) >= 2:
+            dep_airport = airport_parts[0].strip()
+            arr_airport = airport_parts[1].strip()
+        else:
+            dep_airport = arr_airport = None
+        if dep_time and arr_time and dep_airport and arr_airport:
+            # 组合成标准格式
+            return f"{default_date_str} {dep_airport}{dep_time} {arr_time}{arr_airport}"
+    # 如果解析失败，返回原文本
+    return input_text
 
 # ---------- 解析GD单 ----------
 def parse_general_declaration(file_bytes):
@@ -641,6 +678,7 @@ if data_file and template_file:
         date_str = data.get("date_str", "")
         utc_time = data.get("utc_time", "")
         default_route = ""
+        date_display = ""
         if date_str and from_code and to_code:
             date_display = parse_date_display(date_str)
             if utc_time:
@@ -654,9 +692,19 @@ if data_file and template_file:
         st.subheader("📋 提取的航班信息")
         st.info(f"✈️ 默认航班行程：{default_route}")
 
+        # 输入框
         file_name_input = st.text_input("📝 自定义航班行程 / 下载文件名", value=default_route)
 
-        route_display = file_name_input.strip()
+        # 解析用户输入（如果符合格式则自动转换）
+        raw_route = file_name_input.strip()
+        parsed_route = parse_custom_route(raw_route, date_display)
+        # 如果解析成功且与原输入不同，则使用解析结果；否则保留原输入
+        if parsed_route != raw_route and parsed_route is not None:
+            route_display = parsed_route
+        else:
+            route_display = raw_route
+
+        # 若用户清空输入框，则回退到默认
         if not route_display:
             route_display = default_route
 
