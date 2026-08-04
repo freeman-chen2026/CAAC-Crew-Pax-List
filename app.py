@@ -86,6 +86,10 @@ BUILTIN_CONTACT_MAP = {
     "Ying WANG": "159 1009 9069",
     "程佳俊": "134 8010 3029",
     "Jiajun CHENG": "134 8010 3029",
+    "蔡雨桐": "852 6426 7445",
+    "Yu Tong CHOI": "852 6426 7445",
+    "俞凯": "130 0579 0326",
+    "Kai YU": "130 0579 0326",
     "蔡国俊": "157 1220 8304",
     "李庆宏": "135 0909 0503",
     "宋炜": "136 3256 5565",
@@ -103,7 +107,6 @@ BUILTIN_CONTACT_MAP = {
     "Siau Mui LAI": "60 1239 05520",
     "丁燕栒": "135 6035 3829",
     "何静文": "852 6421 0994",
-    "蔡雨桐": "852 6426 7445",
     "茅邂文": "152 5181 7375",
     "周丽欢": "152 5710 6140",
     "AYA, MUGURUMA": "81 8071140700",
@@ -123,7 +126,6 @@ BUILTIN_CONTACT_MAP = {
     "黄彦杰": "132 1157 2184",
     "王珍": "198 6662 9312",
     "赵国庆": "155 8849 2975",
-    "俞凯": "130 0579 0326",
     "王军": "853 62666900",
     "张德桃": "130 2883 6410",
     "江焰辉": "136 3148 0927",
@@ -222,6 +224,15 @@ BUILTIN_LICENSE_MAP = {
     "Shangming JIN": "210381197511034612",
     "程佳俊": "511202198208161358",
     "Jiajun CHENG": "511202198208161358",
+    # 本次新增
+    "张永一": "110102196605202336",
+    "Yongyi ZHANG": "110102196605202336",
+    "Oliver Viktor, RACZ": "000336198206158001",
+    "Oliver Viktor RACZ": "000336198206158001",
+    "蔡雨桐": "10269",
+    "Yu Tong CHOI": "10269",
+    "俞凯": "120110196912180351",
+    "Kai YU": "120110196912180351",
 }
 
 # ---------- 国籍映射 ----------
@@ -351,7 +362,7 @@ def parse_date_display(date_str):
     except:
         return date_str
 
-# ========== 新增：支持单行输入的智能解析函数 ==========
+# ---------- 行程解析函数 ----------
 def parse_route_text(input_text, date_display):
     """
     从用户输入中提取时间和机场，生成标准格式。
@@ -369,11 +380,9 @@ def parse_route_text(input_text, date_display):
     if time_match:
         dep_time = time_match.group(1).replace(':', '')
         arr_time = time_match.group(2).replace(':', '')
-        # 移除时间部分，剩余文本用于提取机场
         remaining = re.sub(time_pattern, '', text).strip()
     else:
         # 尝试匹配单独的时间对（可能没有连字符）
-        # 例如 "10:00 12:00" 或 "10:00 1200"
         time_pattern2 = r'(\d{1,2}:\d{2})\s+(\d{1,2}:\d{2})'
         time_match2 = re.search(time_pattern2, text)
         if time_match2:
@@ -381,22 +390,15 @@ def parse_route_text(input_text, date_display):
             arr_time = time_match2.group(2).replace(':', '')
             remaining = re.sub(time_pattern2, '', text).strip()
         else:
-            # 尝试匹配单个时间（可能只给一个时间，则另一个用默认? 但至少需要两个）
             # 如果没有两个时间，则放弃解析
             return input_text
     # 提取机场：查找 "xxx - xxx" 或 "xxx-xxx"
-    # 使用 - 或 —— 分隔
-    # 注意不能匹配到时间的连字符（我们已经移除时间部分）
     airport_pattern = r'(.+?)\s*[-—–]\s*(.+)'
     airport_match = re.search(airport_pattern, remaining)
     if airport_match:
         dep_airport = airport_match.group(1).strip()
         arr_airport = airport_match.group(2).strip()
-        # 如果机场名包含 "B652R" 等注册号，去除（注册号可能是单独的）
-        # 简单去除可能存在的注册号：去掉前几个字母数字混合单词
-        # 或直接取最后一个部分
-        # 但我们只保留中文机场名，可以通过正则取中文
-        # 如果提取的机场名包含非中文，尝试提取中文部分
+        # 提取中文部分
         def extract_chinese(text):
             chinese = re.findall(r'[\u4e00-\u9fff]+', text)
             return ''.join(chinese) if chinese else text
@@ -404,8 +406,6 @@ def parse_route_text(input_text, date_display):
         arr_airport = extract_chinese(arr_airport)
         if dep_airport and arr_airport:
             return f"{date_display} {dep_airport}{dep_time} {arr_time}{arr_airport}"
-    # 如果机场提取失败，尝试其他方式：可能机场直接是中文，没有连字符，例如 "成都双流 10:00 12:00 格尔木"
-    # 这种情况较复杂，暂不支持，返回原输入
     return input_text
 
 # ---------- 解析GD单 ----------
@@ -711,19 +711,15 @@ if data_file and template_file:
         st.subheader("📋 提取的航班信息")
         st.info(f"✈️ 默认航班行程：{default_route}")
 
-        # 输入框
         file_name_input = st.text_input("📝 自定义航班行程 / 下载文件名", value=default_route)
 
-        # 智能解析用户输入
         raw_route = file_name_input.strip()
         parsed_route = parse_route_text(raw_route, date_display)
-        # 如果解析结果有效且与原始不同，则使用解析结果；否则保留原输入
         if parsed_route != raw_route and parsed_route is not None:
             route_display = parsed_route
         else:
             route_display = raw_route
 
-        # 若用户清空输入框，则回退到默认
         if not route_display:
             route_display = default_route
 
