@@ -110,16 +110,13 @@ BUILTIN_CONTACT_MAP = {
     "Hexin ZHANG": "136 3773 1210",
     "李庆宏": "135 0909 0503",
     "Qinghong LI": "135 0909 0503",
-    # 本次新增
     "Eduard Pascal, Roski": "49 170 1534666",
     "Eduard Pascal Roski": "49 170 1534666",
     "Peter Robert, JACKSON": "186 8245 1935",
     "Peter Robert JACKSON": "186 8245 1935",
-    "王少雄": "186 8387 9841",  # 已有
-    "Shaoxiong WANG": "186 8387 9841",
-    "廉卓群": "133 5632 3949",  # 已有
+    "廉卓群": "133 5632 3949",
     "Zhuoqun LIAN": "133 5632 3949",
-    "孙浩": "136 7012 1990",    # 已有
+    "孙浩": "136 7012 1990",
     "Hao SUN": "136 7012 1990",
     "蔡国俊": "157 1220 8304",
     "宋炜": "136 3256 5565",
@@ -278,7 +275,6 @@ BUILTIN_LICENSE_MAP = {
     "Hexin ZHANG": "3974936",
     "李庆宏": "17260/1 FCL",
     "Qinghong LI": "17260/1 FCL",
-    # 本次新增
     "梅峰": "17205/1 FCL",
     "Feng MEI": "17205/1 FCL",
     "Eduard Pascal, Roski": "3863535",
@@ -416,17 +412,45 @@ def parse_date_display(date_str):
         month_map = {"Jan":1,"Feb":2,"Mar":3,"Apr":4,"May":5,"Jun":6,
                      "Jul":7,"Aug":8,"Sep":9,"Oct":10,"Nov":11,"Dec":12}
         month = month_map.get(month_str[:3], 1)
-        return f"{month:02d}月{int(day):02d}日"
+        return f"{month:02d}月{int(day)}日"  # 日不带前导零
     except:
         return date_str
 
-# ---------- 行程解析函数 ----------
-def parse_route_text(input_text, date_display):
+# ---------- 解析两行输入（获取不含时间的行程字符串） ----------
+def parse_route_no_time(input_text, date_display):
     """
-    从用户输入中提取时间和机场，生成标准格式。
-    支持单行或多行，自动匹配。
-    输出格式：date_display + 起飞机场起飞时间 + 降落时间落地机场
-    例如：08月02日 成都双流1000 1200格尔木
+    从用户输入中提取航班号和机场，生成不带时间的行程字符串。
+    期望输入为两行：
+    第一行: 航班号 时间（如 MLLIN 22:30 - 00:30 +1）
+    第二行: 起飞机场 - 降落机场（如 南京禄口 - 香港）
+    返回: 日期 + 航班号 + 起飞机场-降落机场 (如 08月8日 MLLIN 南京禄口-香港)
+    若解析失败返回None。
+    """
+    if not input_text or not input_text.strip():
+        return None
+    lines = [line.strip() for line in input_text.strip().split('\n') if line.strip()]
+    if len(lines) < 2:
+        return None
+    first_line = lines[0]
+    # 提取第一个单词作为航班号
+    flight_number = first_line.split()[0] if first_line.split() else None
+    if not flight_number:
+        return None
+    second_line = lines[1]
+    # 按 '-' 分割
+    parts = re.split(r'\s*-\s*', second_line)
+    if len(parts) >= 2:
+        dep_airport = parts[0].strip()
+        arr_airport = parts[1].strip()
+        if dep_airport and arr_airport:
+            return f"{date_display} {flight_number} {dep_airport}-{arr_airport}"
+    return None
+
+# ---------- 解析带时间的行程（用于回退） ----------
+def parse_route_with_time(input_text, date_display):
+    """
+    从用户输入中提取时间和机场，生成带时间的标准格式。
+    例如：08月8日 南京禄口2230 0030香港
     """
     if not input_text or not input_text.strip():
         return input_text
@@ -440,7 +464,7 @@ def parse_route_text(input_text, date_display):
         arr_time = time_match.group(2).replace(':', '')
         remaining = re.sub(time_pattern, '', text).strip()
     else:
-        # 尝试匹配单独的时间对（可能没有连字符）
+        # 尝试匹配单独的时间对
         time_pattern2 = r'(\d{1,2}:\d{2})\s+(\d{1,2}:\d{2})'
         time_match2 = re.search(time_pattern2, text)
         if time_match2:
@@ -450,7 +474,7 @@ def parse_route_text(input_text, date_display):
         else:
             # 如果没有两个时间，则放弃解析
             return input_text
-    # 提取机场：查找 "xxx - xxx" 或 "xxx-xxx"
+    # 提取机场
     airport_pattern = r'(.+?)\s*[-—–]\s*(.+)'
     airport_match = re.search(airport_pattern, remaining)
     if airport_match:
@@ -772,21 +796,30 @@ if data_file and template_file:
         file_name_input = st.text_input("📝 自定义航班行程 / 下载文件名", value=default_route)
 
         raw_route = file_name_input.strip()
-        parsed_route = parse_route_text(raw_route, date_display)
-        if parsed_route != raw_route and parsed_route is not None:
-            route_display = parsed_route
+
+        # 尝试解析不带时间的行程（用于表格和文件名）
+        no_time_route = parse_route_no_time(raw_route, date_display)
+        if no_time_route is not None:
+            # 如果成功解析，使用不带时间的格式
+            route_display = no_time_route
         else:
-            route_display = raw_route
+            # 否则尝试解析带时间的格式，若失败则保留原输入
+            with_time_route = parse_route_with_time(raw_route, date_display)
+            if with_time_route != raw_route and with_time_route is not None:
+                route_display = with_time_route
+            else:
+                route_display = raw_route
 
         if not route_display:
             route_display = default_route
 
-        result_bytes = fill_template(template_file, data, crew_list, passenger_list, route_display)
-
+        # 文件名使用与表格相同的字符串
         safe_file_name = re.sub(r'[\\/*?:"<>|]', "_", route_display).strip()
         if not safe_file_name:
             safe_file_name = "备案表"
         download_file_name = f"{safe_file_name}.xlsx"
+
+        result_bytes = fill_template(template_file, data, crew_list, passenger_list, route_display)
 
         st.download_button(
             label="⬇️ 下载填充后的备案表",
