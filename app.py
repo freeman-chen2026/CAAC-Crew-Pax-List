@@ -416,80 +416,62 @@ def parse_date_display(date_str):
     except:
         return date_str
 
-# ---------- 修正后的行程解析函数 ----------
-def parse_route_no_time(input_text, date_display):
+# ---------- 解析：提取无时间行程（用于文件名） ----------
+def parse_no_time_route(input_text, date_display):
     """
-    从用户输入中提取航班号和机场，生成不带时间的行程字符串。
-    支持单行或多行，准确提取中文机场名。
+    从用户输入中提取航班号和机场，生成不带时间的行程字符串（用于文件名）。
     返回: "日期 航班号 机场A-机场B" 或 None
     """
     if not input_text or not input_text.strip():
         return None
 
     text = input_text.strip()
-    # 先尝试按换行分割
     lines = [line.strip() for line in text.split('\n') if line.strip()]
     if len(lines) >= 2:
-        # 两行模式：第一行可能有航班号和时间，第二行是机场
         first_line = lines[0]
         second_line = lines[1]
-        # 提取航班号（第一个词）
         flight_number = first_line.split()[0] if first_line.split() else None
         if not flight_number:
             return None
-        # 从第二行提取中文机场名
-        # 用 '-' 分割，取中文部分
         parts = re.split(r'\s*[-—–]\s*', second_line)
         if len(parts) >= 2:
             dep_airport = parts[0].strip()
             arr_airport = parts[1].strip()
-            # 如果提取的机场名包含非中文（如四字码），可保留，但最好提取中文
-            # 但用户期望中文，所以我们只保留中文部分（如果没有中文则保留原样）
-            # 为简化，直接使用原字符串
             if dep_airport and arr_airport:
                 return f"{date_display} {flight_number} {dep_airport}-{arr_airport}"
     else:
-        # 单行模式：提取航班号、时间和机场
-        # 提取航班号（第一个单词）
+        # 单行模式
         flight_number = text.split()[0] if text.split() else None
         if not flight_number:
             return None
-        # 提取时间（两个时间点），移除它们
+        # 移除时间
         time_pattern = r'(\d{1,2}:\d{2})\s*[-—–]\s*(\d{1,2}:\d{2})'
         remaining = re.sub(time_pattern, '', text).strip()
-        # 也可能有时间后缀如 "+1"，也去掉
         remaining = re.sub(r'\s*\+\s*\d+\s*', '', remaining).strip()
-        # 现在剩余部分应该是机场名，可能包含空格和 '-' 
-        # 按 '-' 分割，取最后两个部分
         airport_parts = re.split(r'\s*[-—–]\s*', remaining)
         if len(airport_parts) >= 2:
-            # 取最后两个作为起降机场
             dep_airport = airport_parts[-2].strip()
             arr_airport = airport_parts[-1].strip()
-            # 如果提取到的机场名包含非中文且像 "MLLIN"，则可能是误提取，尝试从原文本提取中文
-            # 但这里我们仅当提取到的字符串包含中文时使用，否则回退
-            # 这里简单处理，直接使用
+            # 只保留中文机场部分（若无则保留原样）
+            ch_dep = re.findall(r'[\u4e00-\u9fff]+', dep_airport)
+            ch_arr = re.findall(r'[\u4e00-\u9fff]+', arr_airport)
+            if ch_dep and ch_arr:
+                dep_airport = ''.join(ch_dep)
+                arr_airport = ''.join(ch_arr)
+            elif ch_dep and not ch_arr:
+                # 保留原样
+                pass
             if dep_airport and arr_airport:
-                # 如果机场名包含数字或 "MLLIN" 等，尝试从原文本中提取中文部分
-                # 用正则提取中文
-                chinese_dep = re.findall(r'[\u4e00-\u9fff]+', dep_airport)
-                chinese_arr = re.findall(r'[\u4e00-\u9fff]+', arr_airport)
-                if chinese_dep and chinese_arr:
-                    dep_airport = ''.join(chinese_dep)
-                    arr_airport = ''.join(chinese_arr)
-                elif chinese_dep and not chinese_arr:
-                    # 如果只有一边有中文，保留原样
-                    pass
-                # 如果都没有中文，但机场名是英文，我们也可以保留
                 return f"{date_display} {flight_number} {dep_airport}-{arr_airport}"
     return None
 
-def parse_route_with_time(input_text, date_display):
+# ---------- 解析：带时间行程（用于表格内容） ----------
+def parse_with_time_route(input_text, date_display):
     if not input_text or not input_text.strip():
         return input_text
 
     text = input_text.strip()
-    # 提取时间
+    # 提取时间（可能包含 +1 跨天标记，我们忽略它，只显示时间）
     time_pattern = r'(\d{1,2}:\d{2})\s*[-—–]\s*(\d{1,2}:\d{2})'
     time_match = re.search(time_pattern, text)
     if time_match:
@@ -505,6 +487,9 @@ def parse_route_with_time(input_text, date_display):
             remaining = re.sub(time_pattern2, '', text).strip()
         else:
             return input_text
+
+    # 去除跨天标记
+    remaining = re.sub(r'\s*\+\s*\d+\s*', '', remaining).strip()
 
     # 提取机场
     airport_pattern = r'(.+?)\s*[-—–]\s*(.+)'
@@ -825,29 +810,22 @@ if data_file and template_file:
         st.subheader("📋 提取的航班信息")
         st.info(f"✈️ 默认航班行程：{default_route}")
 
-        file_name_input = st.text_input("📝 自定义航班行程 / 下载文件名", value=default_route)
+        raw_route = st.text_input("📝 自定义航班行程 / 下载文件名", value=default_route).strip()
 
-        raw_route = file_name_input.strip()
-
-        # 解析行程显示（用于表格内容）
-        no_time_route = parse_route_no_time(raw_route, date_display)
-        if no_time_route is not None:
-            route_display = no_time_route
+        # ---- 表格内容（带时间） ----
+        with_time = parse_with_time_route(raw_route, date_display)
+        if with_time != raw_route and with_time is not None:
+            route_display = with_time
         else:
-            with_time_route = parse_route_with_time(raw_route, date_display)
-            if with_time_route != raw_route and with_time_route is not None:
-                route_display = with_time_route
-            else:
-                route_display = raw_route
+            route_display = raw_route if raw_route else default_route
 
-        if not route_display:
-            route_display = default_route
-
-        # ---------- 生成文件名 ----------
-        reg = data.get("reg", "")
-        if no_time_route is not None:
-            file_name_base = no_time_route
+        # ---- 文件名（不带时间，简化） ----
+        no_time = parse_no_time_route(raw_route, date_display)
+        if no_time is not None:
+            file_name_base = no_time
         else:
+            # 回退：使用注册号+四字码
+            reg = data.get("reg", "")
             if reg and from_code and to_code:
                 file_name_base = f"{date_display} {reg} {from_code}-{to_code}"
             else:
