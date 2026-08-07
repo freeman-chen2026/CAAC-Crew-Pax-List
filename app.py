@@ -604,9 +604,10 @@ def fill_template(template_bytes, data, crew_list, passenger_list, route_display
 
     if info_row:
         data_row = info_row + 1
-        safe_set_cell_value(ws, data_row, 2, data.get("ac_type", ""))
-        safe_set_cell_value(ws, data_row, 3, data.get("reg", ""))
-        safe_set_cell_value(ws, data_row, 4, data.get("flt", ""))
+        # 关键修复：注册号写入第3列（C列），航班号写入第4列（D列）
+        safe_set_cell_value(ws, data_row, 2, data.get("ac_type", ""))   # 机型 -> 第2列 (B)
+        safe_set_cell_value(ws, data_row, 3, data.get("reg", ""))        # 注册号 -> 第3列 (C) ✅
+        safe_set_cell_value(ws, data_row, 4, data.get("flt", ""))        # 航班号 -> 第4列 (D)
         safe_set_cell_value(ws, data_row, 5, route_display if route_display else "")
 
     # 机长
@@ -800,10 +801,8 @@ if data_file and template_file:
         # 尝试解析不带时间的行程（用于表格和文件名）
         no_time_route = parse_route_no_time(raw_route, date_display)
         if no_time_route is not None:
-            # 如果成功解析，使用不带时间的格式
             route_display = no_time_route
         else:
-            # 否则尝试解析带时间的格式，若失败则保留原输入
             with_time_route = parse_route_with_time(raw_route, date_display)
             if with_time_route != raw_route and with_time_route is not None:
                 route_display = with_time_route
@@ -813,7 +812,6 @@ if data_file and template_file:
         if not route_display:
             route_display = default_route
 
-        # 文件名使用与表格相同的字符串
         safe_file_name = re.sub(r'[\\/*?:"<>|]', "_", route_display).strip()
         if not safe_file_name:
             safe_file_name = "备案表"
