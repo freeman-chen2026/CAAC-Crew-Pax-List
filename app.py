@@ -118,18 +118,23 @@ BUILTIN_CONTACT_MAP = {
     "Zhuoqun LIAN": "133 5632 3949",
     "孙浩": "136 7012 1990",
     "Hao SUN": "136 7012 1990",
-    "蔡国俊": "157 1220 8304",
+    "姚艳阁": "156 0127 9399",
+    "Yange YAO": "156 0127 9399",
+    "茅邂文": "152 5181 7375",
+    "Xiewen MAO": "152 5181 7375",
     "宋炜": "136 3256 5565",
+    "Wei SONG": "136 3256 5565",
+    "BEEBE, Thaddeus John": "852 6930 1609",
+    "Thaddeus John BEEBE": "852 6930 1609",
+    "蔡国俊": "157 1220 8304",
     "朱正宇": "189 8335 3697",
     "金尚明": "136 7113 8047",
     "Shangming JIN": "136 7113 8047",
     "张哲": "139 0247 5026",
     "赵婷婷": "138 2883 3162",
-    "姚艳阁": "156 0127 9399",
     "赖小燕": "60 1239 05520",
     "Siau Mui LAI": "60 1239 05520",
     "何静文": "852 6421 0994",
-    "茅邂文": "152 5181 7375",
     "周丽欢": "152 5710 6140",
     "AYA, MUGURUMA": "81 8071140700",
     "梁广煜": "137 9428 7177",
@@ -287,6 +292,15 @@ BUILTIN_LICENSE_MAP = {
     "Peter Robert JACKSON": "000044197906253001",
     "王少雄": "510105198609042555",
     "Shaoxiong WANG": "510105198609042555",
+    # 本次新增执照号码
+    "BEEBE, Thaddeus John": "2743899",
+    "Thaddeus John BEEBE": "2743899",
+    "姚艳阁": "10204",
+    "Yange YAO": "10204",
+    "茅邂文": "ZN00903",
+    "Xiewen MAO": "ZN00903",
+    "宋炜": "37060219820621211X",
+    "Wei SONG": "37060219820621211X",
 }
 
 # ---------- 国籍映射 ----------
@@ -405,7 +419,6 @@ def parse_utc_to_beijing(utc_str, date_str):
     except:
         return "0000"
 
-# ----- 修改日期显示为两位数（08月08日） -----
 def parse_date_display(date_str):
     try:
         day = re.search(r'\d+', date_str).group()
@@ -458,7 +471,6 @@ def parse_no_time_route(input_text, date_display):
                 return f"{date_display} {flight_number} {dep_airport}-{arr_airport}"
     return None
 
-# ---------- 解析：带时间行程（用于表格内容，时间用 "-" 连接） ----------
 def parse_with_time_route(input_text, date_display):
     if not input_text or not input_text.strip():
         return input_text
@@ -492,7 +504,6 @@ def parse_with_time_route(input_text, date_display):
         dep_airport = extract_chinese(dep_airport)
         arr_airport = extract_chinese(arr_airport)
         if dep_airport and arr_airport:
-            # 时间用 "-" 连接，前后无空格
             return f"{date_display} {dep_airport}{dep_time}-{arr_time}{arr_airport}"
     return input_text
 
