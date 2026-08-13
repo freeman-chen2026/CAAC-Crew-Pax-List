@@ -436,16 +436,16 @@ def parse_date_display(date_str):
     except:
         return date_str
 
-# ---------- 辅助：去除开头的 "F " ----------
-def strip_F_prefix(text):
-    """移除开头的 'F '（F加空格），以处理用户可能粘贴的前缀"""
-    if text and text.startswith('F '):
-        return text[2:]
+# ---------- 去除开头的单字母前缀（如 "F "、"M "、"G " 等） ----------
+def strip_single_letter_prefix(text):
+    """如果文本以单个字母（大小写）加空格开头，则移除该前缀"""
+    if text and re.match(r'^[A-Za-z]\s+', text):
+        return re.sub(r'^[A-Za-z]\s+', '', text)
     return text
 
 # ---------- 解析：提取无时间行程（用于文件名） ----------
 def parse_no_time_route(input_text, date_display):
-    input_text = strip_F_prefix(input_text)
+    input_text = strip_single_letter_prefix(input_text)
     if not input_text or not input_text.strip():
         return None
 
@@ -454,7 +454,6 @@ def parse_no_time_route(input_text, date_display):
     if len(lines) >= 2:
         first_line = lines[0]
         second_line = lines[1]
-        # 从第一行提取航班号（第一个单词）
         flight_number = first_line.split()[0] if first_line.split() else None
         if not flight_number:
             return None
@@ -465,7 +464,6 @@ def parse_no_time_route(input_text, date_display):
             if dep_airport and arr_airport:
                 return f"{date_display} {flight_number} {dep_airport}-{arr_airport}"
     else:
-        # 单行模式
         flight_number = text.split()[0] if text.split() else None
         if not flight_number:
             return None
@@ -487,9 +485,8 @@ def parse_no_time_route(input_text, date_display):
                 return f"{date_display} {flight_number} {dep_airport}-{arr_airport}"
     return None
 
-# ---------- 解析：带时间行程（用于表格内容） ----------
 def parse_with_time_route(input_text, date_display):
-    input_text = strip_F_prefix(input_text)
+    input_text = strip_single_letter_prefix(input_text)
     if not input_text or not input_text.strip():
         return input_text
 
