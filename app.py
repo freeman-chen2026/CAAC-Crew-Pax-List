@@ -126,11 +126,14 @@ BUILTIN_CONTACT_MAP = {
     "Wei SONG": "136 3256 5565",
     "BEEBE, Thaddeus John": "852 6930 1609",
     "Thaddeus John BEEBE": "852 6930 1609",
+    "张哲": "139 0247 5026",
+    "Zhe ZHANG": "139 0247 5026",
+    "李海": "136 8131 8388",
+    "Hai LI": "136 8131 8388",
     "蔡国俊": "157 1220 8304",
     "朱正宇": "189 8335 3697",
     "金尚明": "136 7113 8047",
     "Shangming JIN": "136 7113 8047",
-    "张哲": "139 0247 5026",
     "赵婷婷": "138 2883 3162",
     "赖小燕": "60 1239 05520",
     "Siau Mui LAI": "60 1239 05520",
@@ -292,7 +295,6 @@ BUILTIN_LICENSE_MAP = {
     "Peter Robert JACKSON": "000044197906253001",
     "王少雄": "510105198609042555",
     "Shaoxiong WANG": "510105198609042555",
-    # 本次新增执照号码
     "BEEBE, Thaddeus John": "2743899",
     "Thaddeus John BEEBE": "2743899",
     "姚艳阁": "10204",
@@ -301,6 +303,11 @@ BUILTIN_LICENSE_MAP = {
     "Xiewen MAO": "ZN00903",
     "宋炜": "37060219820621211X",
     "Wei SONG": "37060219820621211X",
+    # 本次新增
+    "张哲": "650104196604163310",
+    "Zhe ZHANG": "650104196604163310",
+    "李海": "110105197201106130",
+    "Hai LI": "110105197201106130",
 }
 
 # ---------- 国籍映射 ----------
@@ -419,6 +426,7 @@ def parse_utc_to_beijing(utc_str, date_str):
     except:
         return "0000"
 
+# ----- 日期显示改为无前导零（如 8月14日） -----
 def parse_date_display(date_str):
     try:
         day = re.search(r'\d+', date_str).group()
@@ -426,7 +434,7 @@ def parse_date_display(date_str):
         month_map = {"Jan":1,"Feb":2,"Mar":3,"Apr":4,"May":5,"Jun":6,
                      "Jul":7,"Aug":8,"Sep":9,"Oct":10,"Nov":11,"Dec":12}
         month = month_map.get(month_str[:3], 1)
-        return f"{month:02d}月{int(day):02d}日"
+        return f"{month}月{int(day)}日"
     except:
         return date_str
 
