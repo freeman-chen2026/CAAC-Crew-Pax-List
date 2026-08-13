@@ -303,7 +303,6 @@ BUILTIN_LICENSE_MAP = {
     "Xiewen MAO": "ZN00903",
     "宋炜": "37060219820621211X",
     "Wei SONG": "37060219820621211X",
-    # 本次新增
     "张哲": "650104196604163310",
     "Zhe ZHANG": "650104196604163310",
     "李海": "110105197201106130",
@@ -426,7 +425,6 @@ def parse_utc_to_beijing(utc_str, date_str):
     except:
         return "0000"
 
-# ----- 日期显示改为无前导零（如 8月14日） -----
 def parse_date_display(date_str):
     try:
         day = re.search(r'\d+', date_str).group()
@@ -438,8 +436,16 @@ def parse_date_display(date_str):
     except:
         return date_str
 
+# ---------- 辅助：去除开头的 "F " ----------
+def strip_F_prefix(text):
+    """移除开头的 'F '（F加空格），以处理用户可能粘贴的前缀"""
+    if text and text.startswith('F '):
+        return text[2:]
+    return text
+
 # ---------- 解析：提取无时间行程（用于文件名） ----------
 def parse_no_time_route(input_text, date_display):
+    input_text = strip_F_prefix(input_text)
     if not input_text or not input_text.strip():
         return None
 
@@ -448,6 +454,7 @@ def parse_no_time_route(input_text, date_display):
     if len(lines) >= 2:
         first_line = lines[0]
         second_line = lines[1]
+        # 从第一行提取航班号（第一个单词）
         flight_number = first_line.split()[0] if first_line.split() else None
         if not flight_number:
             return None
@@ -458,6 +465,7 @@ def parse_no_time_route(input_text, date_display):
             if dep_airport and arr_airport:
                 return f"{date_display} {flight_number} {dep_airport}-{arr_airport}"
     else:
+        # 单行模式
         flight_number = text.split()[0] if text.split() else None
         if not flight_number:
             return None
@@ -479,7 +487,9 @@ def parse_no_time_route(input_text, date_display):
                 return f"{date_display} {flight_number} {dep_airport}-{arr_airport}"
     return None
 
+# ---------- 解析：带时间行程（用于表格内容） ----------
 def parse_with_time_route(input_text, date_display):
+    input_text = strip_F_prefix(input_text)
     if not input_text or not input_text.strip():
         return input_text
 
