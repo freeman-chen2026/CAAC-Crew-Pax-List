@@ -167,7 +167,6 @@ BUILTIN_CONTACT_MAP = {
     "苏志斌": "159 0150 7150",
     "赵康": "191 6764 6172",
     "翟征宇": "134 1448 9793",
-    # ===== 新增（2026-08-15）=====
     "陈居瑜": "158 8962 6660",
     "林毅": "136 8642 0153",
 }
@@ -308,7 +307,6 @@ BUILTIN_LICENSE_MAP = {
     "张哲": "650104196604163310",
     "Zhe ZHANG": "650104196604163310",
     "李海": "110105197201106130",
-    "Hai LI": "110105197201106130",
     # ===== 新增（2026-08-15）=====
     "赵婷婷": "372524198212240023",
     "李园": "110105198309149639",
@@ -332,7 +330,6 @@ BUILTIN_LICENSE_MAP = {
     "庚凡": "430104197901184015",
     "何静文": "Z630284(0)",
     "Ching Man, HO": "Z630284(0)",
-    # ===== 新增（2026-08-15）第二批 =====
     "朱正宇": "350111197207152412",
     "赖小燕": "A71366020",
     "Siau Mui LAI": "A71366020",
@@ -348,7 +345,7 @@ BUILTIN_LICENSE_MAP = {
     "苏志斌": "350782198308221539",
     "赵康": "430321200303160170",
     "翟征宇": "140211198612050031",
-    # 注：蔡国俊、万子辰 暂未提供执照/身份证号，未补
+    # 蔡国俊、万子辰 暂未提供执照号
 }
 
 # ---------- 内置证件号码映射（身份证/护照） ----------
@@ -445,7 +442,6 @@ BUILTIN_ID_MAP = {
     "林毅": "350102197903213219",
     "何静文": "Z630284(0)",
     "Ching Man, HO": "Z630284(0)",
-    # ===== 新增（2026-08-15）第二批 =====
     "朱正宇": "350111197207152412",
     "赖小燕": "A71366020",
     "Siau Mui LAI": "A71366020",
@@ -461,7 +457,7 @@ BUILTIN_ID_MAP = {
     "苏志斌": "350782198308221539",
     "赵康": "430321200303160170",
     "翟征宇": "140211198612050031",
-    # 注：蔡国俊、万子辰 暂未提供身份证号
+    # 蔡国俊、万子辰 暂未提供身份证号
 }
 
 # ---------- 国籍映射 ----------
@@ -477,6 +473,22 @@ NATION_MAP = {
     "MMR": "缅甸", "KHM": "柬埔寨", "LAO": "老挝", "MNG": "蒙古", "PRK": "朝鲜",
     "TWN": "台湾地区", "MAC": "澳门"
 }
+
+# ---------- 机型修正映射（GD单填写错误时使用）----------
+AIRCRAFT_TYPE_CORRECTION = {
+    "B3926": "LJ60",   # GD单误写为 LR60，实际为 LJ60
+}
+
+def correct_aircraft_type(reg, ac_type):
+    """
+    根据注册号修正机型（当GD单填写错误时）
+    """
+    if reg in AIRCRAFT_TYPE_CORRECTION:
+        corrected = AIRCRAFT_TYPE_CORRECTION[reg]
+        if ac_type != corrected:
+            st.info(f"✈️ 机型修正：{ac_type} → {corrected}（注册号 {reg}）")
+        return corrected
+    return ac_type
 
 def get_nation_name(code):
     code = code.strip().upper()
@@ -703,7 +715,10 @@ def parse_general_declaration(file_bytes):
                     if len(parts) > 1:
                         data["flt"] = parts[1]
                 elif "AC TYPE:" in val:
-                    data["ac_type"] = get_value_right(ws, cell.row, cell.column+1)
+                    data["ac_type_raw"] = get_value_right(ws, cell.row, cell.column+1)
+                    # 应用机型修正
+                    reg = data.get("reg", "")
+                    data["ac_type"] = correct_aircraft_type(reg, data["ac_type_raw"])
                 elif "FROM:" in val:
                     data["from"] = get_value_right(ws, cell.row, cell.column+1)
                 elif "TO:" in val:
