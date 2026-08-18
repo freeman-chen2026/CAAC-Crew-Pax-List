@@ -307,7 +307,6 @@ BUILTIN_LICENSE_MAP = {
     "张哲": "650104196604163310",
     "Zhe ZHANG": "650104196604163310",
     "李海": "110105197201106130",
-    # ===== 新增（2026-08-15）=====
     "赵婷婷": "372524198212240023",
     "李园": "110105198309149639",
     "孔铮": "11010419801116125X",
@@ -345,7 +344,6 @@ BUILTIN_LICENSE_MAP = {
     "苏志斌": "350782198308221539",
     "赵康": "430321200303160170",
     "翟征宇": "140211198612050031",
-    # 蔡国俊、万子辰 暂未提供执照号
 }
 
 # ---------- 内置证件号码映射（身份证/护照） ----------
@@ -406,8 +404,8 @@ BUILTIN_ID_MAP = {
     "万虹波": "36050219860709003X",
     "王国勤": "340822197610240215",
     "李潇恩": "510802199512100046",
-    "孙辉": "310228197810012612",  # 新增
-    "Hui Sun": "310228197810012612",  # 新增
+    "孙辉": "310228197810012612",
+    "Hui Sun": "310228197810012612",
     "范蕾蕾": "37010319861027002X",
     "张贺新": "420106197101020435",
     "李庆宏": "441402199107140256",
@@ -421,7 +419,6 @@ BUILTIN_ID_MAP = {
     "BEEBE, Thaddeus John": "R909452(A)",
     "张哲": "650104196604163310",
     "李海": "110105197201106130",
-    # ===== 新增（2026-08-15）=====
     "赵婷婷": "372524198212240023",
     "李园": "110105198309149639",
     "孔铮": "11010419801116125X",
@@ -458,7 +455,6 @@ BUILTIN_ID_MAP = {
     "苏志斌": "350782198308221539",
     "赵康": "430321200303160170",
     "翟征宇": "140211198612050031",
-    # 蔡国俊、万子辰 暂未提供身份证号
 }
 
 # ---------- 国籍映射 ----------
@@ -475,15 +471,12 @@ NATION_MAP = {
     "TWN": "台湾地区", "MAC": "澳门"
 }
 
-# ---------- 机型修正映射（GD单填写错误时使用）----------
+# ---------- 机型修正映射 ----------
 AIRCRAFT_TYPE_CORRECTION = {
-    "B3926": "LJ60",   # GD单误写为 LR60，实际为 LJ60
+    "B3926": "LJ60",
 }
 
 def correct_aircraft_type(reg, ac_type):
-    """
-    根据注册号修正机型（当GD单填写错误时）
-    """
     if reg in AIRCRAFT_TYPE_CORRECTION:
         corrected = AIRCRAFT_TYPE_CORRECTION[reg]
         if ac_type != corrected:
@@ -559,7 +552,7 @@ def parse_document_type(passport_no, doc_type):
         if "中华人民共和国居民身份证" in doc_type_str:
             return "身份证"
         if "港澳居民来往内地通行证" in doc_type_str:
-            return "港澳通行证"
+            return "回乡证"  # 修改：改为“回乡证”
         return doc_type_str
     pn = str(passport_no).strip() if pd.notna(passport_no) else ""
     pn = re.sub(r'\s+', '', pn)
@@ -618,9 +611,6 @@ def parse_date_display(date_str):
         return date_str
 
 def get_beijing_date_display(utc_time_str, date_str):
-    """
-    根据 UTC 时间和原始日期字符串计算北京时间日期（月日），若计算失败则回退到 parse_date_display
-    """
     if not utc_time_str or not date_str:
         return parse_date_display(date_str)
     try:
@@ -638,7 +628,7 @@ def get_beijing_date_display(utc_time_str, date_str):
         month_map = {"Jan":1,"Feb":2,"Mar":3,"Apr":4,"May":5,"Jun":6,
                      "Jul":7,"Aug":8,"Sep":9,"Oct":10,"Nov":11,"Dec":12}
         month = month_map.get(month_str[:3], 1)
-        year = 2026  # 使用当前年份，可根据需要调整
+        year = 2026
         dt_utc = datetime(year, month, day, hour, minute)
         dt_beijing = dt_utc + timedelta(hours=8)
         return f"{dt_beijing.month}月{dt_beijing.day}日"
@@ -1031,7 +1021,6 @@ if data_file and template_file:
         date_str = data.get("date_str", "")
         utc_time = data.get("utc_time", "")
         default_route = ""
-        # 使用北京时间日期
         date_display = get_beijing_date_display(utc_time, date_str) if date_str else ""
         if date_str and from_code and to_code:
             if utc_time:
