@@ -1023,7 +1023,7 @@ with tab1:
     st.info("⚠️ 注意：模板文件必须是 **.xlsx** 格式（非 .xls）。联系方式、执照号码及证件号码已内置，无需额外上传。")
 
     data_file = st.file_uploader("上传 GD单（General Declaration）Excel（.xlsx）", type=["xlsx"], key="data")
-    template_file = st.file_uploader("上传备案表模板 Excel（必须是 .xlsx）", type=["xlsx"], key="template")
+    template_file = st.file_uploader("上传总调模板：Jetops申请一览-", type=["xlsx"], key="template")
 
     if data_file and template_file:
         try:
@@ -1095,7 +1095,7 @@ with tab1:
 # 功能2：世界时行程（独立代码）
 # ================================================================
 with tab2:
-    st.markdown("将包含飞行航段信息的 Excel 文件转换为标准化的飞行计划文本（世界时），便于复制粘贴到飞行计划系统。")
+    st.markdown("从Jetops系统导出的北京时间的行程 Excel 文件转换为世界时的行程，便于复制粘贴。")
 
     # ---------- 辅助函数 ----------
     def parse_time_column(val):
@@ -1204,14 +1204,13 @@ with tab2:
         return {k: plans_dict[k] for k in sorted_keys}
 
     # ---------- 功能2 UI ----------
-    uploaded_file_2 = st.file_uploader("📤 选择 Excel 文件（格式：表头行第二行）", type=["xlsx"], key="worldtime")
+    uploaded_file_2 = st.file_uploader("📤 上传航段数据导出（北京时间）", type=["xlsx"], key="worldtime")
 
     if uploaded_file_2 is not None:
         try:
             df = pd.read_excel(uploaded_file_2, skiprows=1)
             st.success("✅ 文件读取成功")
-            with st.expander("📊 原始数据预览（全部行）", expanded=True):
-                st.dataframe(df, use_container_width=True)
+            # 移除了原始数据预览（全部行）
 
             plans = generate_plans(df)
             if plans is None:
