@@ -7,8 +7,8 @@ from datetime import datetime, timedelta
 import traceback
 
 # ---------- 页面设置 ----------
-st.set_page_config(page_title="公务航空综合工具", layout="wide")
-st.title("🛫 公务航空综合工具")
+st.set_page_config(page_title="备案表&世界时行程&航路处理", layout="wide")
+st.title("🛫 备案表 / 世界时行程 / 航路处理")
 
 # ---------- 创建选项卡 ----------
 tab1, tab2, tab3 = st.tabs(["📋 功能1：备案表生成", "🌐 功能2：世界时行程", "✈️ 功能3：航路处理工具"])
@@ -179,7 +179,6 @@ with tab1:
         "翟征宇": "134 1448 9793",
         "陈居瑜": "158 8962 6660",
         "林毅": "136 8642 0153",
-        # 新增郭春旭
         "郭春旭": "138 0136 1720",
         "Guo Chunxu": "138 0136 1720",
     }
@@ -293,7 +292,6 @@ with tab1:
         "Hui Sun": "310228197810012612",
         "范蕾蕾": "ZN00347",
         "Leilei FAN": "ZN00347",
-        # 张贺新执照号更新为身份证号
         "张贺新": "420106197101020435",
         "Hexin ZHANG": "420106197101020435",
         "李庆宏": "17260/1 FCL",
@@ -358,12 +356,11 @@ with tab1:
         "苏志斌": "350782198308221539",
         "赵康": "430321200303160170",
         "翟征宇": "140211198612050031",
-        # 新增郭春旭
         "郭春旭": "110107197305150016",
         "Guo Chunxu": "110107197305150016",
     }
 
-    # ---------- 内置证件号码映射（身份证/护照） ----------
+    # ---------- 内置证件号码映射 ----------
     BUILTIN_ID_MAP = {
         "庚凡": "430104197901184015",
         "张永一": "110102196605202336",
@@ -472,7 +469,6 @@ with tab1:
         "苏志斌": "350782198308221539",
         "赵康": "430321200303160170",
         "翟征宇": "140211198612050031",
-        # 新增郭春旭
         "郭春旭": "110107197305150016",
         "Guo Chunxu": "110107197305150016",
     }
@@ -491,10 +487,7 @@ with tab1:
         "TWN": "台湾地区", "MAC": "澳门"
     }
 
-    # ---------- 机型修正映射 ----------
-    AIRCRAFT_TYPE_CORRECTION = {
-        "B3926": "LJ60",
-    }
+    AIRCRAFT_TYPE_CORRECTION = {"B3926": "LJ60"}
 
     def correct_aircraft_type(reg, ac_type):
         if reg in AIRCRAFT_TYPE_CORRECTION:
@@ -735,7 +728,6 @@ with tab1:
                 return f"{date_display} {dep_airport}{dep_time}-{arr_time}{arr_airport}"
         return input_text
 
-    # ---------- 解析GD单 ----------
     def parse_general_declaration(file_bytes):
         wb = load_workbook(file_bytes)
         ws = wb.active
@@ -814,7 +806,6 @@ with tab1:
                             })
         return data, crew_data, passenger_data
 
-    # ---------- 填充模板 ----------
     def fill_template(template_bytes, data, crew_list, passenger_list, route_display):
         try:
             wb = load_workbook(template_bytes)
@@ -903,7 +894,6 @@ with tab1:
                     continue
                 break
 
-        # 乘务、机务
         cabin_crew = None
         mechanic = None
         for i in range(2, len(crew_list)):
@@ -976,7 +966,6 @@ with tab1:
                 continue
             break
 
-        # 乘客信息
         passenger_start_row = None
         for row in ws.iter_rows(min_row=1, max_row=100):
             for cell in row:
@@ -1093,19 +1082,17 @@ with tab1:
 
 
 # ================================================================
-# 功能2：世界时行程（独立代码）
+# 功能2：世界时行程
 # ================================================================
 with tab2:
     st.markdown("从Jetops系统导出的北京时间的行程 Excel 文件转换为世界时的行程，便于复制粘贴。")
 
-    # ---------- 辅助函数 ----------
     def parse_time_column(val):
-        """将各种时间格式转换为 'HH:MM' 字符串"""
         if pd.isna(val):
             return None
         if isinstance(val, (pd.Timestamp, datetime)):
             return val.strftime('%H:%M')
-        if hasattr(val, 'strftime'):  # datetime.time
+        if hasattr(val, 'strftime'):
             return val.strftime('%H:%M')
         s = str(val).strip()
         if ':' in s:
@@ -1113,14 +1100,12 @@ with tab2:
         return s
 
     def convert_to_utc(date_val, time_str):
-        """合并日期和时间（北京时间）并转换为 UTC，返回 datetime 对象"""
         if pd.isna(date_val) or time_str is None:
             return None
         if isinstance(date_val, (pd.Timestamp, datetime)):
             date_str = date_val.strftime('%Y-%m-%d')
         else:
             date_str = str(date_val).split()[0]
-
         dt_str = f"{date_str} {time_str}"
         try:
             dt_local = pd.to_datetime(dt_str)
@@ -1130,7 +1115,6 @@ with tab2:
             return None
 
     def format_utc(dt):
-        """格式化为 DDMMM HHMMZ，例如 11AUG 0100Z"""
         if dt is None:
             return ""
         months = ['JAN','FEB','MAR','APR','MAY','JUN',
@@ -1142,7 +1126,6 @@ with tab2:
         return f"{day:02d}{month} {hour:02d}{minute:02d}Z"
 
     def generate_plans(df):
-        """从 DataFrame 生成按飞机注册号分组的飞行计划文本"""
         required = ['飞机注册号', '出发地', '到达地', '出发日期', '计划出发', '到达日期', '预计到达', '用途']
         for col in required:
             if col not in df.columns:
@@ -1155,7 +1138,6 @@ with tab2:
             return None
 
         plans = {}
-
         for idx, row in df.iterrows():
             reg = row['飞机注册号']
             if pd.isna(reg) or str(reg).strip() == '':
@@ -1183,7 +1165,6 @@ with tab2:
                 plans[reg] = []
             plans[reg].append((dep_utc, line))
 
-        # 排序每个注册号下的航段（按时间）
         result = {}
         for reg, items in plans.items():
             items.sort(key=lambda x: x[0])
@@ -1194,7 +1175,6 @@ with tab2:
         return result
 
     def sort_plans(plans_dict):
-        """按照指定顺序排序飞机注册号，N/A 放在最后"""
         priority_order = ['B652Q', 'B65AP', 'B652S', 'MLLIN', 'N88AY', 'B652R']
         all_keys = list(plans_dict.keys())
         priority_keys = [k for k in priority_order if k in all_keys]
@@ -1204,7 +1184,6 @@ with tab2:
         sorted_keys = priority_keys + remaining_keys + na_keys
         return {k: plans_dict[k] for k in sorted_keys}
 
-    # ---------- 功能2 UI ----------
     uploaded_file_2 = st.file_uploader("📤 上传航段数据导出（北京时间）", type=["xlsx"], key="worldtime")
 
     if uploaded_file_2 is not None:
@@ -1245,21 +1224,17 @@ with tab2:
 
 
 # ================================================================
-# 功能3：航路处理工具（原独立代码整合）
+# 功能3：航路处理工具
 # ================================================================
 with tab3:
     st.markdown("支持表格格式（带N/E坐标）/中文描述格式，自动精简航路+添加#前缀，兼容不规整数据")
 
-    # ---------- 初始化会话状态 ----------
     if "last_processed_input_route" not in st.session_state:
         st.session_state.last_processed_input_route = ""
     if "result_text_route" not in st.session_state:
         st.session_state.result_text_route = ""
 
-    # ---------- 核心函数 ----------
     def parse_coord(coord_str):
-        """将坐标字符串（如 N252723.88 或 E1080859.53）转换为四舍五入后的整数部分，
-        纬度返回6位数字，经度返回7位数字，自动处理进位。"""
         letter = coord_str[0]
         num_part = coord_str[1:]
         if letter == 'N':
@@ -1298,11 +1273,9 @@ with tab3:
             raise ValueError(f"未知的坐标前缀: {letter}")
 
     def base_name(s):
-        """返回点的基础名称（去掉@后面的部分）"""
         return s.split('@')[0]
 
     def is_open_point(s):
-        """判断是否为开放点（纯字母2-5位，或P后跟全字母）"""
         base = base_name(s)
         if re.match(r'^[A-Z]{2,5}$', base):
             return True
@@ -1311,22 +1284,18 @@ with tab3:
         return False
 
     def is_p_point(s):
-        """判断是否为不开放P点（P后跟数字）"""
         base = base_name(s)
         return re.match(r'^P\d+$', base) is not None
 
     def clean_route(r):
-        """去掉航路可能的#前缀（用于比较）"""
         if r.startswith('#'):
             return r[1:]
         return r
 
     def is_open_route(rt):
-        """判断是否为开放航路（不以 H/J/V 开头）"""
         return rt and rt[0] not in ('H', 'J', 'V')
 
     def extract_table(text):
-        """处理带坐标的表格数据"""
         tokens = text.strip().split()
         start_idx = 0
         for i, tok in enumerate(tokens):
@@ -1396,7 +1365,6 @@ with tab3:
         return seq
 
     def extract_chinese(text):
-        """处理纯中文描述的航路数据（无坐标）"""
         text = re.sub(r'[\u4e00-\u9fa5，、。；：""''（）【】]', ' ', text)
         words = text.split()
         seq = []
@@ -1422,14 +1390,12 @@ with tab3:
         return seq
 
     def step1_extract(text):
-        """判断输入类型并提取点和航路，返回 (seq, format_type)"""
         if re.search(r'N\d{5,6}(?:\.\d+)?\s+E\d{6,7}(?:\.\d+)?', text):
             return extract_table(text), 'table'
         else:
             return extract_chinese(text), 'chinese'
 
     def step2_reduce(seq):
-        """精简相同开放航路连续且首尾开放点的段落"""
         L = seq[:]
         changed = True
         while changed:
@@ -1467,7 +1433,6 @@ with tab3:
         return L
 
     def step3_add_hash(seq):
-        """为不开放航路和与P点相邻的航路添加#前缀"""
         pts = seq[0::2]
         rts = seq[1::2]
         m = len(rts)
@@ -1492,8 +1457,6 @@ with tab3:
             res.append(right)
         return res
 
-    # ---------- 功能3 UI ----------
-    # 自定义样式微调
     st.markdown("""
         <style>
         .stButton>button {border-radius: 8px; height: 2.5rem; font-size: 1rem;}
@@ -1502,7 +1465,6 @@ with tab3:
         </style>
     """, unsafe_allow_html=True)
 
-    # 输入区域
     input_text_route = st.text_area(
         "📋 请输入待处理的航路文本",
         key="input_text_route",
@@ -1510,21 +1472,18 @@ with tab3:
         placeholder="粘贴民航航线数据，支持多行表格格式/纯中文描述格式..."
     )
 
-    # 按钮区域
     btn_col1, btn_col2, btn_col3 = st.columns([2, 2, 8])
     with btn_col1:
         process_btn = st.button("⚙️ 处理", type="primary", use_container_width=True, key="process_route")
     with btn_col2:
         clear_btn = st.button("🗑️ 清空", use_container_width=True, key="clear_route")
 
-    # 清空按钮逻辑
     if clear_btn:
         st.session_state.input_text_route = ""
         st.session_state.last_processed_input_route = ""
         st.session_state.result_text_route = ""
         st.rerun()
 
-    # 处理按钮逻辑
     if process_btn and st.session_state.get("input_text_route", "").strip():
         progress_bar = st.progress(0)
         status_text = st.empty()
@@ -1532,27 +1491,23 @@ with tab3:
         current_step = 0
 
         try:
-            # 步骤1：识别输入类型
             current_step += 1
             progress_bar.progress(current_step / total_steps)
             status_text.text(f"处理中：第{current_step}步/共{total_steps}步（识别输入类型）")
             seq, fmt = step1_extract(st.session_state.input_text_route)
 
-            # 步骤2：精简航路（表格格式专属）
             current_step += 1
             progress_bar.progress(current_step / total_steps)
             status_text.text(f"处理中：第{current_step}步/共{total_steps}步（精简相同开放航路）")
             if fmt == 'table':
                 seq = step2_reduce(seq)
 
-            # 步骤3：添加#前缀（表格格式专属）
             current_step += 1
             progress_bar.progress(current_step / total_steps)
             status_text.text(f"处理中：第{current_step}步/共{total_steps}步（添加航路#前缀）")
             if fmt == 'table':
                 seq = step3_add_hash(seq)
 
-            # 步骤4：结果拼接
             current_step += 1
             progress_bar.progress(current_step / total_steps)
             status_text.text(f"处理中：第{current_step}步/共{total_steps}步（生成最终结果）")
@@ -1572,7 +1527,6 @@ with tab3:
             with st.expander("🔍 查看详细错误信息", expanded=False):
                 st.code(traceback.format_exc(), language="text")
 
-    # 结果展示区域
     if st.session_state.get("result_text_route", ""):
         current_input = st.session_state.get("input_text_route", "")
         last_input = st.session_state.last_processed_input_route
