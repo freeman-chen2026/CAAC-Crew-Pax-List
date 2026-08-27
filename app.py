@@ -16,7 +16,7 @@ st.title("🛫 备案表 / 世界时行程 / 航路处理")
 tab1, tab2, tab3 = st.tabs(["📋 功能1：备案表生成", "🌐 功能2：世界时行程", "✈️ 功能3：航路处理工具"])
 
 # ================================================================
-# 功能1：备案表生成（保持不变）
+# 功能1：备案表生成
 # ================================================================
 with tab1:
     st.markdown("上传 GD单 和模板，自动生成备案表（联系方式、执照号码及证件号码已内置）。")
@@ -1084,11 +1084,11 @@ with tab1:
 
 
 # ================================================================
-# 功能2：世界时行程（简洁好看版本，修复标红逻辑）
+# 功能2：世界时行程（带记忆对比功能 - 已修复标红逻辑）
 # ================================================================
 with tab2:
     st.markdown("从Jetops系统导出的北京时间的行程 Excel 文件转换为世界时的行程，便于复制粘贴。")
-    st.info("💡 每次上传将自动与上一次记录对比，**变更的航段**会在代码框中红色高亮显示。")
+    st.info("💡 每次上传将自动与上一次记录对比，**新增或变更的航段**会在下方红色高亮显示。")
 
     # ---------- 历史数据管理 ----------
     HISTORY_FILE = "flight_history.json"
@@ -1204,7 +1204,7 @@ with tab2:
         sorted_keys = priority_keys + remaining_keys + na_keys
         return {k: plans_dict[k] for k in sorted_keys}
 
-    # 逐行比较，标记变更（修复版）
+    # 修复：对比函数改为逐行比较，标记变更
     def diff_plans(old_plans, new_plans):
         changes = {}
         all_regs = set(old_plans.keys()) | set(new_plans.keys())
@@ -1213,13 +1213,19 @@ with tab2:
             new_text = new_plans.get(reg, "")
             old_lines = [line for line in old_text.split('\n') if line != reg]
             new_lines = [line for line in new_text.split('\n') if line != reg]
+            # 找出变更的行
+            # 用最大公共子序列或简单按位置比较
             max_len = max(len(old_lines), len(new_lines))
             for i in range(max_len):
                 old_line = old_lines[i] if i < len(old_lines) else None
                 new_line = new_lines[i] if i < len(new_lines) else None
                 if old_line is None and new_line is not None:
                     changes[(reg, new_line)] = 'added'
-                elif old_line is not None and new_line is not None and old_line != new_line:
+                elif old_line is not None and new_line is None:
+                    # 删除不标记，忽略
+                    pass
+                elif old_line != new_line:
+                    # 内容变更
                     changes[(reg, new_line)] = 'modified'
         return changes
 
@@ -1257,37 +1263,37 @@ with tab2:
                 history["records"] = history["records"][-20:]
             save_history(history)
 
-            st.subheader("📋 生成的飞行计划（红色 = 新增或变更）")
+            st.subheader("📋 生成的飞行计划（红色为新增或变更）")
 
             # 每个注册号独立显示
             for reg, text in sorted_new_plans.items():
                 lines = text.split('\n')
+                # 检查是否有变更
                 has_changes = any((reg, line) in changes for line in lines if line != reg)
 
-                # 简洁提示
                 if has_changes:
-                    st.markdown(f"**✈️ {reg}** 🔴 (有变更)")
+                    st.markdown(f"**✈️ {reg}** 🔴 <span style='color:red;font-size:0.9rem;'>（有新增或变更）</span>", unsafe_allow_html=True)
                 else:
                     st.markdown(f"**✈️ {reg}**")
 
-                # 构建带颜色标记的行
+                # 构建带颜色的行
                 colored_lines = []
-                plain_lines = []
                 for line in lines:
                     if line == reg:
                         continue
-                    plain_lines.append(line)
                     if (reg, line) in changes:
                         colored_lines.append(f'<span style="color:red">{line}</span>')
                     else:
                         colored_lines.append(line)
 
-                # 显示带颜色的预览（用 st.markdown，简洁）
+                # 用代码框显示，但代码框不支持HTML，我们改用 st.markdown 显示
+                # 显示彩色预览（使用 st.markdown）
                 if colored_lines:
-                    display_text = "\n".join(colored_lines)
-                    st.markdown(display_text, unsafe_allow_html=True)
+                    preview_text = "\n".join(colored_lines)
+                    st.markdown(preview_text, unsafe_allow_html=True)
 
                 # 同时提供纯文本代码框（方便复制）
+                plain_lines = [line for line in lines if line != reg]
                 plain_text = "\n".join(plain_lines)
                 with st.expander("📋 纯文本版本（点击展开复制）"):
                     st.code(plain_text, language="text")
