@@ -1084,11 +1084,11 @@ with tab1:
 
 
 # ================================================================
-# 功能2：世界时行程（带记忆对比功能）
+# 功能2：世界时行程（带记忆对比功能 - 已修复标红逻辑）
 # ================================================================
 with tab2:
     st.markdown("从Jetops系统导出的北京时间的行程 Excel 文件转换为世界时的行程，便于复制粘贴。")
-    st.info("💡 每次上传将自动与上一次记录对比，新增或变更的航段会在下方红色高亮显示。")
+    st.info("💡 每次上传将自动与上一次记录对比，**新增或变更的航段**会在下方红色高亮显示。")
 
     # ---------- 历史数据管理 ----------
     HISTORY_FILE = "flight_history.json"
@@ -1204,17 +1204,29 @@ with tab2:
         sorted_keys = priority_keys + remaining_keys + na_keys
         return {k: plans_dict[k] for k in sorted_keys}
 
+    # 修复：对比函数改为逐行比较，标记变更
     def diff_plans(old_plans, new_plans):
         changes = {}
         all_regs = set(old_plans.keys()) | set(new_plans.keys())
         for reg in all_regs:
-            old_lines = set(old_plans.get(reg, "").split('\n')) if old_plans.get(reg) else set()
-            new_lines = set(new_plans.get(reg, "").split('\n')) if new_plans.get(reg) else set()
-            old_lines.discard(reg)
-            new_lines.discard(reg)
-            added = new_lines - old_lines
-            for line in added:
-                changes[(reg, line)] = 'added'
+            old_text = old_plans.get(reg, "")
+            new_text = new_plans.get(reg, "")
+            old_lines = [line for line in old_text.split('\n') if line != reg]
+            new_lines = [line for line in new_text.split('\n') if line != reg]
+            # 找出变更的行
+            # 用最大公共子序列或简单按位置比较
+            max_len = max(len(old_lines), len(new_lines))
+            for i in range(max_len):
+                old_line = old_lines[i] if i < len(old_lines) else None
+                new_line = new_lines[i] if i < len(new_lines) else None
+                if old_line is None and new_line is not None:
+                    changes[(reg, new_line)] = 'added'
+                elif old_line is not None and new_line is None:
+                    # 删除不标记，忽略
+                    pass
+                elif old_line != new_line:
+                    # 内容变更
+                    changes[(reg, new_line)] = 'modified'
         return changes
 
     # ---------- UI ----------
@@ -1251,11 +1263,12 @@ with tab2:
                 history["records"] = history["records"][-20:]
             save_history(history)
 
-            st.subheader("📋 生成的飞行计划（红色为新增/变更）")
+            st.subheader("📋 生成的飞行计划（红色为新增或变更）")
 
             # 每个注册号独立显示
             for reg, text in sorted_new_plans.items():
                 lines = text.split('\n')
+                # 检查是否有变更
                 has_changes = any((reg, line) in changes for line in lines if line != reg)
 
                 if has_changes:
@@ -1263,17 +1276,29 @@ with tab2:
                 else:
                     st.markdown(f"**✈️ {reg}**")
 
-                plain_lines = []
+                # 构建带颜色的行
+                colored_lines = []
                 for line in lines:
                     if line == reg:
                         continue
-                    plain_lines.append(line)
+                    if (reg, line) in changes:
+                        colored_lines.append(f'<span style="color:red">{line}</span>')
+                    else:
+                        colored_lines.append(line)
 
-                # 显示纯文本代码框（自带复制按钮）
+                # 用代码框显示，但代码框不支持HTML，我们改用 st.markdown 显示
+                # 显示彩色预览（使用 st.markdown）
+                if colored_lines:
+                    preview_text = "\n".join(colored_lines)
+                    st.markdown(preview_text, unsafe_allow_html=True)
+
+                # 同时提供纯文本代码框（方便复制）
+                plain_lines = [line for line in lines if line != reg]
                 plain_text = "\n".join(plain_lines)
-                st.code(plain_text, language="text")
+                with st.expander("📋 纯文本版本（点击展开复制）"):
+                    st.code(plain_text, language="text")
 
-            # 全部合并的纯文本（备用）
+            # 全部合并的纯文本
             full_text = ""
             for reg, text in sorted_new_plans.items():
                 full_text += f"{text}\n\n"
