@@ -183,6 +183,8 @@ with tab1:
         "林毅": "136 8642 0153",
         "郭春旭": "138 0136 1720",
         "Guo Chunxu": "138 0136 1720",
+        # MODIFIED: 新增黄海东联系方式
+        "黄海东": "138 0179 9315",
     }
 
     # ---------- 内置执照号码映射 ----------
@@ -360,6 +362,8 @@ with tab1:
         "翟征宇": "140211198612050031",
         "郭春旭": "110107197305150016",
         "Guo Chunxu": "110107197305150016",
+        # MODIFIED: 新增黄海东执照号码（与证件一致）
+        "黄海东": "310105197506021215",
     }
 
     # ---------- 内置证件号码映射 ----------
@@ -473,6 +477,8 @@ with tab1:
         "翟征宇": "140211198612050031",
         "郭春旭": "110107197305150016",
         "Guo Chunxu": "110107197305150016",
+        # MODIFIED: 新增黄海东证件号码
+        "黄海东": "310105197506021215",
     }
 
     # ---------- 国籍映射 ----------
@@ -486,7 +492,8 @@ with tab1:
         "GRC": "希腊", "TUR": "土耳其", "SAU": "沙特阿拉伯", "ARE": "阿联酋", "ISR": "以色列",
         "IRN": "伊朗", "PAK": "巴基斯坦", "BGD": "孟加拉", "NPL": "尼泊尔", "LKA": "斯里兰卡",
         "MMR": "缅甸", "KHM": "柬埔寨", "LAO": "老挝", "MNG": "蒙古", "PRK": "朝鲜",
-        "TWN": "台湾地区", "MAC": "澳门"
+        # MODIFIED: 台湾地区改为中国台湾
+        "TWN": "中国台湾", "MAC": "澳门"
     }
 
     AIRCRAFT_TYPE_CORRECTION = {"B3926": "LJ60"}
@@ -863,7 +870,11 @@ with tab1:
                             safe_set_cell_value(ws, row_num, 5, id_num)
                         else:
                             safe_set_cell_value(ws, row_num, 5, crew.get("passport_no", ""))
-                        license_num = find_license(crew["name"])
+                        # MODIFIED: 优先使用证件号码作为执照号码
+                        if id_num:
+                            license_num = id_num
+                        else:
+                            license_num = find_license(crew["name"])
                         safe_set_cell_value(ws, row_num, 6, license_num)
                         contact = find_contact(crew["name"])
                         safe_set_cell_value(ws, row_num, 7, contact)
@@ -887,7 +898,11 @@ with tab1:
                             safe_set_cell_value(ws, row_num, 5, id_num)
                         else:
                             safe_set_cell_value(ws, row_num, 5, crew.get("passport_no", ""))
-                        license_num = find_license(crew["name"])
+                        # MODIFIED: 优先使用证件号码作为执照号码
+                        if id_num:
+                            license_num = id_num
+                        else:
+                            license_num = find_license(crew["name"])
                         safe_set_cell_value(ws, row_num, 6, license_num)
                         contact = find_contact(crew["name"])
                         safe_set_cell_value(ws, row_num, 7, contact)
@@ -922,7 +937,8 @@ with tab1:
                             safe_set_cell_value(ws, row_num, 5, id_num)
                         else:
                             safe_set_cell_value(ws, row_num, 5, cabin_crew.get("passport_no", ""))
-                        license_num = find_id(cabin_crew["name"]) or find_license(cabin_crew["name"])
+                        # MODIFIED: 优先使用证件号码作为执照号码
+                        license_num = id_num if id_num else find_license(cabin_crew["name"])
                         safe_set_cell_value(ws, row_num, 6, license_num)
                         contact = find_contact(cabin_crew["name"])
                         safe_set_cell_value(ws, row_num, 7, contact)
@@ -952,7 +968,8 @@ with tab1:
                             safe_set_cell_value(ws, row_num, 5, id_num)
                         else:
                             safe_set_cell_value(ws, row_num, 5, mechanic.get("passport_no", ""))
-                        license_num = find_license(mechanic["name"])
+                        # MODIFIED: 优先使用证件号码作为执照号码
+                        license_num = id_num if id_num else find_license(mechanic["name"])
                         safe_set_cell_value(ws, row_num, 6, license_num)
                         contact = find_contact(mechanic["name"])
                         safe_set_cell_value(ws, row_num, 7, contact)
