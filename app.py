@@ -39,7 +39,7 @@ with tab1:
         "彭罡": "186 1263 1888",
         "Wan Leung WU": "132 6695 8816",
         "Kwan Leung WU": "132 6695 8816",
-        "胡君量": "132 6695 8816",      # 新增
+        "胡君量": "132 6695 8816",
         "吴鹏": "136 1110 5901",
         "刘汇川": "188 5827 2791",
         "于龙飞": "156 5288 0812",
@@ -196,7 +196,7 @@ with tab1:
         "彭罡": "3240393",
         "Kwan Leung WU": "3025478",
         "Wan Leung WU": "3025478",
-        "胡君量": "3025478",          # 新增
+        "胡君量": "3025478",
         "张佳妮": "10183",
         "Jiani ZHANG": "10183",
         "尤欣": "620102197604293015",
@@ -382,8 +382,8 @@ with tab1:
         "李亚民": "350104197107184915",
         "赵镭": "440301198204157271",
         "彭罡": "440111198403244812",
-        "Kwan Leung WU": "124133200",      # 更新
-        "胡君量": "124133200",             # 新增
+        "Kwan Leung WU": "124133200",
+        "胡君量": "124133200",
         "吴鹏": "130103197602102115",
         "刘汇川": "330103199003191618",
         "于龙飞": "210103198808123928",
@@ -897,7 +897,6 @@ with tab1:
                             safe_set_cell_value(ws, row_num, 5, id_num)
                         else:
                             safe_set_cell_value(ws, row_num, 5, crew.get("passport_no", ""))
-                        # 优先使用证件号码作为执照号码
                         if id_num:
                             license_num = id_num
                         else:
@@ -1036,10 +1035,10 @@ with tab1:
             data, crew_list, passenger_list = parse_general_declaration(data_file)
             st.success(f"✅ 解析成功：机组 {len(crew_list)} 人，乘客 {len(passenger_list)} 人")
 
+            # 只显示机组中文姓名列表（不显示表格）
             if crew_list:
-                st.write("提取的机组信息：", pd.DataFrame(crew_list))
-            if passenger_list:
-                st.write("提取的乘客信息（前5行）：", pd.DataFrame(passenger_list).head(5))
+                crew_names = [extract_chinese_name(crew["name"]) for crew in crew_list if crew.get("name")]
+                st.write("👨‍✈️ 机组名单：", ", ".join(crew_names) if crew_names else "无")
 
             from_code = data.get("from", "")
             to_code = data.get("to", "")
@@ -1056,10 +1055,14 @@ with tab1:
             else:
                 default_route = f"{from_code}-{to_code}" if from_code and to_code else ""
 
-            st.subheader("📋 提取的航班信息")
-            st.info(f"✈️ 默认航班行程：{default_route}")
+            # 不再显示提取的航班信息板块
+            # st.subheader("📋 提取的航班信息")
+            # st.info(f"✈️ 默认航班行程：{default_route}")
 
-            raw_route = st.text_input("📝 自定义航班行程 / 下载文件名", value=default_route).strip()
+            raw_route = st.text_input(
+                "从Jetops复制航班信息并适当调整起落时间 比如： F B652S 08:00 - 14:00  柬埔寨金边 德崇 - 日本东京 羽田",
+                value=default_route
+            ).strip()
 
             with_time = parse_with_time_route(raw_route, date_display)
             if with_time != raw_route and with_time is not None:
@@ -1090,6 +1093,8 @@ with tab1:
                 file_name=download_file_name,
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             )
+            st.caption("⏳ 输入文件名之后稍等3秒钟后再点击下载")
+
         except Exception as e:
             st.error(f"❌ 处理失败：{e}")
             st.exception(e)
@@ -1283,18 +1288,15 @@ with tab2:
                         continue
                     plain_lines.append(line)
 
-                # 显示纯文本代码框（自带复制按钮）
                 plain_text = "\n".join(plain_lines)
                 st.code(plain_text, language="text")
 
-            # 全部合并的纯文本（备用）
             full_text = ""
             for reg, text in sorted_new_plans.items():
                 full_text += f"{text}\n\n"
             with st.expander("📦 全部计划合并（点击展开）"):
                 st.code(full_text, language="text")
 
-            # ---------- 历史记录 ----------
             with st.expander("📜 查看历史上传记录"):
                 if history["records"]:
                     for i, rec in enumerate(history["records"]):
