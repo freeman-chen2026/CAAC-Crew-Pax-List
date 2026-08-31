@@ -39,6 +39,7 @@ with tab1:
         "彭罡": "186 1263 1888",
         "Wan Leung WU": "132 6695 8816",
         "Kwan Leung WU": "132 6695 8816",
+        "胡君量": "132 6695 8816",      # 新增
         "吴鹏": "136 1110 5901",
         "刘汇川": "188 5827 2791",
         "于龙飞": "156 5288 0812",
@@ -183,7 +184,6 @@ with tab1:
         "林毅": "136 8642 0153",
         "郭春旭": "138 0136 1720",
         "Guo Chunxu": "138 0136 1720",
-        # MODIFIED: 新增黄海东联系方式
         "黄海东": "138 0179 9315",
     }
 
@@ -196,6 +196,7 @@ with tab1:
         "彭罡": "3240393",
         "Kwan Leung WU": "3025478",
         "Wan Leung WU": "3025478",
+        "胡君量": "3025478",          # 新增
         "张佳妮": "10183",
         "Jiani ZHANG": "10183",
         "尤欣": "620102197604293015",
@@ -362,7 +363,6 @@ with tab1:
         "翟征宇": "140211198612050031",
         "郭春旭": "110107197305150016",
         "Guo Chunxu": "110107197305150016",
-        # MODIFIED: 新增黄海东执照号码（与证件一致）
         "黄海东": "310105197506021215",
     }
 
@@ -382,7 +382,8 @@ with tab1:
         "李亚民": "350104197107184915",
         "赵镭": "440301198204157271",
         "彭罡": "440111198403244812",
-        "Kwan Leung WU": "Z394213(A)",
+        "Kwan Leung WU": "124133200",      # 更新
+        "胡君量": "124133200",             # 新增
         "吴鹏": "130103197602102115",
         "刘汇川": "330103199003191618",
         "于龙飞": "210103198808123928",
@@ -477,7 +478,6 @@ with tab1:
         "翟征宇": "140211198612050031",
         "郭春旭": "110107197305150016",
         "Guo Chunxu": "110107197305150016",
-        # MODIFIED: 新增黄海东证件号码
         "黄海东": "310105197506021215",
     }
 
@@ -492,7 +492,6 @@ with tab1:
         "GRC": "希腊", "TUR": "土耳其", "SAU": "沙特阿拉伯", "ARE": "阿联酋", "ISR": "以色列",
         "IRN": "伊朗", "PAK": "巴基斯坦", "BGD": "孟加拉", "NPL": "尼泊尔", "LKA": "斯里兰卡",
         "MMR": "缅甸", "KHM": "柬埔寨", "LAO": "老挝", "MNG": "蒙古", "PRK": "朝鲜",
-        # MODIFIED: 台湾地区改为中国台湾
         "TWN": "中国台湾", "MAC": "澳门"
     }
 
@@ -870,7 +869,7 @@ with tab1:
                             safe_set_cell_value(ws, row_num, 5, id_num)
                         else:
                             safe_set_cell_value(ws, row_num, 5, crew.get("passport_no", ""))
-                        # MODIFIED: 优先使用证件号码作为执照号码
+                        # 优先使用证件号码作为执照号码
                         if id_num:
                             license_num = id_num
                         else:
@@ -898,7 +897,7 @@ with tab1:
                             safe_set_cell_value(ws, row_num, 5, id_num)
                         else:
                             safe_set_cell_value(ws, row_num, 5, crew.get("passport_no", ""))
-                        # MODIFIED: 优先使用证件号码作为执照号码
+                        # 优先使用证件号码作为执照号码
                         if id_num:
                             license_num = id_num
                         else:
@@ -937,7 +936,6 @@ with tab1:
                             safe_set_cell_value(ws, row_num, 5, id_num)
                         else:
                             safe_set_cell_value(ws, row_num, 5, cabin_crew.get("passport_no", ""))
-                        # MODIFIED: 优先使用证件号码作为执照号码
                         license_num = id_num if id_num else find_license(cabin_crew["name"])
                         safe_set_cell_value(ws, row_num, 6, license_num)
                         contact = find_contact(cabin_crew["name"])
@@ -968,7 +966,6 @@ with tab1:
                             safe_set_cell_value(ws, row_num, 5, id_num)
                         else:
                             safe_set_cell_value(ws, row_num, 5, mechanic.get("passport_no", ""))
-                        # MODIFIED: 优先使用证件号码作为执照号码
                         license_num = id_num if id_num else find_license(mechanic["name"])
                         safe_set_cell_value(ws, row_num, 6, license_num)
                         contact = find_contact(mechanic["name"])
