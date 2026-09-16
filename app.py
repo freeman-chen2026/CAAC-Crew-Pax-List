@@ -462,7 +462,6 @@ with tab1:
 
     # ---------- 航段数据解析与匹配 ----------
     def _parse_hhmm(val):
-        """把各种时间格式转成 HH:MM 字符串"""
         if val is None:
             return None
         try:
@@ -482,7 +481,6 @@ with tab1:
         return None
 
     def parse_route_plan(file_bytes):
-        """解析航段数据导出文件，返回 DataFrame（失败返回 None）"""
         try:
             df = pd.read_excel(file_bytes, skiprows=1)
             df.columns = [str(c).strip() for c in df.columns]
@@ -495,7 +493,6 @@ with tab1:
             return None
 
     def _parse_gd_date(date_str):
-        """从 GD 的 date_str（如 '15Sep'）解析出 (month, day)"""
         if not date_str:
             return None
         m = re.match(r'(\d{1,2})\s*([A-Za-z]{3})', str(date_str).strip())
@@ -513,7 +510,6 @@ with tab1:
         return (month, day)
 
     def _extract_row_date(row_date):
-        """把航段数据里的出发日期统一解析为 datetime（仅日期）"""
         if row_date is None:
             return None
         try:
@@ -542,9 +538,6 @@ with tab1:
         return None
 
     def find_matching_flight(df, reg, from_airport, to_airport, gd_date=None):
-        """在航段数据中按 注册号 + 出发地 + 到达地（+日期）匹配飞行计划。
-        日期做 ±1 天容错，处理 GD 单 UTC 与航段数据北京时间的跨天差异。
-        """
         if df is None or df.empty:
             return None
         required = ['飞机注册号', '出发地', '到达地', '计划出发', '预计到达', '出发城市', '到达城市']
@@ -560,13 +553,11 @@ with tab1:
         if matched.empty:
             return None
 
-        # 没有日期信息：返回第一条
         if gd_date is None or '出发日期' not in matched.columns:
             return matched.iloc[0]
 
         gd_month, gd_day = gd_date
 
-        # 1) 精确匹配月日
         def _same_month_day(row_date):
             dt = _extract_row_date(row_date)
             return dt is not None and dt.month == gd_month and dt.day == gd_day
@@ -575,7 +566,6 @@ with tab1:
         if not exact.empty:
             return exact.iloc[0]
 
-        # 2) 容错 ±1 天
         def _nearby_month_day(row_date):
             dt = _extract_row_date(row_date)
             if dt is None:
@@ -593,7 +583,6 @@ with tab1:
         return None
 
     def build_route_from_flight(flight_row):
-        """从航段数据行生成 route 字符串（格式与 Jetops 复制一致）"""
         reg = str(flight_row.get('飞机注册号', '') or '').strip()
         dep_time = _parse_hhmm(flight_row.get('计划出发'))
         arr_time = _parse_hhmm(flight_row.get('预计到达'))
@@ -782,13 +771,13 @@ with tab1:
         "上传 GD单（General Declaration）Excel（.xlsx）",
         type=["xlsx"], key="data"
     )
-    flight_plan_file = st.file_uploader(
-        "（可选）上传航段数据导出 Excel（.xlsx），自动匹配飞行计划并预填航班信息",
-        type=["xlsx"], key="flight_plan"
-    )
     template_file = st.file_uploader(
         "上传总调模板：Jetops申请一览-",
         type=["xlsx"], key="template"
+    )
+    flight_plan_file = st.file_uploader(
+        "（可选）上传飞行计划（航段数据导出）（北京时间），用于预填文件名",
+        type=["xlsx"], key="flight_plan"
     )
 
     if data_file and template_file:
