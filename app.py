@@ -22,13 +22,6 @@ with tab1:
     st.markdown("上传 GD单 和模板，自动生成备案表（联系方式、执照号码及证件号码已内置）。")
 
     # ---------- 内置机组信息（唯一真源） ----------
-    # 姓名格式：「中文名 / 英文名」（多个英文写法可用 / 分隔），只有单一名字时只写一个。
-    # 英文名匹配自动忽略逗号、大小写、词序：
-    #   杨涛 / Tao, YANG  ==  杨涛 / YANG Tao  ==  YANG Tao  ==  Tao YANG
-    #   Herve Daniel, STAMM  ==  Herve Daniel STAMM  ==  STAMM Herve Daniel
-    # 执照号码规则：
-    #   · 证件号码是 18 位身份证 → 执照号码 = 证件号码
-    #   · 否则                   → 执照号码 = 本表中填写的执照号码
     BUILTIN_CREW_DATA = [
         # (姓名, 联系方式, 执照号码, 证件号码)
         ("庚凡", "139 2463 9747", "430104197901184015", "430104197901184015"),
@@ -185,7 +178,6 @@ with tab1:
             return full_name
 
     def normalize_name(name):
-        """姓名规范化：去中文、去逗号、去多余空格、转小写、按单词排序。"""
         if not name:
             return ""
         name = re.sub(r'[\u4e00-\u9fff]+', '', name)
@@ -196,7 +188,6 @@ with tab1:
         return [p.strip() for p in re.split(r'\s*[/|、]\s*', name_val) if p.strip()]
 
     def _find_crew_field(crew_name, field):
-        """从内置名单中查找指定字段；同名多条时取最下面（最新）的那条。"""
         if not crew_name:
             return ""
         target = str(crew_name).strip()
@@ -469,21 +460,153 @@ with tab1:
                         })
         return data, crew_data, passenger_data
 
+    # ---------- 航段数据解析与匹配 ----------
+    def _parse_hhmm(val):
+        """把各种时间格式转成 HH:MM 字符串"""
+        if val is None:
+            return None
+        try:
+            if isinstance(val, float) and pd.isna(val):
+                return None
+        except Exception:
+            pass
+        if hasattr(val, 'strftime'):
+            try:
+                return val.strftime('%H:%M')
+            except Exception:
+                pass
+        s = str(val).strip()
+        m = re.match(r'^(\d{1,2}):(\d{2})', s)
+        if m:
+            return f"{int(m.group(1)):02d}:{m.group(2)}"
+        return None
+
+    def parse_route_plan(file_bytes):
+        """解析航段数据导出文件，返回 DataFrame（失败返回 None）"""
+        try:
+            df = pd.read_excel(file_bytes, skiprows=1)
+            df.columns = [str(c).strip() for c in df.columns]
+            if '飞机注册号' not in df.columns:
+                df = pd.read_excel(file_bytes, header=1)
+                df.columns = [str(c).strip() for c in df.columns]
+            return df
+        except Exception as e:
+            st.warning(f"⚠️ 航段数据解析失败：{e}")
+            return None
+
+    def _parse_gd_date(date_str):
+        """从 GD 的 date_str（如 '15Sep'）解析出 (month, day)"""
+        if not date_str:
+            return None
+        m = re.match(r'(\d{1,2})\s*([A-Za-z]{3})', str(date_str).strip())
+        if not m:
+            return None
+        try:
+            day = int(m.group(1))
+        except Exception:
+            return None
+        month_map = {"Jan":1,"Feb":2,"Mar":3,"Apr":4,"May":5,"Jun":6,
+                     "Jul":7,"Aug":8,"Sep":9,"Oct":10,"Nov":11,"Dec":12}
+        month = month_map.get(m.group(2).capitalize()[:3])
+        if not month:
+            return None
+        return (month, day)
+
+    def _extract_row_date(row_date):
+        """把航段数据里的出发日期统一解析为 datetime（仅日期）"""
+        if row_date is None:
+            return None
+        try:
+            if isinstance(row_date, float) and pd.isna(row_date):
+                return None
+        except Exception:
+            pass
+        if hasattr(row_date, 'year'):
+            try:
+                return datetime(row_date.year, row_date.month, row_date.day)
+            except Exception:
+                pass
+        s = str(row_date).strip()
+        m = re.match(r'(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})', s)
+        if m:
+            try:
+                return datetime(int(m.group(1)), int(m.group(2)), int(m.group(3)))
+            except Exception:
+                return None
+        m = re.match(r'(\d{4})(\d{2})(\d{2})', s)
+        if m:
+            try:
+                return datetime(int(m.group(1)), int(m.group(2)), int(m.group(3)))
+            except Exception:
+                return None
+        return None
+
+    def find_matching_flight(df, reg, from_airport, to_airport, gd_date=None):
+        """在航段数据中按 注册号 + 出发地 + 到达地（+日期）匹配飞行计划。
+        日期做 ±1 天容错，处理 GD 单 UTC 与航段数据北京时间的跨天差异。
+        """
+        if df is None or df.empty:
+            return None
+        required = ['飞机注册号', '出发地', '到达地', '计划出发', '预计到达', '出发城市', '到达城市']
+        if not all(c in df.columns for c in required):
+            return None
+
+        mask = (
+            (df['飞机注册号'].astype(str).str.strip() == str(reg).strip()) &
+            (df['出发地'].astype(str).str.strip().str.upper() == str(from_airport).strip().upper()) &
+            (df['到达地'].astype(str).str.strip().str.upper() == str(to_airport).strip().upper())
+        )
+        matched = df[mask]
+        if matched.empty:
+            return None
+
+        # 没有日期信息：返回第一条
+        if gd_date is None or '出发日期' not in matched.columns:
+            return matched.iloc[0]
+
+        gd_month, gd_day = gd_date
+
+        # 1) 精确匹配月日
+        def _same_month_day(row_date):
+            dt = _extract_row_date(row_date)
+            return dt is not None and dt.month == gd_month and dt.day == gd_day
+
+        exact = matched[matched['出发日期'].apply(_same_month_day)]
+        if not exact.empty:
+            return exact.iloc[0]
+
+        # 2) 容错 ±1 天
+        def _nearby_month_day(row_date):
+            dt = _extract_row_date(row_date)
+            if dt is None:
+                return False
+            try:
+                target = datetime(dt.year, gd_month, gd_day)
+            except Exception:
+                return False
+            return abs((dt - target).days) <= 1
+
+        nearby = matched[matched['出发日期'].apply(_nearby_month_day)]
+        if not nearby.empty:
+            return nearby.iloc[0]
+
+        return None
+
+    def build_route_from_flight(flight_row):
+        """从航段数据行生成 route 字符串（格式与 Jetops 复制一致）"""
+        reg = str(flight_row.get('飞机注册号', '') or '').strip()
+        dep_time = _parse_hhmm(flight_row.get('计划出发'))
+        arr_time = _parse_hhmm(flight_row.get('预计到达'))
+        dep_city = str(flight_row.get('出发城市', '') or '').strip()
+        arr_city = str(flight_row.get('到达城市', '') or '').strip()
+        if not (reg and dep_time and arr_time and dep_city and arr_city):
+            return None
+        return f"F {reg} {dep_time} - {arr_time}  {dep_city} - {arr_city}"
+
     # ---------- 姓名单元格样式优化 ----------
     from copy import copy as _copy_style
 
     def _style_name_cell(ws, row, col, text):
-        """对姓名单元格做显示优化（机组 / 乘客通用）：
-        - 始终开启自动换行
-        - 按长度自适应字号：
-            ≤ 12  → 保持模板原字号
-            13~17 → 10 号
-            18~25 → 9 号
-            26~35 → 8 号
-            36+   → 7 号
-        - 保证行高至少能放下 2 行；若模板原行高更大（如乘客单元格 36），保持不变
-        - 自动处理合并单元格：样式设在合并区域左上角
-        """
         target_row, target_col = row, col
         for merged_range in ws.merged_cells.ranges:
             if merged_range.min_row <= row <= merged_range.max_row and \
@@ -495,17 +618,14 @@ with tab1:
         cell = ws.cell(row=target_row, column=target_col)
         text_str = str(text) if text is not None else ""
 
-        # 1) 自动换行
         new_align = _copy_style(cell.alignment)
         new_align.wrap_text = True
         cell.alignment = new_align
 
         n = len(text_str)
-        # 2) 短名字不动
         if n <= 12:
             return
 
-        # 3) 按长度自适应字号
         if n <= 17:
             new_size = 10
         elif n <= 25:
@@ -519,7 +639,6 @@ with tab1:
         new_font.size = new_size
         cell.font = new_font
 
-        # 4) 行高至少能放下 2 行；模板原行高更大则保持不变
         min_h = new_size * 2 + 4
         rd = ws.row_dimensions[target_row]
         current_h = rd.height
@@ -527,7 +646,6 @@ with tab1:
             rd.height = min_h
 
     def _fill_crew_row_by_data(ws, label_keyword, crew_row):
-        """按职务关键字把已编辑的机组行填入模板"""
         for row in ws.iter_rows(min_row=1, max_row=50):
             for cell in row:
                 if cell.value and isinstance(cell.value, str) and label_keyword in cell.value:
@@ -588,7 +706,6 @@ with tab1:
             safe_set_cell_value(ws, data_row, 4, data.get("flt", ""))
             safe_set_cell_value(ws, data_row, 5, route_display if route_display else "")
 
-        # 按"职务"字段匹配（同名职务取第一个）
         role_map = {}
         for cr in crew_rows:
             role = str(cr.get("职务", "")).strip()
@@ -661,15 +778,25 @@ with tab1:
     st.subheader("📂 上传文件")
     st.info("⚠️ 注意：模板文件必须是 **.xlsx** 格式（非 .xls）。联系方式、执照号码及证件号码已内置，无需额外上传。")
 
-    data_file = st.file_uploader("上传 GD单（General Declaration）Excel（.xlsx）", type=["xlsx"], key="data")
-    template_file = st.file_uploader("上传总调模板：Jetops申请一览-", type=["xlsx"], key="template")
+    data_file = st.file_uploader(
+        "上传 GD单（General Declaration）Excel（.xlsx）",
+        type=["xlsx"], key="data"
+    )
+    flight_plan_file = st.file_uploader(
+        "（可选）上传航段数据导出 Excel（.xlsx），自动匹配飞行计划并预填航班信息",
+        type=["xlsx"], key="flight_plan"
+    )
+    template_file = st.file_uploader(
+        "上传总调模板：Jetops申请一览-",
+        type=["xlsx"], key="template"
+    )
 
     if data_file and template_file:
         try:
             data, crew_list, passenger_list = parse_general_declaration(data_file)
             st.success(f"✅ 解析成功：机组 {len(crew_list)} 人，乘客 {len(passenger_list)} 人")
 
-            # ---------- 本次机组信息（可编辑，用于生成本次备案表） ----------
+            # ---------- 本次机组信息（可编辑） ----------
             st.subheader("📋 本次机组信息（可编辑）")
             st.caption(
                 "系统已从内置名单匹配出**将要写入的证件号码 / 执照号码 / 联系方式**，"
@@ -677,7 +804,6 @@ with tab1:
                 "改完下方下载按钮生成的就是最新数据。"
             )
 
-            # ---------- 构建初始行 ----------
             role_order = ["机长", "副驾驶", "乘务", "机务"]
             role_rows = {r: None for r in role_order}
             overflow_rows = []
@@ -712,7 +838,6 @@ with tab1:
                 else:
                     overflow_rows.append(row)
 
-            # 4 个固定职务（缺的填"无"），再追加多余机组
             initial_rows = []
             for role in role_order:
                 if role_rows[role] is not None:
@@ -729,7 +854,6 @@ with tab1:
                     })
             initial_rows.extend(overflow_rows)
 
-            # ---------- 机组溢出警告 ----------
             if overflow_rows:
                 overflow_desc = "、".join(
                     f"{r['姓名']}（当前标为「{r['职务']}」）" for r in overflow_rows
@@ -741,7 +865,6 @@ with tab1:
                     f"如需写入模板，请下载后在 Excel 中手动插入行。"
                 )
 
-            # 用 GD 单的机组名单做签名，名单变了就重置编辑器
             crew_signature = "|".join([c.get("name", "") for c in crew_list])
             editor_key = f"crew_fill_editor_{abs(hash(crew_signature)) % (10**8)}"
 
@@ -781,7 +904,6 @@ with tab1:
                     f"以下 **{extra} 位乘客不会自动写入模板**，请在下载后手动插入行并复制下方内容："
                 )
 
-                # 生成 Tab 分隔的文本（复制到 Excel 会自动分列）
                 lines = ["姓名\t性别\t出生日期\t国籍\t证件种类\t证件号码"]
                 for pax in passenger_list[MAX_PAX_ROWS:]:
                     pax_name = extract_chinese_name(pax["name"])
@@ -807,13 +929,47 @@ with tab1:
             # ---------- 航班信息 ----------
             from_code = data.get("from", ""); to_code = data.get("to", "")
             date_str = data.get("date_str", ""); utc_time = data.get("utc_time", "")
-            default_route = ""
+            reg = data.get("reg", "")
             date_display = get_beijing_date_display(utc_time, date_str) if date_str else ""
-            if date_str and from_code and to_code:
-                bj_time = parse_utc_to_beijing(utc_time, date_str) if utc_time else "0000"
-                default_route = f"{date_display} {from_code} {bj_time} XXXX {to_code}"
-            else:
-                default_route = f"{from_code}-{to_code}" if from_code and to_code else ""
+
+            # 优先从航段数据匹配
+            default_route = ""
+            matched_note = ""
+            gd_date_parsed = _parse_gd_date(date_str)
+            if flight_plan_file is not None and reg and from_code and to_code:
+                route_df = parse_route_plan(flight_plan_file)
+                if route_df is not None:
+                    matched_flight = find_matching_flight(
+                        route_df, reg, from_code, to_code, gd_date=gd_date_parsed
+                    )
+                    if matched_flight is not None:
+                        built = build_route_from_flight(matched_flight)
+                        if built:
+                            default_route = built
+                            flight_no = str(matched_flight.get('航班号', '') or '').strip()
+                            row_date = _extract_row_date(matched_flight.get('出发日期'))
+                            date_hint = row_date.strftime("%m-%d") if row_date else "?"
+                            matched_note = (
+                                f"✅ 已从航段数据自动匹配到飞行计划（航班号 {flight_no}，"
+                                f"{from_code} → {to_code}，{date_hint}），已预填到下方输入框"
+                            )
+
+            # 未匹配到则用 GD 单信息生成默认值
+            if not default_route:
+                if date_str and from_code and to_code:
+                    bj_time = parse_utc_to_beijing(utc_time, date_str) if utc_time else "0000"
+                    default_route = f"{date_display} {from_code} {bj_time} XXXX {to_code}"
+                else:
+                    default_route = f"{from_code}-{to_code}" if from_code and to_code else ""
+
+            if matched_note:
+                st.success(matched_note)
+            elif flight_plan_file is not None and reg and from_code and to_code:
+                date_hint = f"{gd_date_parsed[0]}月{gd_date_parsed[1]}日" if gd_date_parsed else "未知日期"
+                st.info(
+                    f"ℹ️ 航段数据中未找到 {reg} {from_code}→{to_code}（{date_hint}）的匹配记录，"
+                    f"已使用 GD单 信息生成默认值。"
+                )
 
             raw_route = st.text_input(
                 "从Jetops复制航班信息并适当调整起落时间 比如： F B652S 08:00 - 14:00  柬埔寨金边 德崇 - 日本东京 羽田",
@@ -830,9 +986,9 @@ with tab1:
             if no_time is not None:
                 file_name_base = no_time
             else:
-                reg = data.get("reg", "")
-                if reg and from_code and to_code:
-                    file_name_base = f"{date_display} {reg} {from_code}-{to_code}"
+                reg_fallback = data.get("reg", "")
+                if reg_fallback and from_code and to_code:
+                    file_name_base = f"{date_display} {reg_fallback} {from_code}-{to_code}"
                 else:
                     file_name_base = route_display
 
