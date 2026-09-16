@@ -345,7 +345,12 @@ with tab1:
             flight_number = text.split()[0] if text.split() else None
             if not flight_number:
                 return None
-            time_pattern = r'(\d{1,2}:\d{2})\s*[-—–]\s*(\d{1,2}:\d{2})'
+            # 支持 06:00 和 0600 两种时间格式
+            time_pattern = (
+                r'(?<![A-Za-z0-9])(\d{1,2}:\d{2}|\d{4})(?![A-Za-z0-9])'
+                r'\s*[-—–]\s*'
+                r'(\d{1,2}:\d{2}|\d{4})(?![A-Za-z0-9])'
+            )
             remaining = re.sub(time_pattern, '', text).strip()
             remaining = re.sub(r'\s*\+\s*\d+\s*', '', remaining).strip()
             airport_parts = re.split(r'\s*[-—–]\s*', remaining)
@@ -364,13 +369,22 @@ with tab1:
         if not input_text or not input_text.strip():
             return input_text
         text = input_text.strip()
-        time_pattern = r'(\d{1,2}:\d{2})\s*[-—–]\s*(\d{1,2}:\d{2})'
+        # 支持 06:00 / 0600 两种时间格式；前后 lookaround 避免误匹配航班号里的数字
+        time_pattern = (
+            r'(?<![A-Za-z0-9])(\d{1,2}:\d{2}|\d{4})(?![A-Za-z0-9])'
+            r'\s*[-—–]\s*'
+            r'(\d{1,2}:\d{2}|\d{4})(?![A-Za-z0-9])'
+        )
         time_match = re.search(time_pattern, text)
         if time_match:
             dep_time = time_match.group(1).replace(':', ''); arr_time = time_match.group(2).replace(':', '')
             remaining = re.sub(time_pattern, '', text).strip()
         else:
-            time_pattern2 = r'(\d{1,2}:\d{2})\s+(\d{1,2}:\d{2})'
+            time_pattern2 = (
+                r'(?<![A-Za-z0-9])(\d{1,2}:\d{2}|\d{4})(?![A-Za-z0-9])'
+                r'\s+'
+                r'(\d{1,2}:\d{2}|\d{4})(?![A-Za-z0-9])'
+            )
             time_match2 = re.search(time_pattern2, text)
             if time_match2:
                 dep_time = time_match2.group(1).replace(':', ''); arr_time = time_match2.group(2).replace(':', '')
@@ -590,7 +604,9 @@ with tab1:
         arr_city = str(flight_row.get('到达城市', '') or '').strip()
         if not (reg and dep_time and arr_time and dep_city and arr_city):
             return None
-        return f"F {reg} {dep_time} - {arr_time}  {dep_city} - {arr_city}"
+        dep_time_clean = dep_time.replace(':', '')
+        arr_time_clean = arr_time.replace(':', '')
+        return f"F {reg} {dep_time_clean} - {arr_time_clean}  {dep_city} - {arr_city}"
 
     # ---------- 姓名单元格样式优化 ----------
     from copy import copy as _copy_style
