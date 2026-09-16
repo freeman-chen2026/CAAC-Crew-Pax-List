@@ -538,7 +538,10 @@ with tab1:
                 role_map[role] = cr
 
         def _is_valid(row):
-            return row is not None and str(row.get("姓名", "")).strip() != ""
+            if row is None:
+                return False
+            name = str(row.get("姓名", "")).strip()
+            return name != "" and name != "无"
 
         if _is_valid(role_map.get("机长")):
             _fill_crew_row_by_data(ws, "机长", role_map["机长"])
@@ -613,8 +616,10 @@ with tab1:
                 "改完下方下载按钮生成的就是最新数据。"
             )
 
-            # 构建初始行
-            initial_rows = []
+            # 构建初始行：确保 4 个职务都有一行，缺的填「无」
+            role_order = ["机长", "副驾驶", "乘务", "机务"]
+            role_rows = {r: None for r in role_order}
+
             for idx, crew in enumerate(crew_list):
                 name_cn = extract_chinese_name(crew["name"])
                 id_fill, license_fill = resolve_crew_id_and_license(
@@ -633,15 +638,31 @@ with tab1:
                     else:
                         role = "机务"
 
-                initial_rows.append({
-                    "职务": role,
-                    "姓名": name_cn,
-                    "性别": crew.get("gender", ""),
-                    "出生日期": crew.get("dob", ""),
-                    "证件号码": id_fill,
-                    "执照号码": license_fill,
-                    "联系方式": contact,
-                })
+                if role_rows.get(role) is None:
+                    role_rows[role] = {
+                        "职务": role,
+                        "姓名": name_cn,
+                        "性别": crew.get("gender", ""),
+                        "出生日期": crew.get("dob", ""),
+                        "证件号码": id_fill,
+                        "执照号码": license_fill,
+                        "联系方式": contact,
+                    }
+
+            initial_rows = []
+            for role in role_order:
+                if role_rows[role] is not None:
+                    initial_rows.append(role_rows[role])
+                else:
+                    initial_rows.append({
+                        "职务": role,
+                        "姓名": "无",
+                        "性别": "",
+                        "出生日期": "",
+                        "证件号码": "",
+                        "执照号码": "",
+                        "联系方式": "",
+                    })
 
             # 用 GD 单的机组名单做签名，名单变了就重置编辑器
             crew_signature = "|".join([c.get("name", "") for c in crew_list])
