@@ -469,18 +469,55 @@ with tab1:
                         })
         return data, crew_data, passenger_data
 
+    # ---------- 姓名单元格样式优化 ----------
+    from copy import copy as _copy_style
+
+    def _style_name_cell(ws, row, col, text):
+        """对姓名单元格做显示优化：
+        - 始终开启自动换行（短名字不会触发换行，无影响）
+        - 名字长度超过 12 时，字号降为 9，并确保行高能放下两行
+        - 自动处理合并单元格：样式设在合并区域左上角
+        """
+        target_row, target_col = row, col
+        for merged_range in ws.merged_cells.ranges:
+            if merged_range.min_row <= row <= merged_range.max_row and \
+               merged_range.min_col <= col <= merged_range.max_col:
+                target_row = merged_range.min_row
+                target_col = merged_range.min_col
+                break
+
+        cell = ws.cell(row=target_row, column=target_col)
+        text_str = str(text) if text is not None else ""
+
+        # 1) 自动换行
+        new_align = _copy_style(cell.alignment)
+        new_align.wrap_text = True
+        cell.alignment = new_align
+
+        # 2) 长名字 → 字号 9 + 行高保证两行
+        if len(text_str) > 12:
+            new_font = _copy_style(cell.font)
+            new_font.size = 9
+            cell.font = new_font
+            rd = ws.row_dimensions[target_row]
+            current_h = rd.height
+            if current_h is None or current_h < 24:
+                rd.height = 24
+
     def _fill_crew_row_by_data(ws, label_keyword, crew_row):
         """按职务关键字把已编辑的机组行填入模板"""
         for row in ws.iter_rows(min_row=1, max_row=50):
             for cell in row:
                 if cell.value and isinstance(cell.value, str) and label_keyword in cell.value:
                     row_num = cell.row
-                    safe_set_cell_value(ws, row_num, 2, crew_row.get("姓名", ""))
+                    name_text = crew_row.get("姓名", "")
+                    safe_set_cell_value(ws, row_num, 2, name_text)
                     safe_set_cell_value(ws, row_num, 3, crew_row.get("性别", ""))
                     safe_set_cell_value(ws, row_num, 4, crew_row.get("出生日期", ""))
                     safe_set_cell_value(ws, row_num, 5, crew_row.get("证件号码", ""))
                     safe_set_cell_value(ws, row_num, 6, crew_row.get("执照号码", ""))
                     safe_set_cell_value(ws, row_num, 7, crew_row.get("联系方式", ""))
+                    _style_name_cell(ws, row_num, 2, name_text)
                     return True
         return False
 
@@ -583,7 +620,9 @@ with tab1:
                 row_num = passenger_start_row + i
                 for col in range(1, 7):
                     safe_set_cell_value(ws, row_num, col, None)
-                safe_set_cell_value(ws, row_num, 1, extract_chinese_name(pax["name"]))
+                pax_name = extract_chinese_name(pax["name"])
+                safe_set_cell_value(ws, row_num, 1, pax_name)
+                _style_name_cell(ws, row_num, 1, pax_name)
                 safe_set_cell_value(ws, row_num, 2, pax.get("gender", ""))
                 safe_set_cell_value(ws, row_num, 3, pax.get("dob", ""))
                 safe_set_cell_value(ws, row_num, 4, get_nation_name(pax.get("nationality", "")))
