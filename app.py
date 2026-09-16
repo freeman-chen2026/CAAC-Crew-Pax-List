@@ -485,22 +485,87 @@ with tab1:
     CREW_DATA_FILE = "crew_directory.json"
     CREW_COLUMNS = ["姓名", "联系方式", "执照号码", "证件号码"]
 
+    def _is_chinese_name(s):
+        return bool(re.search(r'[\u4e00-\u9fff]', s))
+
+    def _canonical_en(s):
+        """英文名规范化：去逗号，转小写，单词排序（用于判断是否同一人不同写法）"""
+        s = re.sub(r'[,\s]+', ' ', s).strip().lower()
+        return ' '.join(sorted(s.split()))
+
     def build_default_crew_records():
-        """由内置的三个映射生成默认机组信息表（每个姓名一条记录）"""
-        names = []
+        """由内置的三个映射生成默认机组信息表：
+        - 按联系电话分组
+        - 同一电话下的 1 个中文名 + 1 个英文名 → 合并为 "中文名 / 英文名"
+        - 外籍姓名"姓, 名"和"名 姓"两种写法自动去重
+        """
+        all_names = []
         for d in (BUILTIN_CONTACT_MAP, BUILTIN_LICENSE_MAP, BUILTIN_ID_MAP):
             for k in d:
-                if k not in names:
-                    names.append(k)
-        return [
-            {
+                if k not in all_names:
+                    all_names.append(k)
+
+        phone_groups = {}
+        no_phone_names = []
+        for n in all_names:
+            phone = (BUILTIN_CONTACT_MAP.get(n, "") or "").strip()
+            if phone:
+                phone_groups.setdefault(phone, []).append(n)
+            else:
+                no_phone_names.append(n)
+
+        def get_field(name_list, field_map):
+            for n in name_list:
+                v = field_map.get(n, "")
+                if v:
+                    return v
+            return ""
+
+        records = []
+        seen_canonical_en = set()
+
+        for phone, names in phone_groups.items():
+            cn_list = [n for n in names if _is_chinese_name(n)]
+            en_list = []
+            for n in names:
+                if _is_chinese_name(n):
+                    continue
+                canon = _canonical_en(n)
+                if canon not in seen_canonical_en:
+                    seen_canonical_en.add(canon)
+                    en_list.append(n)
+
+            if len(cn_list) == 1 and len(en_list) == 1:
+                cn, en = cn_list[0], en_list[0]
+                records.append({
+                    "姓名": f"{cn} / {en}",
+                    "联系方式": phone,
+                    "执照号码": get_field([cn, en], BUILTIN_LICENSE_MAP),
+                    "证件号码": get_field([cn, en], BUILTIN_ID_MAP),
+                })
+            else:
+                for n in cn_list + en_list:
+                    records.append({
+                        "姓名": n,
+                        "联系方式": phone,
+                        "执照号码": BUILTIN_LICENSE_MAP.get(n, ""),
+                        "证件号码": BUILTIN_ID_MAP.get(n, ""),
+                    })
+
+        for n in no_phone_names:
+            if not _is_chinese_name(n):
+                canon = _canonical_en(n)
+                if canon in seen_canonical_en:
+                    continue
+                seen_canonical_en.add(canon)
+            records.append({
                 "姓名": n,
-                "联系方式": BUILTIN_CONTACT_MAP.get(n, ""),
+                "联系方式": "",
                 "执照号码": BUILTIN_LICENSE_MAP.get(n, ""),
                 "证件号码": BUILTIN_ID_MAP.get(n, ""),
-            }
-            for n in names
-        ]
+            })
+
+        return records
 
     def save_crew_records(records):
         try:
@@ -569,45 +634,58 @@ with tab1:
             return full_name
 
     def normalize_name(name):
+        """姓名规范化：去中文、去逗号、转小写、按词排序（用于英文名比对）"""
         if not name:
             return ""
         name = re.sub(r'[\u4e00-\u9fff]+', '', name)
         name = re.sub(r'[,\s]+', ' ', name).strip()
-        return name.lower()
+        return ' '.join(sorted(name.lower().split()))
 
     def _find_crew_field(crew_name, field):
-        """从页面维护的机组信息表中查找指定字段（联系方式 / 执照号码 / 证件号码）"""
+        """从页面维护的机组信息表中查找指定字段（联系方式 / 执照号码 / 证件号码）。
+        姓名支持 "中文名 / 英文名" 复合格式，会自动拆分后分别匹配。"""
         if not crew_name:
             return ""
         records = st.session_state.get("crew_records") or []
         if not records:
             return ""
-        target = str(crew_name).strip()
 
-        # 1) 全名直接匹配
+        target = str(crew_name).strip()
+        target_cn = extract_chinese_name(target)
+        target_norm = normalize_name(target)
+
         for rec in records:
-            if str(rec.get("姓名", "")).strip() == target:
+            name_val = str(rec.get("姓名", "") or "").strip()
+            if not name_val:
+                continue
+
+            # 支持多种分隔符： / 、| 、、
+            parts = [p.strip() for p in re.split(r'[/|、]', name_val) if p.strip()]
+
+            matched = False
+            # 1) 整名直接匹配
+            if name_val == target:
+                matched = True
+            # 2) 拆分后逐个匹配
+            if not matched:
+                for p in parts:
+                    if p == target:
+                        matched = True
+                        break
+                    # 中文名匹配
+                    if target_cn and p == target_cn:
+                        matched = True
+                        break
+                    # 英文名规范化匹配（忽略大小写、逗号、词序）
+                    if target_norm and normalize_name(p) == target_norm:
+                        matched = True
+                        break
+
+            if matched:
                 val = str(rec.get(field, "") or "").strip()
                 if val:
                     return val
 
-        # 2) 中文名匹配（如 "ZHANG San 张三" → "张三"）
-        chinese = extract_chinese_name(crew_name)
-        if chinese:
-            for rec in records:
-                if str(rec.get("姓名", "")).strip() == chinese:
-                    val = str(rec.get(field, "") or "").strip()
-                    if val:
-                        return val
-
-        # 3) 规范化后匹配（忽略中文、逗号、大小写）
-        norm = normalize_name(crew_name)
-        if norm:
-            for rec in records:
-                if normalize_name(str(rec.get("姓名", ""))) == norm:
-                    val = str(rec.get(field, "") or "").strip()
-                    if val:
-                        return val
         return ""
 
     def find_contact(crew_name):
@@ -1158,10 +1236,11 @@ with tab1:
     if st.session_state.get("show_crew_panel", False):
         st.subheader("👥 机组人员信息维护")
         st.caption(
-            "可直接点击单元格修改；在表格最后一行输入内容即可新增人员；"
-            "选中行后按 Delete 键可删除。修改完成后点击「💾 保存修改」，"
-            f"数据会写入 `{CREW_DATA_FILE}`，下次打开页面自动加载，无需再改代码。"
-            "（同一人若同时存在中文名和英文名两条记录，需要分别维护。）"
+            "📌 姓名列推荐格式：「**中文名 / 英文名**」（例如 `赖小燕 / Siau Mui LAI`），"
+            "只有一个名字时只写一个即可。系统会自动拆分并按中/英文分别匹配 GD单 里的姓名，"
+            "无论 GD单 里是 `赖小燕`、`Siau Mui LAI` 还是 `LAI Siau Mui` 都能命中。\n\n"
+            "操作：直接点单元格修改；在表格最后一行输入内容即可新增人员；选中行后按 Delete 键删除。"
+            f"改完点「💾 保存修改」，数据会写入 `{CREW_DATA_FILE}`，下次打开页面自动加载，无需再改代码。"
         )
 
         df_crew = pd.DataFrame(st.session_state.crew_records)
@@ -1177,7 +1256,7 @@ with tab1:
             height=520,
             key=f"crew_editor_{st.session_state.crew_editor_version}",
             column_config={
-                "姓名": st.column_config.TextColumn("姓名", width="medium"),
+                "姓名": st.column_config.TextColumn("姓名（中文名 / 英文名）", width="large"),
                 "联系方式": st.column_config.TextColumn("联系方式", width="medium"),
                 "执照号码": st.column_config.TextColumn("执照号码", width="medium"),
                 "证件号码": st.column_config.TextColumn("证件号码", width="medium"),
