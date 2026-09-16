@@ -70,7 +70,7 @@ with tab1:
         ("Rodolfo, BONETTI / Rodolfo BONETTI", "132 6284 1083", "12660", ""),
         ("危慧 / Hui WEI", "152 1349 1328", "10137", "43072119941115468X"),
         ("李辛欣 / Xinxin LI", "135 5008 8666", "4209424", "510105198605023015"),
-        ("Herve Daniel, STAMM / Herve Daniel STAMM", "183 1709 0300", "2666622", ""),
+        ("Herve Daniel, STAMM / Herve Daniel STAMM", "183 1709 0300", "2666622", "M578620(2)"),
         ("樊婉程 / Wancheng FAN", "186 2017 4817", "ZN00434", "440106199608180326"),
         ("刘爽 / Shuang LIU", "138 0125 8789", "4101498", "110108196308296450"),
         ("刘凯 / Kai LIU", "135 2157 9157", "2833670", "230103198103275511"),
@@ -144,9 +144,8 @@ with tab1:
     ]
 
     CREW_COLUMNS = ["姓名", "联系方式", "执照号码", "证件号码"]
+    CREW_FILL_COLUMNS = ["职务", "姓名", "性别", "出生日期", "证件号码", "执照号码", "联系方式"]
 
-    # 页面临时工作区：页面打开时从 BUILTIN_CREW_DATA 初始化；
-    # 你在维护面板里的编辑只影响当次会话，刷新后回到代码版本。
     if "crew_records" not in st.session_state:
         st.session_state.crew_records = [
             {"姓名": n, "联系方式": c, "执照号码": l, "证件号码": i}
@@ -194,7 +193,6 @@ with tab1:
             return full_name
 
     def normalize_name(name):
-        """姓名规范化：去中文、去逗号、去多余空格、转小写、按单词排序。"""
         if not name:
             return ""
         name = re.sub(r'[\u4e00-\u9fff]+', '', name)
@@ -205,38 +203,31 @@ with tab1:
         return [p.strip() for p in re.split(r'\s*[/|、]\s*', name_val) if p.strip()]
 
     def _find_crew_field(crew_name, field):
-        """从页面临时工作区中查找指定字段；同名多条时取最下面（最新）的那条。"""
         if not crew_name:
             return ""
         records = st.session_state.get("crew_records") or []
         if not records:
             return ""
-
         target = str(crew_name).strip()
         target_cn = extract_chinese_name(target)
         target_norm = normalize_name(target)
-
         result = ""
         for rec in records:
             name_val = str(rec.get("姓名", "") or "").strip()
             if not name_val:
                 continue
             parts = _split_crew_name(name_val)
-
             matched = False
             if name_val == target:
                 matched = True
             if not matched:
                 for p in parts:
                     if p == target:
-                        matched = True
-                        break
+                        matched = True; break
                     if target_cn and p == target_cn:
-                        matched = True
-                        break
+                        matched = True; break
                     if target_norm and normalize_name(p) == target_norm:
-                        matched = True
-                        break
+                        matched = True; break
             if matched:
                 val = str(rec.get(field, "") or "").strip()
                 if val:
@@ -486,20 +477,18 @@ with tab1:
                         })
         return data, crew_data, passenger_data
 
-    def _fill_one_crew_row(ws, label_keyword, crew):
+    def _fill_crew_row_by_data(ws, label_keyword, crew_row):
+        """按职务关键字把已编辑的机组行填入模板"""
         for row in ws.iter_rows(min_row=1, max_row=50):
             for cell in row:
                 if cell.value and isinstance(cell.value, str) and label_keyword in cell.value:
                     row_num = cell.row
-                    id_fill, license_fill = resolve_crew_id_and_license(
-                        crew["name"], crew.get("passport_no", "")
-                    )
-                    safe_set_cell_value(ws, row_num, 2, extract_chinese_name(crew["name"]))
-                    safe_set_cell_value(ws, row_num, 3, crew.get("gender", ""))
-                    safe_set_cell_value(ws, row_num, 4, crew.get("dob", ""))
-                    safe_set_cell_value(ws, row_num, 5, id_fill)
-                    safe_set_cell_value(ws, row_num, 6, license_fill)
-                    safe_set_cell_value(ws, row_num, 7, find_contact(crew["name"]))
+                    safe_set_cell_value(ws, row_num, 2, crew_row.get("姓名", ""))
+                    safe_set_cell_value(ws, row_num, 3, crew_row.get("性别", ""))
+                    safe_set_cell_value(ws, row_num, 4, crew_row.get("出生日期", ""))
+                    safe_set_cell_value(ws, row_num, 5, crew_row.get("证件号码", ""))
+                    safe_set_cell_value(ws, row_num, 6, crew_row.get("执照号码", ""))
+                    safe_set_cell_value(ws, row_num, 7, crew_row.get("联系方式", ""))
                     return True
         return False
 
@@ -513,7 +502,7 @@ with tab1:
                     return True
         return False
 
-    def fill_template(template_bytes, data, crew_list, passenger_list, route_display):
+    def fill_template(template_bytes, data, crew_rows, passenger_list, route_display):
         try:
             wb = load_workbook(template_bytes)
         except Exception as e:
@@ -548,27 +537,34 @@ with tab1:
             safe_set_cell_value(ws, data_row, 4, data.get("flt", ""))
             safe_set_cell_value(ws, data_row, 5, route_display if route_display else "")
 
-        if len(crew_list) >= 1:
-            _fill_one_crew_row(ws, "机长", crew_list[0])
-        if len(crew_list) >= 2:
-            _fill_one_crew_row(ws, "副驾驶", crew_list[1])
+        # 按"职务"字段匹配
+        role_map = {}
+        for cr in crew_rows:
+            role = str(cr.get("职务", "")).strip()
+            name = str(cr.get("姓名", "")).strip()
+            if role and name and role not in role_map:
+                role_map[role] = cr
 
-        cabin_crew = None; mechanic = None
-        for i in range(2, len(crew_list)):
-            crew = crew_list[i]
-            gender = str(crew.get("gender", "")).strip()
-            if gender in ["女", "Female", "F"] and cabin_crew is None:
-                cabin_crew = crew
-            elif gender in ["男", "Male", "M"] and mechanic is None:
-                mechanic = crew
-            if cabin_crew and mechanic: break
+        def _is_valid(row):
+            return row is not None and str(row.get("姓名", "")).strip() != ""
 
-        if cabin_crew:
-            _fill_one_crew_row(ws, "乘务", cabin_crew)
+        if _is_valid(role_map.get("机长")):
+            _fill_crew_row_by_data(ws, "机长", role_map["机长"])
+        else:
+            _fill_empty_crew_row(ws, "机长")
+
+        if _is_valid(role_map.get("副驾驶")):
+            _fill_crew_row_by_data(ws, "副驾驶", role_map["副驾驶"])
+        else:
+            _fill_empty_crew_row(ws, "副驾驶")
+
+        if _is_valid(role_map.get("乘务")):
+            _fill_crew_row_by_data(ws, "乘务", role_map["乘务"])
         else:
             _fill_empty_crew_row(ws, "乘务")
-        if mechanic:
-            _fill_one_crew_row(ws, "机务", mechanic)
+
+        if _is_valid(role_map.get("机务")):
+            _fill_crew_row_by_data(ws, "机务", role_map["机务"])
         else:
             _fill_empty_crew_row(ws, "机务")
 
@@ -616,10 +612,79 @@ with tab1:
         try:
             data, crew_list, passenger_list = parse_general_declaration(data_file)
             st.success(f"✅ 解析成功：机组 {len(crew_list)} 人，乘客 {len(passenger_list)} 人")
-            if crew_list:
-                crew_names = [extract_chinese_name(crew["name"]) for crew in crew_list if crew.get("name")]
-                st.write("👨‍✈️ 机组名单：", ", ".join(crew_names) if crew_names else "无")
 
+            # ---------- 本次机组信息（可编辑，用于生成本次备案表） ----------
+            st.subheader("📋 本次机组信息（可编辑）")
+            st.caption(
+                "系统已从内置名单匹配出**将要写入的证件号码 / 执照号码 / 联系方式**，"
+                "如有出入可直接在表格里修改（也可改姓名、性别、出生日期或调整职务）。"
+                "改完下方下载按钮生成的就是最新数据。"
+            )
+
+            # 构建初始行
+            initial_rows = []
+            for idx, crew in enumerate(crew_list):
+                name_cn = extract_chinese_name(crew["name"])
+                id_fill, license_fill = resolve_crew_id_and_license(
+                    crew["name"], crew.get("passport_no", "")
+                )
+                contact = find_contact(crew["name"])
+
+                if idx == 0:
+                    role = "机长"
+                elif idx == 1:
+                    role = "副驾驶"
+                else:
+                    gender = str(crew.get("gender", "")).strip()
+                    if gender in ["女", "Female", "F"]:
+                        role = "乘务"
+                    else:
+                        role = "机务"
+
+                initial_rows.append({
+                    "职务": role,
+                    "姓名": name_cn,
+                    "性别": crew.get("gender", ""),
+                    "出生日期": crew.get("dob", ""),
+                    "证件号码": id_fill,
+                    "执照号码": license_fill,
+                    "联系方式": contact,
+                })
+
+            # 用 GD 单的机组名单做签名，名单变了就重置编辑器
+            crew_signature = "|".join([c.get("name", "") for c in crew_list])
+            editor_key = f"crew_fill_editor_{abs(hash(crew_signature)) % (10**8)}"
+
+            df_fill = pd.DataFrame(initial_rows, columns=CREW_FILL_COLUMNS)
+            edited_crew_df = st.data_editor(
+                df_fill,
+                num_rows="dynamic",
+                use_container_width=True,
+                height=240,
+                key=editor_key,
+                column_config={
+                    "职务": st.column_config.SelectboxColumn(
+                        "职务",
+                        options=["机长", "副驾驶", "乘务", "机务"],
+                        width="small",
+                    ),
+                    "姓名": st.column_config.TextColumn("姓名", width="medium"),
+                    "性别": st.column_config.TextColumn("性别", width="small"),
+                    "出生日期": st.column_config.TextColumn("出生日期", width="medium"),
+                    "证件号码": st.column_config.TextColumn("证件号码", width="medium"),
+                    "执照号码": st.column_config.TextColumn("执照号码", width="medium"),
+                    "联系方式": st.column_config.TextColumn("联系方式", width="medium"),
+                },
+            )
+
+            crew_for_template = (
+                edited_crew_df.fillna("").astype(str).to_dict("records")
+                if not edited_crew_df.empty else []
+            )
+
+            st.markdown("---")
+
+            # ---------- 航班信息 ----------
             from_code = data.get("from", ""); to_code = data.get("to", "")
             date_str = data.get("date_str", ""); utc_time = data.get("utc_time", "")
             default_route = ""
@@ -656,7 +721,7 @@ with tab1:
                 safe_file_name = "备案表"
             download_file_name = f"{safe_file_name}.xlsx"
 
-            result_bytes = fill_template(template_file, data, crew_list, passenger_list, route_display)
+            result_bytes = fill_template(template_file, data, crew_for_template, passenger_list, route_display)
 
             st.download_button(
                 label="⬇️ 下载填充后的备案表",
@@ -680,19 +745,7 @@ with tab1:
 
     if st.session_state.get("show_crew_panel", False):
         st.subheader("👥 机组人员信息维护")
-        st.warning(
-            "⚠️ **这里的修改只对当前会话生效**（页面刷新 / 重新部署后会恢复成代码里的版本）。\n\n"
-            "**想长期保存**：改完后点最下方的「📋 导出更新后的名单」，把生成的内容复制发我，"
-            "我更新到代码里 → 你 push 到 GitHub → Streamlit 自动重新部署，全网生效。"
-        )
-
-        st.caption(
-            "**姓名列格式**：`中文名 / 英文名`，多个英文写法用 `/` 分隔；只有单一名字时只写一个。\n"
-            "英文名匹配自动忽略逗号、大小写、词序（`Tao, YANG` = `YANG Tao` = `Tao YANG`）。\n\n"
-            "**执照号码规则**：证件号是 18 位身份证 → 执照号自动用身份证号；否则用你填的执照号。\n\n"
-            "**同名优先**：同一姓名出现多次时，取表格里**最下面**那条。\n\n"
-            "操作：直接点单元格改；最后一行输入内容即可新增；选中行按 Delete 删除。"
-        )
+        st.warning("⚠️ 这里的修改只对当前会话生效（刷新后会恢复成代码里的版本）。")
 
         df_crew = pd.DataFrame(st.session_state.crew_records)
         for c in CREW_COLUMNS:
@@ -739,12 +792,7 @@ with tab1:
         with col_count:
             st.caption(f"当前会话共 {len(st.session_state.crew_records)} 条记录")
 
-        # ---------- 导出面板 ----------
-        st.markdown("---")
-        st.markdown("### 📋 导出更新后的名单")
-        st.caption("复制下面的内容发给我，我直接替换代码里的 `BUILTIN_CREW_DATA`，你 push 后就长期生效。")
-
-        # 生成可直接粘贴到代码里的格式
+        # 导出按钮（不显示代码块）
         export_lines = []
         for rec in st.session_state.crew_records:
             n = str(rec.get("姓名", "") or "")
@@ -754,10 +802,8 @@ with tab1:
             export_lines.append(f'        ("{n}", "{c}", "{l}", "{i}"),')
         export_text = "    BUILTIN_CREW_DATA = [\n" + "\n".join(export_lines) + "\n    ]"
 
-        st.code(export_text, language="python")
-
         st.download_button(
-            label="⬇️ 下载为 .txt 文件",
+            label="📋 导出更新后的名单（下载 .txt 发我）",
             data=export_text.encode("utf-8"),
             file_name="BUILTIN_CREW_DATA.txt",
             mime="text/plain",
