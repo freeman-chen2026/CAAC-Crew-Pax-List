@@ -21,551 +21,132 @@ tab1, tab2, tab3 = st.tabs(["📋 功能1：备案表生成", "🌐 功能2：�
 with tab1:
     st.markdown("上传 GD单 和模板，自动生成备案表（联系方式、执照号码及证件号码已内置）。")
 
-    # ---------- 内置联系方式映射 ----------
-    BUILTIN_CONTACT_MAP = {
-        "庚凡": "139 2463 9747",
-        "张永一": "139 0125 9544",
-        "梅峰": "135 0967 8127",
-        "王斌": "139 2527 2867",
-        "王少雄": "186 8387 9841",
-        "苗旺旺": "138 1871 5251",
-        "赵岩松": "186 1161 8385",
-        "Bruce Roderick, WAINES": "186 6532 9796",
-        "Oliver Viktor, RACZ": "186 1197 3165",
-        "Yiftah RAUCH": "186 1045 0563",
-        "尤欣": "139 1608 5072",
-        "李亚民": "133 6632 0878",
-        "赵镭": "138 0883 9660",
-        "彭罡": "186 1263 1888",
-        "Wan Leung WU": "132 6695 8816",
-        "Kwan Leung WU": "132 6695 8816",
-        "胡君量": "132 6695 8816",
-        "吴鹏": "136 1110 5901",
-        "刘汇川": "188 5827 2791",
-        "于龙飞": "156 5288 0812",
-        "林帅": "138 1156 6711",
-        "张佳妮": "136 6169 9966",
-        "张欢乐": "186 1652 1529",
-        "昝昭君": "182 9570 0579",
-        "孙赫": "186 0102 1216",
-        "He SUN": "186 0102 1216",
-        "李晓龙": "138 2378 1747",
-        "Xiaolong LI": "138 2378 1747",
-        "李卉妍": "138 5142 0321",
-        "Huiyan LI": "138 5142 0321",
-        "熊立凌": "135 3821 6276",
-        "Liling Xiong": "135 3821 6276",
-        "HEALY, Darran William": "852 6891 2350",
-        "Darran William HEALY": "852 6891 2350",
-        "ROEDER, SIMONE ELKE": "852 6263 4569",
-        "SIMONE ELKE ROEDER": "852 6263 4569",
-        "王凯珮": "852 6858 8410",
-        "HOI PUI, WONG": "852 6858 8410",
-        "马坚": "189 1770 2918",
-        "Jian MA": "189 1770 2918",
-        "卢江": "158 0045 6521",
-        "Jiang LU": "158 0045 6521",
-        "孟周聪": "135 6434 5029",
-        "Zhoucong Meng": "135 6434 5029",
-        "张帆": "138 0135 1294",
-        "Fan ZHANG": "138 0135 1294",
-        "魏思远": "133 2110 4588",
-        "Siyuan WEI": "133 2110 4588",
-        "王晟磊": "150 2689 7493",
-        "Shenglei WANG": "150 2689 7493",
-        "Keith Robert, SHERREN": "137 3540 9744",
-        "Keith Robert SHERREN": "137 3540 9744",
-        "Rodolfo, BONETTI": "132 6284 1083",
-        "Rodolfo BONETTI": "132 6284 1083",
-        "危慧": "152 1349 1328",
-        "Hui WEI": "152 1349 1328",
-        "李辛欣": "135 5008 8666",
-        "Xinxin LI": "135 5008 8666",
-        "Herve Daniel, STAMM": "183 1709 0300",
-        "Herve Daniel STAMM": "183 1709 0300",
-        "樊婉程": "186 2017 4817",
-        "Wancheng FAN": "186 2017 4817",
-        "刘爽": "138 0125 8789",
-        "Shuang LIU": "138 0125 8789",
-        "刘凯": "135 2157 9157",
-        "Kai LIU": "135 2157 9157",
-        "詹佩佩": "137 1440 5925",
-        "Peipei ZHAN": "137 1440 5925",
-        "花佩": "186 2631 0634",
-        "Pei HUA": "186 2631 0634",
-        "翁英": "130 6785 2000",
-        "Ying WENG": "130 6785 2000",
-        "王莹": "159 1009 9069",
-        "Ying WANG": "159 1009 9069",
-        "程佳俊": "134 8010 3029",
-        "Jiajun CHENG": "134 8010 3029",
-        "蔡雨桐": "852 6426 7445",
-        "Yu Tong CHOI": "852 6426 7445",
-        "俞凯": "130 0579 0326",
-        "Kai YU": "130 0579 0326",
-        "杨杰": "186 1694 8903",
-        "Jie YANG": "186 1694 8903",
-        "徐卓": "139 1028 5510",
-        "Zhuo XU": "139 1028 5510",
-        "丁燕栒": "135 6035 3829",
-        "Yanxun DING": "135 6035 3829",
-        "万虹波": "133 1297 9906",
-        "Hongbo WAN": "133 1297 9906",
-        "王国勤": "138 1815 8715",
-        "Guoqin WANG": "138 1815 8715",
-        "李潇恩": "158 0599 1600",
-        "Xiaoen LI": "158 0599 1600",
-        "孙辉": "139 1626 9572",
-        "Hui Sun": "139 1626 9572",
-        "范蕾蕾": "182 1000 6866",
-        "Leilei FAN": "182 1000 6866",
-        "张贺新": "136 3773 1210",
-        "Hexin ZHANG": "136 3773 1210",
-        "李庆宏": "135 0909 0503",
-        "Qinghong LI": "135 0909 0503",
-        "Eduard Pascal, Roski": "49 170 1534666",
-        "Eduard Pascal Roski": "49 170 1534666",
-        "Peter Robert, JACKSON": "186 8245 1935",
-        "Peter Robert JACKSON": "186 8245 1935",
-        "廉卓群": "133 5632 3949",
-        "Zhuoqun LIAN": "133 5632 3949",
-        "孙浩": "136 7012 1990",
-        "Hao SUN": "136 7012 1990",
-        "姚艳阁": "156 0127 9399",
-        "Yange YAO": "156 0127 9399",
-        "茅邂文": "152 5181 7375",
-        "Xiewen MAO": "152 5181 7375",
-        "宋炜": "136 3256 5565",
-        "Wei SONG": "136 3256 5565",
-        "BEEBE, Thaddeus John": "852 6930 1609",
-        "Thaddeus John BEEBE": "852 6930 1609",
-        "张哲": "139 0247 5026",
-        "Zhe ZHANG": "139 0247 5026",
-        "李海": "136 8131 8388",
-        "Hai LI": "136 8131 8388",
-        "蔡国俊": "157 1220 8304",
-        "朱正宇": "189 8335 3697",
-        "金尚明": "136 7113 8047",
-        "Shangming JIN": "136 7113 8047",
-        "赵婷婷": "138 2883 3162",
-        "赖小燕": "60 1239 05520",
-        "Siau Mui LAI": "60 1239 05520",
-        "何静文": "852 6421 0994",
-        "周丽欢": "152 5710 6140",
-        "AYA, MUGURUMA": "81 8071140700",
-        "梁广煜": "137 9428 7177",
-        "李园": "139 1178 3914",
-        "孔铮": "139 1085 3981",
-        "高峰": "135 8186 9017",
-        "李阳": "133 6603 6567",
-        "林生": "159 2162 9406",
-        "谢依椿": "159 8942 4501",
-        "廖关荣": "181 0755 9103",
-        "林峰": "135 2260 7955",
-        "丘东": "136 0044 6505",
-        "王庆辉": "134 8013 9352",
-        "姜磊": "135 1006 5318",
-        "黄彦杰": "132 1157 2184",
-        "王珍": "198 6662 9312",
-        "赵国庆": "155 8849 2975",
-        "王军": "853 62666900",
-        "张德桃": "130 2883 6410",
-        "江焰辉": "136 3148 0927",
-        "孙龙": "156 9558 0691",
-        "梁平": "138 2750 6225",
-        "冯仁毫": "185 2028 6463",
-        "焦石军": "139 2388 3525",
-        "万子辰": "177 7005 7193",
-        "卓辉": "157 7070 8632",
-        "苏志斌": "159 0150 7150",
-        "赵康": "191 6764 6172",
-        "翟征宇": "134 1448 9793",
-        "陈居瑜": "158 8962 6660",
-        "林毅": "136 8642 0153",
-        "郭春旭": "138 0136 1720",
-        "Guo Chunxu": "138 0136 1720",
-        "黄海东": "138 0179 9315",
-    }
+    # ---------- 内置机组信息（已整理：中英文名合并，按姓名/联系方式/执照号码/证件号码） ----------
+    # 执照号码列保留原始值；生成备案表时按规则自动判断：
+    #   · 若证件号码是 18 位身份证  → 执照号码 = 证件号码
+    #   · 否则                       → 执照号码 = 本表中填写的执照号码
+    BUILTIN_CREW_DATA = [
+        # (姓名, 联系方式, 执照号码, 证件号码)
+        ("庚凡", "139 2463 9747", "430104197901184015", "430104197901184015"),
+        ("张永一 / Yongyi ZHANG", "139 0125 9544", "110102196605202336", "110102196605202336"),
+        ("梅峰 / Feng MEI", "135 0967 8127", "17205/1 FCL", "510107197911242636"),
+        ("王斌 / Bin WANG", "139 2527 2867", "3340398", "610104197911058331"),
+        ("王少雄 / Shaoxiong WANG", "186 8387 9841", "510105198609042555", "510105198609042555"),
+        ("苗旺旺 / Wangwang MIAO", "138 1871 5251", "410781198608019797", "410781198608019797"),
+        ("赵岩松 / Yansong ZHAO", "186 1161 8385", "410103197004017014", "410103197004017014"),
+        ("Bruce Roderick, WAINES", "186 6532 9796", "3448726", "000336198206158001"),
+        ("Oliver Viktor, RACZ", "186 1197 3165", "000336198206158001", "000336198206158001"),
+        ("Yiftah RAUCH", "186 1045 0563", "000972198112152001", "000972198112152001"),
+        ("尤欣 / Xin YOU", "139 1608 5072", "620102197604293015", "620102197604293015"),
+        ("李亚民 / Yamin Li", "133 6632 0878", "350104197107184915", "350104197107184915"),
+        ("赵镭 / Lei ZHAO", "138 0883 9660", "440301198204157271", "440301198204157271"),
+        ("彭罡", "186 1263 1888", "3240393", "440111198403244812"),
+        ("胡君量 / Wan Leung WU / Kwan Leung WU", "132 6695 8816", "3025478", "124133200"),
+        ("吴鹏", "136 1110 5901", "130103197602102115", "130103197602102115"),
+        ("刘汇川", "188 5827 2791", "330103199003191618", "330103199003191618"),
+        ("于龙飞", "156 5288 0812", "ZN00915", "210103198808123928"),
+        ("林帅", "138 1156 6711", "110227198601130015", "110227198601130015"),
+        ("张佳妮 / Jiani ZHANG", "136 6169 9966", "10183", "31010619840115002X"),
+        ("张欢乐 / Huanle ZHANG", "186 1652 1529", "ZN00883", "330381198705292523"),
+        ("昝昭君 / Zhaojun ZAN", "182 9570 0579", "14272419950203313X", "14272419950203313X"),
+        ("孙赫 / He SUN", "186 0102 1216", "4070599", "410102197702243012"),
+        ("李晓龙 / Xiaolong LI", "138 2378 1747", "3781955", "420104197906150015"),
+        ("李卉妍 / Huiyan LI", "138 5142 0321", "10299", ""),
+        ("熊立凌 / Liling Xiong", "135 3821 6276", "421003199203222631", "421003199203222631"),
+        ("HEALY, Darran William / Darran William HEALY", "852 6891 2350", "3141079", ""),
+        ("ROEDER, SIMONE ELKE / SIMONE ELKE ROEDER", "852 6263 4569", "4213276", ""),
+        ("王凯珮 / HOI PUI, WONG", "852 6858 8410", "10068", "Z411582(2)"),
+        ("马坚 / Jian MA", "189 1770 2918", "320103196607089512", "320103196607089512"),
+        ("卢江 / Jiang LU", "158 0045 6521", "10302", "420521198809280021"),
+        ("孟周聪 / Zhoucong Meng", "135 6434 5029", "10303", "310113198307243215"),
+        ("张帆 / Fan ZHANG", "138 0135 1294", "2552356", "211002197306050057"),
+        ("魏思远 / Siyuan WEI", "133 2110 4588", "230102198911054315", "230102198911054315"),
+        ("王晟磊 / Shenglei WANG", "150 2689 7493", "310109198409264012", "310109198409264012"),
+        ("Keith Robert, SHERREN / Keith Robert SHERREN", "137 3540 9744", "12262", ""),
+        ("Rodolfo, BONETTI / Rodolfo BONETTI", "132 6284 1083", "12660", ""),
+        ("危慧 / Hui WEI", "152 1349 1328", "10137", "43072119941115468X"),
+        ("李辛欣 / Xinxin LI", "135 5008 8666", "4209424", "510105198605023015"),
+        ("Herve Daniel, STAMM / Herve Daniel STAMM", "183 1709 0300", "2666622", ""),
+        ("樊婉程 / Wancheng FAN", "186 2017 4817", "ZN00434", "440106199608180326"),
+        ("刘爽 / Shuang LIU", "138 0125 8789", "4101498", "110108196308296450"),
+        ("刘凯 / Kai LIU", "135 2157 9157", "2833670", "230103198103275511"),
+        ("詹佩佩 / Peipei ZHAN", "137 1440 5925", "10283", "440301198809275123"),
+        ("花佩 / Pei HUA", "186 2631 0634", "ZN00495", "320281198911117761"),
+        ("翁英 / Ying WENG", "130 6785 2000", "ZN00905", "330106198801182024"),
+        ("王莹 / Ying WANG", "159 1009 9069", "370125199004215621", "370125199004215621"),
+        ("程佳俊 / Jiajun CHENG", "134 8010 3029", "511202198208161358", "511202198208161358"),
+        ("蔡雨桐 / Yu Tong CHOI", "852 6426 7445", "10269", "V146532(5)"),
+        ("俞凯 / Kai YU", "130 0579 0326", "120110196912180351", "120110196912180351"),
+        ("杨杰 / Jie YANG", "186 1694 8903", "310104198411304413", "310104198411304413"),
+        ("徐卓 / Zhuo XU", "139 1028 5510", "110105198906307113", "110105198906307113"),
+        ("丁燕栒 / Yanxun DING", "135 6035 3829", "ZN00499", "440510199107260826"),
+        ("万虹波 / Hongbo WAN", "133 1297 9906", "36050219860709003X", "36050219860709003X"),
+        ("王国勤 / Guoqin WANG", "138 1815 8715", "2589322", "340822197610240215"),
+        ("李潇恩 / Xiaoen LI", "158 0599 1600", "ZN00468", "510802199512100046"),
+        ("孙辉 / Hui Sun", "139 1626 9572", "310228197810012612", "310228197810012612"),
+        ("范蕾蕾 / Leilei FAN", "182 1000 6866", "ZN00347", "37010319861027002X"),
+        ("张贺新 / Hexin ZHANG", "136 3773 1210", "420106197101020435", "420106197101020435"),
+        ("李庆宏 / Qinghong LI", "135 0909 0503", "17260/1 FCL", "441402199107140256"),
+        ("Eduard Pascal, Roski / Eduard Pascal Roski", "49 170 1534666", "3863535", "C9TR22VZM"),
+        ("Peter Robert, JACKSON / Peter Robert JACKSON", "186 8245 1935", "000044197906253001", "000044197906253001"),
+        ("廉卓群 / Zhuoqun LIAN", "133 5632 3949", "ZN00430", "370402199702018029"),
+        ("孙浩 / Hao SUN", "136 7012 1990", "650103199102160037", "650103199102160037"),
+        ("姚艳阁 / Yange YAO", "156 0127 9399", "10204", "130922199601151224"),
+        ("茅邂文 / Xiewen MAO", "152 5181 7375", "ZN00903", "320683199911098627"),
+        ("宋炜 / Wei SONG", "136 3256 5565", "37060219820621211X", "37060219820621211X"),
+        ("BEEBE, Thaddeus John / Thaddeus John BEEBE", "852 6930 1609", "2743899", "R909452(A)"),
+        ("张哲 / Zhe ZHANG", "139 0247 5026", "650104196604163310", "650104196604163310"),
+        ("李海 / Hai LI", "136 8131 8388", "110105197201106130", "110105197201106130"),
+        ("蔡国俊 / Kuo-Chun, TSAI", "86 157 1220 8304", "17203/1 FCL", "360019647"),
+        ("朱正宇", "189 8335 3697", "350111197207152412", "350111197207152412"),
+        ("金尚明 / Shangming JIN", "136 7113 8047", "210381197511034612", ""),
+        ("赵婷婷", "138 2883 3162", "372524198212240023", "372524198212240023"),
+        ("赖小燕 / Siau Mui LAI", "60 1239 05520", "A71366020", "A71366020"),
+        ("何静文 / Ching Man, HO", "852 6421 0994", "Z630284(0)", "Z630284(0)"),
+        ("周丽欢", "152 5710 6140", "330411199101195440", "330411199101195440"),
+        ("AYA, MUGURUMA", "81 8071140700", "TT5868294", ""),
+        ("梁广煜", "137 9428 7177", "EK9629672", ""),
+        ("李园", "139 1178 3914", "110105198309149639", "110105198309149639"),
+        ("孔铮", "139 1085 3981", "11010419801116125X", "11010419801116125X"),
+        ("高峰", "135 8186 9017", "130826198001175332", "130826198001175332"),
+        ("李阳", "133 6603 6567", "11010319850705091X", "11010319850705091X"),
+        ("林生", "159 2162 9406", "350627198512262530", "350627198512262530"),
+        ("谢依椿", "159 8942 4501", "441427198601221716", "441427198601221716"),
+        ("廖关荣", "181 0755 9103", "360732199009095838", "360732199009095838"),
+        ("林峰", "135 2260 7955", "150402198501122713", "150402198501122713"),
+        ("丘东", "136 0044 6505", "11010119650406453x", "11010119650406453x"),
+        ("王庆辉", "134 8013 9352", "350627198212052013", "350627198212052013"),
+        ("姜磊", "135 1006 5318", "360502198312071333", "360502198312071333"),
+        ("黄彦杰", "132 1157 2184", "450881199810196233", "450881199810196233"),
+        ("王珍", "198 6662 9312", "622627199605283017", "622627199605283017"),
+        ("赵国庆", "155 8849 2975", "370403200003133433", "370403200003133433"),
+        ("王军", "853 62666900", "1458107(8)", "1458107(8)"),
+        ("张德桃", "130 2883 6410", "360311199603192012", "360311199603192012"),
+        ("江焰辉", "136 3148 0927", "440182199307270615", "440182199307270615"),
+        ("孙龙", "156 9558 0691", "341623200010015613", "341623200010015613"),
+        ("梁平", "138 2750 6225", "441223198510246217", "441223198510246217"),
+        ("冯仁毫", "185 2028 6463", "440582199101153650", "440582199101153650"),
+        ("焦石军", "139 2388 3525", "421224198310151013", "421224198310151013"),
+        ("万子辰", "177 7005 7193", "", ""),
+        ("卓辉", "157 7070 8632", "36073219981213009X", "36073219981213009X"),
+        ("苏志斌", "159 0150 7150", "350782198308221539", "350782198308221539"),
+        ("赵康", "191 6764 6172", "430321200303160170", "430321200303160170"),
+        ("翟征宇", "134 1448 9793", "140211198612050031", "140211198612050031"),
+        ("陈居瑜", "158 8962 6660", "460004197905030814", "460004197905030814"),
+        ("林毅", "136 8642 0153", "350102197903213219", "350102197903213219"),
+        ("郭春旭 / Guo Chunxu", "138 0136 1720", "110107197305150016", "110107197305150016"),
+        ("黄海东", "138 0179 9315", "310105197506021215", "310105197506021215"),
+    ]
 
-    # ---------- 内置执照号码映射 ----------
-    BUILTIN_LICENSE_MAP = {
-        "吴鹏": "130103197602102115",
-        "刘汇川": "330103199003191618",
-        "于龙飞": "ZN00915",
-        "林帅": "110227198601130015",
-        "彭罡": "3240393",
-        "Kwan Leung WU": "3025478",
-        "Wan Leung WU": "3025478",
-        "胡君量": "3025478",
-        "张佳妮": "10183",
-        "Jiani ZHANG": "10183",
-        "尤欣": "620102197604293015",
-        "Xin YOU": "620102197604293015",
-        "昝昭君": "14272419950203313X",
-        "Zhaojun ZAN": "14272419950203313X",
-        "张欢乐": "ZN00883",
-        "Huanle ZHANG": "ZN00883",
-        "孙赫": "4070599",
-        "He SUN": "4070599",
-        "李晓龙": "3781955",
-        "Xiaolong LI": "3781955",
-        "李卉妍": "10299",
-        "Huiyan LI": "10299",
-        "熊立凌": "421003199203222631",
-        "Liling Xiong": "421003199203222631",
-        "HEALY, Darran William": "3141079",
-        "Darran William HEALY": "3141079",
-        "ROEDER, SIMONE ELKE": "4213276",
-        "SIMONE ELKE ROEDER": "4213276",
-        "王凯珮": "10068",
-        "HOI PUI, WONG": "10068",
-        "马坚": "320103196607089512",
-        "Jian MA": "320103196607089512",
-        "卢江": "10302",
-        "Jiang LU": "10302",
-        "孟周聪": "10303",
-        "Zhoucong Meng": "10303",
-        "张帆": "2552356",
-        "Fan ZHANG": "2552356",
-        "魏思远": "230102198911054315",
-        "Siyuan WEI": "230102198911054315",
-        "王晟磊": "310109198409264012",
-        "Shenglei WANG": "310109198409264012",
-        "Keith Robert, SHERREN": "12262",
-        "Keith Robert SHERREN": "12262",
-        "Rodolfo, BONETTI": "12660",
-        "Rodolfo BONETTI": "12660",
-        "危慧": "10137",
-        "Hui WEI": "10137",
-        "李辛欣": "4209424",
-        "Xinxin LI": "4209424",
-        "Herve Daniel, STAMM": "2666622",
-        "Herve Daniel STAMM": "2666622",
-        "樊婉程": "ZN00434",
-        "Wancheng FAN": "ZN00434",
-        "刘爽": "4101498",
-        "Shuang LIU": "4101498",
-        "刘凯": "2833670",
-        "Kai LIU": "2833670",
-        "詹佩佩": "10283",
-        "Peipei ZHAN": "10283",
-        "王斌": "3340398",
-        "Bin WANG": "3340398",
-        "Bruce Roderick, WAINES": "3448726",
-        "Bruce Roderick WAINES": "3448726",
-        "花佩": "ZN00495",
-        "Pei HUA": "ZN00495",
-        "李亚民": "350104197107184915",
-        "Yamin Li": "350104197107184915",
-        "赵镭": "440301198204157271",
-        "Lei ZHAO": "440301198204157271",
-        "翁英": "ZN00905",
-        "Ying WENG": "ZN00905",
-        "王莹": "370125199004215621",
-        "Ying WANG": "370125199004215621",
-        "赵岩松": "410103197004017014",
-        "Yansong ZHAO": "410103197004017014",
-        "金尚明": "210381197511034612",
-        "Shangming JIN": "210381197511034612",
-        "程佳俊": "511202198208161358",
-        "Jiajun CHENG": "511202198208161358",
-        "张永一": "110102196605202336",
-        "Yongyi ZHANG": "110102196605202336",
-        "Oliver Viktor, RACZ": "000336198206158001",
-        "Oliver Viktor RACZ": "000336198206158001",
-        "蔡雨桐": "10269",
-        "Yu Tong CHOI": "10269",
-        "俞凯": "120110196912180351",
-        "Kai YU": "120110196912180351",
-        "杨杰": "310104198411304413",
-        "Jie YANG": "310104198411304413",
-        "Yiftah, RAUCH": "000972198112152001",
-        "Yiftah RAUCH": "000972198112152001",
-        "苗旺旺": "410781198608019797",
-        "Wangwang MIAO": "410781198608019797",
-        "徐卓": "110105198906307113",
-        "Zhuo XU": "110105198906307113",
-        "丁燕栒": "ZN00499",
-        "Yanxun DING": "ZN00499",
-        "万虹波": "36050219860709003X",
-        "Hongbo WAN": "36050219860709003X",
-        "王国勤": "2589322",
-        "Guoqin WANG": "2589322",
-        "李潇恩": "ZN00468",
-        "Xiaoen LI": "ZN00468",
-        "孙辉": "310228197810012612",
-        "Hui Sun": "310228197810012612",
-        "范蕾蕾": "ZN00347",
-        "Leilei FAN": "ZN00347",
-        "张贺新": "420106197101020435",
-        "Hexin ZHANG": "420106197101020435",
-        "李庆宏": "17260/1 FCL",
-        "Qinghong LI": "17260/1 FCL",
-        "梅峰": "17205/1 FCL",
-        "Feng MEI": "17205/1 FCL",
-        "Eduard Pascal, Roski": "3863535",
-        "Eduard Pascal Roski": "3863535",
-        "廉卓群": "ZN00430",
-        "Zhuoqun LIAN": "ZN00430",
-        "孙浩": "650103199102160037",
-        "Hao SUN": "650103199102160037",
-        "Peter Robert, JACKSON": "000044197906253001",
-        "Peter Robert JACKSON": "000044197906253001",
-        "王少雄": "510105198609042555",
-        "Shaoxiong WANG": "510105198609042555",
-        "BEEBE, Thaddeus John": "2743899",
-        "Thaddeus John BEEBE": "2743899",
-        "姚艳阁": "10204",
-        "Yange YAO": "10204",
-        "茅邂文": "ZN00903",
-        "Xiewen MAO": "ZN00903",
-        "宋炜": "37060219820621211X",
-        "Wei SONG": "37060219820621211X",
-        "张哲": "650104196604163310",
-        "Zhe ZHANG": "650104196604163310",
-        "李海": "110105197201106130",
-        "赵婷婷": "372524198212240023",
-        "李园": "110105198309149639",
-        "孔铮": "11010419801116125X",
-        "高峰": "130826198001175332",
-        "陈居瑜": "460004197905030814",
-        "林生": "350627198512262530",
-        "谢依椿": "441427198601221716",
-        "廖关荣": "360732199009095838",
-        "王珍": "622627199605283017",
-        "赵国庆": "370403200003133433",
-        "王军": "1458107(8)",
-        "张德桃": "360311199603192012",
-        "江焰辉": "440182199307270615",
-        "李阳": "11010319850705091X",
-        "丘东": "11010119650406453x",
-        "王庆辉": "350627198212052013",
-        "姜磊": "360502198312071333",
-        "黄彦杰": "450881199810196233",
-        "林毅": "350102197903213219",
-        "庚凡": "430104197901184015",
-        "何静文": "Z630284(0)",
-        "Ching Man, HO": "Z630284(0)",
-        "朱正宇": "350111197207152412",
-        "赖小燕": "A71366020",
-        "Siau Mui LAI": "A71366020",
-        "周丽欢": "330411199101195440",
-        "AYA, MUGURUMA": "TT5868294",
-        "梁广煜": "EK9629672",
-        "林峰": "150402198501122713",
-        "孙龙": "341623200010015613",
-        "梁平": "441223198510246217",
-        "冯仁毫": "440582199101153650",
-        "焦石军": "421224198310151013",
-        "卓辉": "36073219981213009X",
-        "苏志斌": "350782198308221539",
-        "赵康": "430321200303160170",
-        "翟征宇": "140211198612050031",
-        "郭春旭": "110107197305150016",
-        "Guo Chunxu": "110107197305150016",
-        "黄海东": "310105197506021215",
-    }
-
-    # ---------- 内置证件号码映射 ----------
-    BUILTIN_ID_MAP = {
-        "庚凡": "430104197901184015",
-        "张永一": "110102196605202336",
-        "梅峰": "510107197911242636",
-        "王斌": "610104197911058331",
-        "王少雄": "510105198609042555",
-        "苗旺旺": "410781198608019797",
-        "赵岩松": "410103197004017014",
-        "Bruce Roderick, WAINES": "000336198206158001",
-        "Oliver Viktor, RACZ": "000336198206158001",
-        "Yiftah RAUCH": "000972198112152001",
-        "尤欣": "620102197604293015",
-        "李亚民": "350104197107184915",
-        "赵镭": "440301198204157271",
-        "彭罡": "440111198403244812",
-        "Kwan Leung WU": "124133200",
-        "胡君量": "124133200",
-        "吴鹏": "130103197602102115",
-        "刘汇川": "330103199003191618",
-        "于龙飞": "210103198808123928",
-        "林帅": "110227198601130015",
-        "张佳妮": "31010619840115002X",
-        "张欢乐": "330381198705292523",
-        "昝昭君": "14272419950203313X",
-        "孙赫": "410102197702243012",
-        "李晓龙": "420104197906150015",
-        "李卉妍": "",
-        "熊立凌": "421003199203222631",
-        "HEALY, Darran William": "",
-        "ROEDER, SIMONE ELKE": "",
-        "王凯珮": "Z411582(2)",
-        "马坚": "320103196607089512",
-        "卢江": "420521198809280021",
-        "孟周聪": "310113198307243215",
-        "张帆": "211002197306050057",
-        "魏思远": "230102198911054315",
-        "王晟磊": "310109198409264012",
-        "Keith Robert, SHERREN": "",
-        "Rodolfo, BONETTI": "",
-        "危慧": "43072119941115468X",
-        "李辛欣": "510105198605023015",
-        "Herve Daniel, STAMM": "",
-        "樊婉程": "440106199608180326",
-        "刘爽": "110108196308296450",
-        "刘凯": "230103198103275511",
-        "詹佩佩": "440301198809275123",
-        "花佩": "320281198911117761",
-        "翁英": "330106198801182024",
-        "王莹": "370125199004215621",
-        "程佳俊": "511202198208161358",
-        "蔡雨桐": "V146532(5)",
-        "俞凯": "120110196912180351",
-        "杨杰": "310104198411304413",
-        "徐卓": "110105198906307113",
-        "丁燕栒": "440510199107260826",
-        "万虹波": "36050219860709003X",
-        "王国勤": "340822197610240215",
-        "李潇恩": "510802199512100046",
-        "孙辉": "310228197810012612",
-        "Hui Sun": "310228197810012612",
-        "范蕾蕾": "37010319861027002X",
-        "张贺新": "420106197101020435",
-        "李庆宏": "441402199107140256",
-        "Eduard Pascal Roski": "C9TR22VZM",
-        "Peter Robert JACKSON": "000044197906253001",
-        "廉卓群": "370402199702018029",
-        "孙浩": "650103199102160037",
-        "姚艳阁": "130922199601151224",
-        "茅邂文": "320683199911098627",
-        "宋炜": "37060219820621211X",
-        "BEEBE, Thaddeus John": "R909452(A)",
-        "张哲": "650104196604163310",
-        "李海": "110105197201106130",
-        "赵婷婷": "372524198212240023",
-        "李园": "110105198309149639",
-        "孔铮": "11010419801116125X",
-        "高峰": "130826198001175332",
-        "陈居瑜": "460004197905030814",
-        "林生": "350627198512262530",
-        "谢依椿": "441427198601221716",
-        "廖关荣": "360732199009095838",
-        "王珍": "622627199605283017",
-        "赵国庆": "370403200003133433",
-        "王军": "1458107(8)",
-        "张德桃": "360311199603192012",
-        "江焰辉": "440182199307270615",
-        "李阳": "11010319850705091X",
-        "丘东": "11010119650406453x",
-        "王庆辉": "350627198212052013",
-        "姜磊": "360502198312071333",
-        "黄彦杰": "450881199810196233",
-        "林毅": "350102197903213219",
-        "何静文": "Z630284(0)",
-        "Ching Man, HO": "Z630284(0)",
-        "朱正宇": "350111197207152412",
-        "赖小燕": "A71366020",
-        "Siau Mui LAI": "A71366020",
-        "周丽欢": "330411199101195440",
-        "AYA, MUGURUMA": "",
-        "梁广煜": "",
-        "林峰": "150402198501122713",
-        "孙龙": "341623200010015613",
-        "梁平": "441223198510246217",
-        "冯仁毫": "440582199101153650",
-        "焦石军": "421224198310151013",
-        "卓辉": "36073219981213009X",
-        "苏志斌": "350782198308221539",
-        "赵康": "430321200303160170",
-        "翟征宇": "140211198612050031",
-        "郭春旭": "110107197305150016",
-        "Guo Chunxu": "110107197305150016",
-        "黄海东": "310105197506021215",
-    }
-
-    # ---------- 机组信息持久化（新增：可在页面直接维护，无需改代码） ----------
+    # ---------- 机组信息持久化 ----------
     CREW_DATA_FILE = "crew_directory.json"
     CREW_COLUMNS = ["姓名", "联系方式", "执照号码", "证件号码"]
 
-    def _is_chinese_name(s):
-        return bool(re.search(r'[\u4e00-\u9fff]', s))
-
-    def _canonical_en(s):
-        """英文名规范化：去逗号，转小写，单词排序（用于判断是否同一人不同写法）"""
-        s = re.sub(r'[,\s]+', ' ', s).strip().lower()
-        return ' '.join(sorted(s.split()))
-
     def build_default_crew_records():
-        """由内置的三个映射生成默认机组信息表：
-        - 按联系电话分组
-        - 同一电话下的 1 个中文名 + 1 个英文名 → 合并为 "中文名 / 英文名"
-        - 外籍姓名"姓, 名"和"名 姓"两种写法自动去重
-        """
-        all_names = []
-        for d in (BUILTIN_CONTACT_MAP, BUILTIN_LICENSE_MAP, BUILTIN_ID_MAP):
-            for k in d:
-                if k not in all_names:
-                    all_names.append(k)
-
-        phone_groups = {}
-        no_phone_names = []
-        for n in all_names:
-            phone = (BUILTIN_CONTACT_MAP.get(n, "") or "").strip()
-            if phone:
-                phone_groups.setdefault(phone, []).append(n)
-            else:
-                no_phone_names.append(n)
-
-        def get_field(name_list, field_map):
-            for n in name_list:
-                v = field_map.get(n, "")
-                if v:
-                    return v
-            return ""
-
-        records = []
-        seen_canonical_en = set()
-
-        for phone, names in phone_groups.items():
-            cn_list = [n for n in names if _is_chinese_name(n)]
-            en_list = []
-            for n in names:
-                if _is_chinese_name(n):
-                    continue
-                canon = _canonical_en(n)
-                if canon not in seen_canonical_en:
-                    seen_canonical_en.add(canon)
-                    en_list.append(n)
-
-            if len(cn_list) == 1 and len(en_list) == 1:
-                cn, en = cn_list[0], en_list[0]
-                records.append({
-                    "姓名": f"{cn} / {en}",
-                    "联系方式": phone,
-                    "执照号码": get_field([cn, en], BUILTIN_LICENSE_MAP),
-                    "证件号码": get_field([cn, en], BUILTIN_ID_MAP),
-                })
-            else:
-                for n in cn_list + en_list:
-                    records.append({
-                        "姓名": n,
-                        "联系方式": phone,
-                        "执照号码": BUILTIN_LICENSE_MAP.get(n, ""),
-                        "证件号码": BUILTIN_ID_MAP.get(n, ""),
-                    })
-
-        for n in no_phone_names:
-            if not _is_chinese_name(n):
-                canon = _canonical_en(n)
-                if canon in seen_canonical_en:
-                    continue
-                seen_canonical_en.add(canon)
-            records.append({
-                "姓名": n,
-                "联系方式": "",
-                "执照号码": BUILTIN_LICENSE_MAP.get(n, ""),
-                "证件号码": BUILTIN_ID_MAP.get(n, ""),
-            })
-
-        return records
+        return [
+            {"姓名": n, "联系方式": c, "执照号码": l, "证件号码": i}
+            for n, c, l, i in BUILTIN_CREW_DATA
+        ]
 
     def save_crew_records(records):
         try:
@@ -641,9 +222,14 @@ with tab1:
         name = re.sub(r'[,\s]+', ' ', name).strip()
         return ' '.join(sorted(name.lower().split()))
 
+    def _split_crew_name(name_val):
+        """拆分 "中文名 / 英文名" 复合格式；分隔符支持 / | 、"""
+        return [p.strip() for p in re.split(r'\s*[/|、]\s*', name_val) if p.strip()]
+
     def _find_crew_field(crew_name, field):
-        """从页面维护的机组信息表中查找指定字段（联系方式 / 执照号码 / 证件号码）。
-        姓名支持 "中文名 / 英文名" 复合格式，会自动拆分后分别匹配。"""
+        """从页面维护的机组信息表中查找指定字段。
+        同名多条记录时，取维护表中**最下面**（最新添加）的那条。
+        """
         if not crew_name:
             return ""
         records = st.session_state.get("crew_records") or []
@@ -654,39 +240,29 @@ with tab1:
         target_cn = extract_chinese_name(target)
         target_norm = normalize_name(target)
 
-        for rec in records:
+        result = ""
+        for rec in records:  # 顺序遍历，最后一个匹配的生效
             name_val = str(rec.get("姓名", "") or "").strip()
             if not name_val:
                 continue
-
-            # 支持多种分隔符： / 、| 、、
-            parts = [p.strip() for p in re.split(r'[/|、]', name_val) if p.strip()]
+            parts = _split_crew_name(name_val)
 
             matched = False
-            # 1) 整名直接匹配
             if name_val == target:
                 matched = True
-            # 2) 拆分后逐个匹配
             if not matched:
                 for p in parts:
-                    if p == target:
+                    if p == target or (target_cn and p == target_cn):
                         matched = True
                         break
-                    # 中文名匹配
-                    if target_cn and p == target_cn:
-                        matched = True
-                        break
-                    # 英文名规范化匹配（忽略大小写、逗号、词序）
                     if target_norm and normalize_name(p) == target_norm:
                         matched = True
                         break
-
             if matched:
                 val = str(rec.get(field, "") or "").strip()
                 if val:
-                    return val
-
-        return ""
+                    result = val  # 不立即返回，让后面（更靠下）的记录覆盖
+        return result
 
     def find_contact(crew_name):
         return _find_crew_field(crew_name, "联系方式")
@@ -696,6 +272,25 @@ with tab1:
 
     def find_id(crew_name):
         return _find_crew_field(crew_name, "证件号码")
+
+    def is_18digit_id_card(val):
+        """判断是否为 18 位身份证号码"""
+        if not val:
+            return False
+        s = re.sub(r'\s+', '', str(val))
+        return bool(re.match(r'^[0-9]{17}[0-9Xx]$', s))
+
+    def resolve_crew_id_and_license(crew_name, fallback_passport=""):
+        """返回 (证件号码填表值, 执照号码填表值)：
+        · 证件号是 18 位身份证 → 证件号码和执照号码都填身份证号
+        · 否则 → 证件号码优先用维护表里的（没有则用 GD单 中的护照号），
+                 执照号码用维护表里的执照号码
+        """
+        id_val = find_id(crew_name)
+        license_val = find_license(crew_name)
+        if is_18digit_id_card(id_val):
+            return id_val, id_val
+        return (id_val if id_val else fallback_passport), license_val
 
     def parse_document_type(passport_no, doc_type):
         doc_type_str = str(doc_type).strip() if pd.notna(doc_type) else ""
@@ -944,6 +539,39 @@ with tab1:
                             })
         return data, crew_data, passenger_data
 
+    def _fill_one_crew_row(ws, label_keyword, crew):
+        """在模板中查找包含 label_keyword 的行，填入机组成员信息（统一按规则填写证件号/执照号）"""
+        for row in ws.iter_rows(min_row=1, max_row=50):
+            for cell in row:
+                if cell.value and isinstance(cell.value, str) and label_keyword in cell.value:
+                    row_num = cell.row
+                    id_fill, license_fill = resolve_crew_id_and_license(
+                        crew["name"], crew.get("passport_no", "")
+                    )
+                    safe_set_cell_value(ws, row_num, 2, extract_chinese_name(crew["name"]))
+                    safe_set_cell_value(ws, row_num, 3, crew.get("gender", ""))
+                    safe_set_cell_value(ws, row_num, 4, crew.get("dob", ""))
+                    safe_set_cell_value(ws, row_num, 5, id_fill)
+                    safe_set_cell_value(ws, row_num, 6, license_fill)
+                    safe_set_cell_value(ws, row_num, 7, find_contact(crew["name"]))
+                    return True
+        return False
+
+    def _fill_empty_crew_row(ws, label_keyword):
+        """找不到对应人员时，填「无」"""
+        for row in ws.iter_rows(min_row=1, max_row=50):
+            for cell in row:
+                if cell.value and isinstance(cell.value, str) and label_keyword in cell.value:
+                    row_num = cell.row
+                    safe_set_cell_value(ws, row_num, 2, "无")
+                    safe_set_cell_value(ws, row_num, 3, "")
+                    safe_set_cell_value(ws, row_num, 4, "")
+                    safe_set_cell_value(ws, row_num, 5, "")
+                    safe_set_cell_value(ws, row_num, 6, "")
+                    safe_set_cell_value(ws, row_num, 7, "")
+                    return True
+        return False
+
     def fill_template(template_bytes, data, crew_list, passenger_list, route_display):
         try:
             wb = load_workbook(template_bytes)
@@ -986,59 +614,13 @@ with tab1:
 
         # 机长
         if len(crew_list) >= 1:
-            crew = crew_list[0]
-            for row in ws.iter_rows(min_row=1, max_row=50):
-                for cell in row:
-                    if cell.value and isinstance(cell.value, str) and "机长" in cell.value:
-                        row_num = cell.row
-                        safe_set_cell_value(ws, row_num, 2, extract_chinese_name(crew["name"]))
-                        safe_set_cell_value(ws, row_num, 3, crew.get("gender", ""))
-                        safe_set_cell_value(ws, row_num, 4, crew.get("dob", ""))
-                        id_num = find_id(crew["name"])
-                        if id_num:
-                            safe_set_cell_value(ws, row_num, 5, id_num)
-                        else:
-                            safe_set_cell_value(ws, row_num, 5, crew.get("passport_no", ""))
-                        # 优先使用证件号码作为执照号码
-                        if id_num:
-                            license_num = id_num
-                        else:
-                            license_num = find_license(crew["name"])
-                        safe_set_cell_value(ws, row_num, 6, license_num)
-                        contact = find_contact(crew["name"])
-                        safe_set_cell_value(ws, row_num, 7, contact)
-                        break
-                else:
-                    continue
-                break
+            _fill_one_crew_row(ws, "机长", crew_list[0])
 
         # 副驾驶
         if len(crew_list) >= 2:
-            crew = crew_list[1]
-            for row in ws.iter_rows(min_row=1, max_row=50):
-                for cell in row:
-                    if cell.value and isinstance(cell.value, str) and "副驾驶" in cell.value:
-                        row_num = cell.row
-                        safe_set_cell_value(ws, row_num, 2, extract_chinese_name(crew["name"]))
-                        safe_set_cell_value(ws, row_num, 3, crew.get("gender", ""))
-                        safe_set_cell_value(ws, row_num, 4, crew.get("dob", ""))
-                        id_num = find_id(crew["name"])
-                        if id_num:
-                            safe_set_cell_value(ws, row_num, 5, id_num)
-                        else:
-                            safe_set_cell_value(ws, row_num, 5, crew.get("passport_no", ""))
-                        if id_num:
-                            license_num = id_num
-                        else:
-                            license_num = find_license(crew["name"])
-                        safe_set_cell_value(ws, row_num, 6, license_num)
-                        contact = find_contact(crew["name"])
-                        safe_set_cell_value(ws, row_num, 7, contact)
-                        break
-                else:
-                    continue
-                break
+            _fill_one_crew_row(ws, "副驾驶", crew_list[1])
 
+        # 乘务 / 机务（按性别自动分配）
         cabin_crew = None
         mechanic = None
         for i in range(2, len(crew_list)):
@@ -1051,65 +633,15 @@ with tab1:
             if cabin_crew and mechanic:
                 break
 
-        # 乘务行
-        for row in ws.iter_rows(min_row=1, max_row=50):
-            for cell in row:
-                if cell.value and isinstance(cell.value, str) and "乘务" in cell.value:
-                    row_num = cell.row
-                    if cabin_crew:
-                        safe_set_cell_value(ws, row_num, 2, extract_chinese_name(cabin_crew["name"]))
-                        safe_set_cell_value(ws, row_num, 3, cabin_crew.get("gender", ""))
-                        safe_set_cell_value(ws, row_num, 4, cabin_crew.get("dob", ""))
-                        id_num = find_id(cabin_crew["name"])
-                        if id_num:
-                            safe_set_cell_value(ws, row_num, 5, id_num)
-                        else:
-                            safe_set_cell_value(ws, row_num, 5, cabin_crew.get("passport_no", ""))
-                        license_num = id_num if id_num else find_license(cabin_crew["name"])
-                        safe_set_cell_value(ws, row_num, 6, license_num)
-                        contact = find_contact(cabin_crew["name"])
-                        safe_set_cell_value(ws, row_num, 7, contact)
-                    else:
-                        safe_set_cell_value(ws, row_num, 2, "无")
-                        safe_set_cell_value(ws, row_num, 3, "")
-                        safe_set_cell_value(ws, row_num, 4, "")
-                        safe_set_cell_value(ws, row_num, 5, "")
-                        safe_set_cell_value(ws, row_num, 6, "")
-                        safe_set_cell_value(ws, row_num, 7, "")
-                    break
-            else:
-                continue
-            break
+        if cabin_crew:
+            _fill_one_crew_row(ws, "乘务", cabin_crew)
+        else:
+            _fill_empty_crew_row(ws, "乘务")
 
-        # 机务行
-        for row in ws.iter_rows(min_row=1, max_row=50):
-            for cell in row:
-                if cell.value and isinstance(cell.value, str) and "机务" in cell.value:
-                    row_num = cell.row
-                    if mechanic:
-                        safe_set_cell_value(ws, row_num, 2, extract_chinese_name(mechanic["name"]))
-                        safe_set_cell_value(ws, row_num, 3, mechanic.get("gender", ""))
-                        safe_set_cell_value(ws, row_num, 4, mechanic.get("dob", ""))
-                        id_num = find_id(mechanic["name"])
-                        if id_num:
-                            safe_set_cell_value(ws, row_num, 5, id_num)
-                        else:
-                            safe_set_cell_value(ws, row_num, 5, mechanic.get("passport_no", ""))
-                        license_num = id_num if id_num else find_license(mechanic["name"])
-                        safe_set_cell_value(ws, row_num, 6, license_num)
-                        contact = find_contact(mechanic["name"])
-                        safe_set_cell_value(ws, row_num, 7, contact)
-                    else:
-                        safe_set_cell_value(ws, row_num, 2, "无")
-                        safe_set_cell_value(ws, row_num, 3, "")
-                        safe_set_cell_value(ws, row_num, 4, "")
-                        safe_set_cell_value(ws, row_num, 5, "")
-                        safe_set_cell_value(ws, row_num, 6, "")
-                        safe_set_cell_value(ws, row_num, 7, "")
-                    break
-            else:
-                continue
-            break
+        if mechanic:
+            _fill_one_crew_row(ws, "机务", mechanic)
+        else:
+            _fill_empty_crew_row(ws, "机务")
 
         passenger_start_row = None
         for row in ws.iter_rows(min_row=1, max_row=100):
@@ -1165,7 +697,6 @@ with tab1:
             data, crew_list, passenger_list = parse_general_declaration(data_file)
             st.success(f"✅ 解析成功：机组 {len(crew_list)} 人，乘客 {len(passenger_list)} 人")
 
-            # 只显示机组中文姓名列表（不显示表格）
             if crew_list:
                 crew_names = [extract_chinese_name(crew["name"]) for crew in crew_list if crew.get("name")]
                 st.write("👨‍✈️ 机组名单：", ", ".join(crew_names) if crew_names else "无")
@@ -1227,7 +758,7 @@ with tab1:
     else:
         st.info("👆 请同时上传 GD单 和 模板文件。")
 
-    # ---------- 机组人员信息维护面板（新增） ----------
+    # ---------- 机组人员信息维护面板 ----------
     st.markdown("---")
 
     if st.button("👥 机组人员信息维护（点击展开 / 收起）", key="toggle_crew_panel"):
@@ -1236,10 +767,13 @@ with tab1:
     if st.session_state.get("show_crew_panel", False):
         st.subheader("👥 机组人员信息维护")
         st.caption(
-            "📌 姓名列推荐格式：「**中文名 / 英文名**」（例如 `赖小燕 / Siau Mui LAI`），"
-            "只有一个名字时只写一个即可。系统会自动拆分并按中/英文分别匹配 GD单 里的姓名，"
-            "无论 GD单 里是 `赖小燕`、`Siau Mui LAI` 还是 `LAI Siau Mui` 都能命中。\n\n"
-            "操作：直接点单元格修改；在表格最后一行输入内容即可新增人员；选中行后按 Delete 键删除。"
+            "📌 姓名列格式：「**中文名 / 英文名**」（例如 `赖小燕 / Siau Mui LAI`），"
+            "也可写多个英文名（如 `胡君量 / Wan Leung WU / Kwan Leung WU`）；只有一个名字时只写一个。"
+            "系统会自动拆分后按中/英文分别匹配 GD单 里的姓名，无论 GD单 里是 `赖小燕`、`Siau Mui LAI` 还是 `LAI Siau Mui` 都能命中。\n\n"
+            "**执照号码规则**：生成备案表时，如果证件号码是 18 位身份证，执照号码会自动填成同一个身份证号；"
+            "否则执照号码填本表里填写的值（例如 `蔡国俊` 的证件号 `360019647` 不是 18 位，执照号就用 `17203/1 FCL`）。\n\n"
+            "**同名优先**：若同一姓名在表中出现多次，会取**最下面**（最新添加）的那条。"
+            "直接点单元格修改；在最后一行输入内容即可新增；选中行后按 Delete 键删除。"
             f"改完点「💾 保存修改」，数据会写入 `{CREW_DATA_FILE}`，下次打开页面自动加载，无需再改代码。"
         )
 
