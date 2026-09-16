@@ -481,6 +481,55 @@ with tab1:
         "黄海东": "310105197506021215",
     }
 
+    # ---------- 机组信息持久化（新增：可在页面直接维护，无需改代码） ----------
+    CREW_DATA_FILE = "crew_directory.json"
+    CREW_COLUMNS = ["姓名", "联系方式", "执照号码", "证件号码"]
+
+    def build_default_crew_records():
+        """由内置的三个映射生成默认机组信息表（每个姓名一条记录）"""
+        names = []
+        for d in (BUILTIN_CONTACT_MAP, BUILTIN_LICENSE_MAP, BUILTIN_ID_MAP):
+            for k in d:
+                if k not in names:
+                    names.append(k)
+        return [
+            {
+                "姓名": n,
+                "联系方式": BUILTIN_CONTACT_MAP.get(n, ""),
+                "执照号码": BUILTIN_LICENSE_MAP.get(n, ""),
+                "证件号码": BUILTIN_ID_MAP.get(n, ""),
+            }
+            for n in names
+        ]
+
+    def save_crew_records(records):
+        try:
+            with open(CREW_DATA_FILE, "w", encoding="utf-8") as f:
+                json.dump({"records": records}, f, ensure_ascii=False, indent=2)
+            return True
+        except Exception as e:
+            st.error(f"❌ 保存失败：{e}")
+            return False
+
+    def load_crew_records():
+        if os.path.exists(CREW_DATA_FILE):
+            try:
+                with open(CREW_DATA_FILE, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                records = data.get("records", [])
+                if isinstance(records, list):
+                    return records
+            except Exception:
+                pass
+        records = build_default_crew_records()
+        save_crew_records(records)
+        return records
+
+    if "crew_records" not in st.session_state:
+        st.session_state.crew_records = load_crew_records()
+    if "crew_editor_version" not in st.session_state:
+        st.session_state.crew_editor_version = 0
+
     # ---------- 国籍映射 ----------
     NATION_MAP = {
         "CHN": "中国", "HKG": "香港", "DEU": "德国", "USA": "美国", "GBR": "英国",
@@ -526,46 +575,49 @@ with tab1:
         name = re.sub(r'[,\s]+', ' ', name).strip()
         return name.lower()
 
-    def find_contact(crew_name):
-        if not crew_name or not BUILTIN_CONTACT_MAP:
+    def _find_crew_field(crew_name, field):
+        """从页面维护的机组信息表中查找指定字段（联系方式 / 执照号码 / 证件号码）"""
+        if not crew_name:
             return ""
-        chinese = extract_chinese_name(crew_name)
-        if chinese and chinese in BUILTIN_CONTACT_MAP:
-            return BUILTIN_CONTACT_MAP[chinese]
-        norm = normalize_name(crew_name)
-        if not norm:
+        records = st.session_state.get("crew_records") or []
+        if not records:
             return ""
-        for key, val in BUILTIN_CONTACT_MAP.items():
-            if normalize_name(key) == norm:
-                return val
-        return ""
+        target = str(crew_name).strip()
 
-    def find_license(crew_name):
-        if not crew_name or not BUILTIN_LICENSE_MAP:
-            return ""
-        chinese = extract_chinese_name(crew_name)
-        if chinese and chinese in BUILTIN_LICENSE_MAP:
-            return BUILTIN_LICENSE_MAP[chinese]
-        norm = normalize_name(crew_name)
-        if not norm:
-            return ""
-        for key, val in BUILTIN_LICENSE_MAP.items():
-            if normalize_name(key) == norm:
-                return val
-        return ""
+        # 1) 全名直接匹配
+        for rec in records:
+            if str(rec.get("姓名", "")).strip() == target:
+                val = str(rec.get(field, "") or "").strip()
+                if val:
+                    return val
 
-    def find_id(crew_name):
-        if not crew_name or not BUILTIN_ID_MAP:
-            return ""
+        # 2) 中文名匹配（如 "ZHANG San 张三" → "张三"）
         chinese = extract_chinese_name(crew_name)
-        if chinese and chinese in BUILTIN_ID_MAP:
-            return BUILTIN_ID_MAP[chinese]
+        if chinese:
+            for rec in records:
+                if str(rec.get("姓名", "")).strip() == chinese:
+                    val = str(rec.get(field, "") or "").strip()
+                    if val:
+                        return val
+
+        # 3) 规范化后匹配（忽略中文、逗号、大小写）
         norm = normalize_name(crew_name)
         if norm:
-            for key, val in BUILTIN_ID_MAP.items():
-                if normalize_name(key) == norm:
-                    return val
+            for rec in records:
+                if normalize_name(str(rec.get("姓名", ""))) == norm:
+                    val = str(rec.get(field, "") or "").strip()
+                    if val:
+                        return val
         return ""
+
+    def find_contact(crew_name):
+        return _find_crew_field(crew_name, "联系方式")
+
+    def find_license(crew_name):
+        return _find_crew_field(crew_name, "执照号码")
+
+    def find_id(crew_name):
+        return _find_crew_field(crew_name, "证件号码")
 
     def parse_document_type(passport_no, doc_type):
         doc_type_str = str(doc_type).strip() if pd.notna(doc_type) else ""
@@ -1055,10 +1107,6 @@ with tab1:
             else:
                 default_route = f"{from_code}-{to_code}" if from_code and to_code else ""
 
-            # 不再显示提取的航班信息板块
-            # st.subheader("📋 提取的航班信息")
-            # st.info(f"✈️ 默认航班行程：{default_route}")
-
             raw_route = st.text_input(
                 "从Jetops复制航班信息并适当调整起落时间 比如： F B652S 08:00 - 14:00  柬埔寨金边 德崇 - 日本东京 羽田",
                 value=default_route
@@ -1101,6 +1149,65 @@ with tab1:
     else:
         st.info("👆 请同时上传 GD单 和 模板文件。")
 
+    # ---------- 机组人员信息维护面板（新增） ----------
+    st.markdown("---")
+
+    if st.button("👥 机组人员信息维护（点击展开 / 收起）", key="toggle_crew_panel"):
+        st.session_state.show_crew_panel = not st.session_state.get("show_crew_panel", False)
+
+    if st.session_state.get("show_crew_panel", False):
+        st.subheader("👥 机组人员信息维护")
+        st.caption(
+            "可直接点击单元格修改；在表格最后一行输入内容即可新增人员；"
+            "选中行后按 Delete 键可删除。修改完成后点击「💾 保存修改」，"
+            f"数据会写入 `{CREW_DATA_FILE}`，下次打开页面自动加载，无需再改代码。"
+            "（同一人若同时存在中文名和英文名两条记录，需要分别维护。）"
+        )
+
+        df_crew = pd.DataFrame(st.session_state.crew_records)
+        for c in CREW_COLUMNS:
+            if c not in df_crew.columns:
+                df_crew[c] = ""
+        df_crew = df_crew[CREW_COLUMNS].fillna("").astype(str)
+
+        edited_df = st.data_editor(
+            df_crew,
+            num_rows="dynamic",
+            use_container_width=True,
+            height=520,
+            key=f"crew_editor_{st.session_state.crew_editor_version}",
+            column_config={
+                "姓名": st.column_config.TextColumn("姓名", width="medium"),
+                "联系方式": st.column_config.TextColumn("联系方式", width="medium"),
+                "执照号码": st.column_config.TextColumn("执照号码", width="medium"),
+                "证件号码": st.column_config.TextColumn("证件号码", width="medium"),
+            },
+        )
+
+        col_save, col_reset, col_count = st.columns([1, 1, 3])
+        with col_save:
+            if st.button("💾 保存修改", type="primary", use_container_width=True, key="save_crew_records"):
+                new_records = edited_df.fillna("").astype(str).to_dict("records")
+                new_records = [
+                    {k: str(r.get(k, "")).strip() for k in CREW_COLUMNS}
+                    for r in new_records
+                    if any(str(r.get(k, "")).strip() for k in CREW_COLUMNS)
+                ]
+                st.session_state.crew_records = new_records
+                if save_crew_records(new_records):
+                    st.session_state.crew_editor_version += 1
+                    st.toast(f"✅ 已保存 {len(new_records)} 条机组信息", icon="✅")
+                    st.rerun()
+        with col_reset:
+            if st.button("♻️ 恢复内置默认", use_container_width=True, key="reset_crew_records"):
+                default_records = build_default_crew_records()
+                st.session_state.crew_records = default_records
+                save_crew_records(default_records)
+                st.session_state.crew_editor_version += 1
+                st.toast("已恢复为内置默认数据", icon="♻️")
+                st.rerun()
+        with col_count:
+            st.caption(f"当前共 {len(st.session_state.crew_records)} 条记录")
 
 # ================================================================
 # 功能2：世界时行程（带记忆对比功能）
