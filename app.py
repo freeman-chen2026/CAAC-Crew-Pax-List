@@ -588,7 +588,7 @@ with tab1:
             safe_set_cell_value(ws, data_row, 4, data.get("flt", ""))
             safe_set_cell_value(ws, data_row, 5, route_display if route_display else "")
 
-        # 按"职务"字段匹配
+        # 按"职务"字段匹配（同名职务取第一个）
         role_map = {}
         for cr in crew_rows:
             role = str(cr.get("职务", "")).strip()
@@ -677,9 +677,10 @@ with tab1:
                 "改完下方下载按钮生成的就是最新数据。"
             )
 
-            # 构建初始行：确保 4 个职务都有一行，缺的填「无」
+            # ---------- 构建初始行 ----------
             role_order = ["机长", "副驾驶", "乘务", "机务"]
             role_rows = {r: None for r in role_order}
+            overflow_rows = []
 
             for idx, crew in enumerate(crew_list):
                 name_cn = extract_chinese_name(crew["name"])
@@ -689,27 +690,29 @@ with tab1:
                 contact = find_contact(crew["name"])
 
                 if idx == 0:
-                    role = "机长"
+                    preferred_role = "机长"
                 elif idx == 1:
-                    role = "副驾驶"
+                    preferred_role = "副驾驶"
                 else:
                     gender = str(crew.get("gender", "")).strip()
-                    if gender in ["女", "Female", "F"]:
-                        role = "乘务"
-                    else:
-                        role = "机务"
+                    preferred_role = "乘务" if gender in ["女", "Female", "F"] else "机务"
 
-                if role_rows.get(role) is None:
-                    role_rows[role] = {
-                        "职务": role,
-                        "姓名": name_cn,
-                        "性别": crew.get("gender", ""),
-                        "出生日期": crew.get("dob", ""),
-                        "证件号码": id_fill,
-                        "执照号码": license_fill,
-                        "联系方式": contact,
-                    }
+                row = {
+                    "职务": preferred_role,
+                    "姓名": name_cn,
+                    "性别": crew.get("gender", ""),
+                    "出生日期": crew.get("dob", ""),
+                    "证件号码": id_fill,
+                    "执照号码": license_fill,
+                    "联系方式": contact,
+                }
 
+                if role_rows.get(preferred_role) is None:
+                    role_rows[preferred_role] = row
+                else:
+                    overflow_rows.append(row)
+
+            # 4 个固定职务（缺的填"无"），再追加多余机组
             initial_rows = []
             for role in role_order:
                 if role_rows[role] is not None:
@@ -724,6 +727,22 @@ with tab1:
                         "执照号码": "",
                         "联系方式": "",
                     })
+            initial_rows.extend(overflow_rows)
+
+            # ---------- 警告 ----------
+            if overflow_rows:
+                overflow_desc = "、".join(
+                    f"{r['姓名']}（当前标为「{r['职务']}」）" for r in overflow_rows
+                )
+                st.warning(
+                    f"⚠️ **本次机组共 {len(crew_list)} 人**，而模板机组区只有 **4 行**"
+                    f"（机长 / 副驾驶 / 乘务 / 机务）。以下人员**不会自动写入模板**：\n\n"
+                    f"**{overflow_desc}**\n\n"
+                    f"如需写入模板，请下载后在 Excel 中手动插入行。"
+                )
+
+            # 检查职务重复（编辑后的表格里可能出现）
+            # 这里先不检测，让用户看到 initial_rows 后自行调整
 
             # 用 GD 单的机组名单做签名，名单变了就重置编辑器
             crew_signature = "|".join([c.get("name", "") for c in crew_list])
@@ -734,7 +753,7 @@ with tab1:
                 df_fill,
                 num_rows="dynamic",
                 use_container_width=True,
-                height=240,
+                height=280,
                 key=editor_key,
                 column_config={
                     "职务": st.column_config.SelectboxColumn(
