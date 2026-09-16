@@ -729,7 +729,7 @@ with tab1:
                     })
             initial_rows.extend(overflow_rows)
 
-            # ---------- 警告 ----------
+            # ---------- 机组溢出警告 ----------
             if overflow_rows:
                 overflow_desc = "、".join(
                     f"{r['姓名']}（当前标为「{r['职务']}」）" for r in overflow_rows
@@ -740,9 +740,6 @@ with tab1:
                     f"**{overflow_desc}**\n\n"
                     f"如需写入模板，请下载后在 Excel 中手动插入行。"
                 )
-
-            # 检查职务重复（编辑后的表格里可能出现）
-            # 这里先不检测，让用户看到 initial_rows 后自行调整
 
             # 用 GD 单的机组名单做签名，名单变了就重置编辑器
             crew_signature = "|".join([c.get("name", "") for c in crew_list])
@@ -774,6 +771,36 @@ with tab1:
                 edited_crew_df.fillna("").astype(str).to_dict("records")
                 if not edited_crew_df.empty else []
             )
+
+            # ---------- 乘客数量警告 ----------
+            MAX_PAX_ROWS = 14
+            if len(passenger_list) > MAX_PAX_ROWS:
+                extra = len(passenger_list) - MAX_PAX_ROWS
+                st.warning(
+                    f"⚠️ **本次乘客共 {len(passenger_list)} 人**，而模板乘客区只有 **{MAX_PAX_ROWS} 行**。\n\n"
+                    f"以下 **{extra} 位乘客不会自动写入模板**，请在下载后手动插入行并复制下方内容："
+                )
+
+                # 生成 Tab 分隔的文本（复制到 Excel 会自动分列）
+                lines = ["姓名\t性别\t出生日期\t国籍\t证件种类\t证件号码"]
+                for pax in passenger_list[MAX_PAX_ROWS:]:
+                    pax_name = extract_chinese_name(pax["name"])
+                    doc_type = pax.get("doc_type", "")
+                    doc_type_clean = parse_document_type("", doc_type) if (pd.notna(doc_type) and str(doc_type).strip()) else parse_document_type(pax.get("passport_no", ""), "")
+                    lines.append(
+                        "\t".join([
+                            pax_name,
+                            str(pax.get("gender", "") or ""),
+                            str(pax.get("dob", "") or ""),
+                            get_nation_name(pax.get("nationality", "")),
+                            doc_type_clean,
+                            str(pax.get("passport_no", "") or ""),
+                        ])
+                    )
+                copy_text = "\n".join(lines)
+
+                st.markdown("**📋 超出部分乘客信息（点击右上角复制按钮，直接粘贴到 Excel）**")
+                st.code(copy_text, language="text")
 
             st.markdown("---")
 
