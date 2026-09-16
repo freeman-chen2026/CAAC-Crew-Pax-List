@@ -21,7 +21,13 @@ tab1, tab2, tab3 = st.tabs(["📋 功能1：备案表生成", "🌐 功能2：�
 with tab1:
     st.markdown("上传 GD单 和模板，自动生成备案表（联系方式、执照号码及证件号码已内置）。")
 
-    # ---------- 内置机组信息（已整理：中英文名合并，按姓名/联系方式/执照号码/证件号码） ----------
+    # ---------- 内置机组信息 ----------
+    # 姓名格式：「中文名 / 英文名」（多个英文写法可用 / 分隔），只有单一名字时只写一个。
+    # 匹配规则（见 normalize_name）：
+    #   · 中文名 → 直接比对中文
+    #   · 英文名 → 去逗号、转小写、按词排序后比对，因此以下写法都能互相匹配：
+    #       杨涛 / Tao, YANG  ==  杨涛 / YANG Tao  ==  YANG Tao  ==  Tao YANG
+    #       Herve Daniel, STAMM  ==  Herve Daniel STAMM  ==  STAMM Herve Daniel
     # 执照号码列保留原始值；生成备案表时按规则自动判断：
     #   · 若证件号码是 18 位身份证  → 执照号码 = 证件号码
     #   · 否则                       → 执照号码 = 本表中填写的执照号码
@@ -36,7 +42,7 @@ with tab1:
         ("赵岩松 / Yansong ZHAO", "186 1161 8385", "410103197004017014", "410103197004017014"),
         ("Bruce Roderick, WAINES", "186 6532 9796", "3448726", "000336198206158001"),
         ("Oliver Viktor, RACZ", "186 1197 3165", "000336198206158001", "000336198206158001"),
-        ("Yiftah RAUCH", "186 1045 0563", "000972198112152001", "000972198112152001"),
+        ("Yiftah RAUCH / Yiftah, RAUCH", "186 1045 0563", "000972198112152001", "000972198112152001"),
         ("尤欣 / Xin YOU", "139 1608 5072", "620102197604293015", "620102197604293015"),
         ("李亚民 / Yamin Li", "133 6632 0878", "350104197107184915", "350104197107184915"),
         ("赵镭 / Lei ZHAO", "138 0883 9660", "440301198204157271", "440301198204157271"),
@@ -98,6 +104,7 @@ with tab1:
         ("张哲 / Zhe ZHANG", "139 0247 5026", "650104196604163310", "650104196604163310"),
         ("李海 / Hai LI", "136 8131 8388", "110105197201106130", "110105197201106130"),
         ("蔡国俊 / Kuo-Chun, TSAI", "86 157 1220 8304", "17203/1 FCL", "360019647"),
+        ("杨涛 / Tao, YANG", "86 186 0122 5737", "140103197302010034", "140103197302010034"),
         ("朱正宇", "189 8335 3697", "350111197207152412", "350111197207152412"),
         ("金尚明 / Shangming JIN", "136 7113 8047", "210381197511034612", ""),
         ("赵婷婷", "138 2883 3162", "372524198212240023", "372524198212240023"),
@@ -215,15 +222,19 @@ with tab1:
             return full_name
 
     def normalize_name(name):
-        """姓名规范化：去中文、去逗号、转小写、按词排序（用于英文名比对）"""
+        """姓名规范化：去中文、去逗号、去多余空格、转小写、按单词排序。
+        这样以下写法都等价：
+            杨涛 / Tao, YANG  ↔  YANG Tao  ↔  Tao YANG  ↔  Tao, YANG
+            Herve Daniel, STAMM  ↔  Herve Daniel STAMM  ↔  STAMM Herve Daniel
+        """
         if not name:
             return ""
         name = re.sub(r'[\u4e00-\u9fff]+', '', name)
-        name = re.sub(r'[,\s]+', ' ', name).strip()
-        return ' '.join(sorted(name.lower().split()))
+        name = re.sub(r'[,\s]+', ' ', name).strip().lower()
+        return ' '.join(sorted(name.split()))
 
     def _split_crew_name(name_val):
-        """拆分 "中文名 / 英文名" 复合格式；分隔符支持 / | 、"""
+        """拆分复合姓名；分隔符支持 / | 、"""
         return [p.strip() for p in re.split(r'\s*[/|、]\s*', name_val) if p.strip()]
 
     def _find_crew_field(crew_name, field):
@@ -248,11 +259,16 @@ with tab1:
             parts = _split_crew_name(name_val)
 
             matched = False
+            # 1) 整名直接相等
             if name_val == target:
                 matched = True
+            # 2) 拆分后逐个匹配（中文名精确、英文名规范化）
             if not matched:
                 for p in parts:
-                    if p == target or (target_cn and p == target_cn):
+                    if p == target:
+                        matched = True
+                        break
+                    if target_cn and p == target_cn:
                         matched = True
                         break
                     if target_norm and normalize_name(p) == target_norm:
@@ -274,7 +290,7 @@ with tab1:
         return _find_crew_field(crew_name, "证件号码")
 
     def is_18digit_id_card(val):
-        """判断是否为 18 位身份证号码"""
+        """判断是否为 18 位身份证号码（17 位数字 + 数字/X 校验位）"""
         if not val:
             return False
         s = re.sub(r'\s+', '', str(val))
@@ -284,7 +300,7 @@ with tab1:
         """返回 (证件号码填表值, 执照号码填表值)：
         · 证件号是 18 位身份证 → 证件号码和执照号码都填身份证号
         · 否则 → 证件号码优先用维护表里的（没有则用 GD单 中的护照号），
-                 执照号码用维护表里的执照号码
+                 执照号码用维护表里的执照号码（如 蔡国俊 → 17203/1 FCL）
         """
         id_val = find_id(crew_name)
         license_val = find_license(crew_name)
@@ -540,7 +556,7 @@ with tab1:
         return data, crew_data, passenger_data
 
     def _fill_one_crew_row(ws, label_keyword, crew):
-        """在模板中查找包含 label_keyword 的行，填入机组成员信息（统一按规则填写证件号/执照号）"""
+        """在模板中查找包含 label_keyword 的行，填入机组成员信息"""
         for row in ws.iter_rows(min_row=1, max_row=50):
             for cell in row:
                 if cell.value and isinstance(cell.value, str) and label_keyword in cell.value:
@@ -767,13 +783,17 @@ with tab1:
     if st.session_state.get("show_crew_panel", False):
         st.subheader("👥 机组人员信息维护")
         st.caption(
-            "📌 姓名列格式：「**中文名 / 英文名**」（例如 `赖小燕 / Siau Mui LAI`），"
-            "也可写多个英文名（如 `胡君量 / Wan Leung WU / Kwan Leung WU`）；只有一个名字时只写一个。"
-            "系统会自动拆分后按中/英文分别匹配 GD单 里的姓名，无论 GD单 里是 `赖小燕`、`Siau Mui LAI` 还是 `LAI Siau Mui` 都能命中。\n\n"
-            "**执照号码规则**：生成备案表时，如果证件号码是 18 位身份证，执照号码会自动填成同一个身份证号；"
-            "否则执照号码填本表里填写的值（例如 `蔡国俊` 的证件号 `360019647` 不是 18 位，执照号就用 `17203/1 FCL`）。\n\n"
-            "**同名优先**：若同一姓名在表中出现多次，会取**最下面**（最新添加）的那条。"
-            "直接点单元格修改；在最后一行输入内容即可新增；选中行后按 Delete 键删除。"
+            "📌 **姓名列格式**：「中文名 / 英文名」（英文名可以是多种写法，用 `/` 分隔），只有一个名字时只写一个。\n\n"
+            "**匹配规则**（系统会自动归一化，以下写法都视为同一个人）：\n"
+            "- 中文名精确匹配：`杨涛` == `杨涛`\n"
+            "- 英文名去逗号、转小写、按单词排序后匹配：\n"
+            "  · `Tao, YANG` == `YANG Tao` == `Tao YANG`\n"
+            "  · `Herve Daniel, STAMM` == `Herve Daniel STAMM` == `STAMM Herve Daniel`\n\n"
+            "**执照号码规则**：\n"
+            "- 证件号码是 18 位身份证 → 执照号码自动填成同一个身份证号\n"
+            "- 否则 → 执照号码填本表里填的值（如 `蔡国俊` 的证件号 `360019647` 不是 18 位，执照号就用 `17203/1 FCL`）\n\n"
+            "**同名优先**：若同一姓名在表中出现多次，会取**最下面**（最新添加）的那条。\n\n"
+            "操作：直接点单元格修改；在最后一行输入内容即可新增；选中行后按 Delete 键删除。"
             f"改完点「💾 保存修改」，数据会写入 `{CREW_DATA_FILE}`，下次打开页面自动加载，无需再改代码。"
         )
 
