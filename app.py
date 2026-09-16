@@ -146,14 +146,6 @@ with tab1:
     CREW_COLUMNS = ["姓名", "联系方式", "执照号码", "证件号码"]
     CREW_FILL_COLUMNS = ["职务", "姓名", "性别", "出生日期", "证件号码", "执照号码", "联系方式"]
 
-    if "crew_records" not in st.session_state:
-        st.session_state.crew_records = [
-            {"姓名": n, "联系方式": c, "执照号码": l, "证件号码": i}
-            for n, c, l, i in BUILTIN_CREW_DATA
-        ]
-    if "crew_editor_version" not in st.session_state:
-        st.session_state.crew_editor_version = 0
-
     # ---------- 国籍映射 ----------
     NATION_MAP = {
         "CHN": "中国", "HKG": "香港", "DEU": "德国", "USA": "美国", "GBR": "英国",
@@ -193,6 +185,7 @@ with tab1:
             return full_name
 
     def normalize_name(name):
+        """姓名规范化：去中文、去逗号、去多余空格、转小写、按单词排序。"""
         if not name:
             return ""
         name = re.sub(r'[\u4e00-\u9fff]+', '', name)
@@ -203,17 +196,16 @@ with tab1:
         return [p.strip() for p in re.split(r'\s*[/|、]\s*', name_val) if p.strip()]
 
     def _find_crew_field(crew_name, field):
+        """从内置名单中查找指定字段；同名多条时取最下面（最新）的那条。"""
         if not crew_name:
-            return ""
-        records = st.session_state.get("crew_records") or []
-        if not records:
             return ""
         target = str(crew_name).strip()
         target_cn = extract_chinese_name(target)
         target_norm = normalize_name(target)
+        field_idx = CREW_COLUMNS.index(field)
         result = ""
-        for rec in records:
-            name_val = str(rec.get("姓名", "") or "").strip()
+        for row in BUILTIN_CREW_DATA:
+            name_val = str(row[0] or "").strip()
             if not name_val:
                 continue
             parts = _split_crew_name(name_val)
@@ -229,7 +221,7 @@ with tab1:
                     if target_norm and normalize_name(p) == target_norm:
                         matched = True; break
             if matched:
-                val = str(rec.get(field, "") or "").strip()
+                val = str(row[field_idx] or "").strip()
                 if val:
                     result = val
         return result
@@ -736,79 +728,6 @@ with tab1:
             st.exception(e)
     else:
         st.info("👆 请同时上传 GD单 和 模板文件。")
-
-    # ---------- 机组人员信息维护面板 ----------
-    st.markdown("---")
-
-    if st.button("👥 机组人员信息维护（点击展开 / 收起）", key="toggle_crew_panel"):
-        st.session_state.show_crew_panel = not st.session_state.get("show_crew_panel", False)
-
-    if st.session_state.get("show_crew_panel", False):
-        st.subheader("👥 机组人员信息维护")
-        st.warning("⚠️ 这里的修改只对当前会话生效（刷新后会恢复成代码里的版本）。")
-
-        df_crew = pd.DataFrame(st.session_state.crew_records)
-        for c in CREW_COLUMNS:
-            if c not in df_crew.columns:
-                df_crew[c] = ""
-        df_crew = df_crew[CREW_COLUMNS].fillna("").astype(str)
-
-        edited_df = st.data_editor(
-            df_crew,
-            num_rows="dynamic",
-            use_container_width=True,
-            height=520,
-            key=f"crew_editor_{st.session_state.crew_editor_version}",
-            column_config={
-                "姓名": st.column_config.TextColumn("姓名（中文名 / 英文名）", width="large"),
-                "联系方式": st.column_config.TextColumn("联系方式", width="medium"),
-                "执照号码": st.column_config.TextColumn("执照号码", width="medium"),
-                "证件号码": st.column_config.TextColumn("证件号码", width="medium"),
-            },
-        )
-
-        col_apply, col_reset, col_count = st.columns([1, 1, 3])
-        with col_apply:
-            if st.button("✅ 应用到本次会话", type="primary", use_container_width=True, key="apply_crew_records"):
-                new_records = edited_df.fillna("").astype(str).to_dict("records")
-                new_records = [
-                    {k: str(r.get(k, "")).strip() for k in CREW_COLUMNS}
-                    for r in new_records
-                    if any(str(r.get(k, "")).strip() for k in CREW_COLUMNS)
-                ]
-                st.session_state.crew_records = new_records
-                st.session_state.crew_editor_version += 1
-                st.toast(f"✅ 已应用 {len(new_records)} 条机组信息（仅当前会话）", icon="✅")
-                st.rerun()
-        with col_reset:
-            if st.button("↩️ 恢复为代码版本", use_container_width=True, key="reset_crew_records"):
-                st.session_state.crew_records = [
-                    {"姓名": n, "联系方式": c, "执照号码": l, "证件号码": i}
-                    for n, c, l, i in BUILTIN_CREW_DATA
-                ]
-                st.session_state.crew_editor_version += 1
-                st.toast("已恢复为代码内置版本", icon="↩️")
-                st.rerun()
-        with col_count:
-            st.caption(f"当前会话共 {len(st.session_state.crew_records)} 条记录")
-
-        # 导出按钮（不显示代码块）
-        export_lines = []
-        for rec in st.session_state.crew_records:
-            n = str(rec.get("姓名", "") or "")
-            c = str(rec.get("联系方式", "") or "")
-            l = str(rec.get("执照号码", "") or "")
-            i = str(rec.get("证件号码", "") or "")
-            export_lines.append(f'        ("{n}", "{c}", "{l}", "{i}"),')
-        export_text = "    BUILTIN_CREW_DATA = [\n" + "\n".join(export_lines) + "\n    ]"
-
-        st.download_button(
-            label="📋 导出更新后的名单（下载 .txt 发我）",
-            data=export_text.encode("utf-8"),
-            file_name="BUILTIN_CREW_DATA.txt",
-            mime="text/plain",
-            key="download_crew_export",
-        )
 
 # ================================================================
 # 功能2：世界时行程（带记忆对比功能）
