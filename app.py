@@ -21,16 +21,14 @@ tab1, tab2, tab3 = st.tabs(["📋 功能1：备案表生成", "🌐 功能2：�
 with tab1:
     st.markdown("上传 GD单 和模板，自动生成备案表（联系方式、执照号码及证件号码已内置）。")
 
-    # ---------- 内置机组信息 ----------
+    # ---------- 内置机组信息（唯一真源） ----------
     # 姓名格式：「中文名 / 英文名」（多个英文写法可用 / 分隔），只有单一名字时只写一个。
-    # 匹配规则（见 normalize_name）：
-    #   · 中文名 → 直接比对中文
-    #   · 英文名 → 去逗号、转小写、按词排序后比对，因此以下写法都能互相匹配：
-    #       杨涛 / Tao, YANG  ==  杨涛 / YANG Tao  ==  YANG Tao  ==  Tao YANG
-    #       Herve Daniel, STAMM  ==  Herve Daniel STAMM  ==  STAMM Herve Daniel
-    # 执照号码列保留原始值；生成备案表时按规则自动判断：
-    #   · 若证件号码是 18 位身份证  → 执照号码 = 证件号码
-    #   · 否则                       → 执照号码 = 本表中填写的执照号码
+    # 英文名匹配自动忽略逗号、大小写、词序：
+    #   杨涛 / Tao, YANG  ==  杨涛 / YANG Tao  ==  YANG Tao  ==  Tao YANG
+    #   Herve Daniel, STAMM  ==  Herve Daniel STAMM  ==  STAMM Herve Daniel
+    # 执照号码规则：
+    #   · 证件号码是 18 位身份证 → 执照号码 = 证件号码
+    #   · 否则                   → 执照号码 = 本表中填写的执照号码
     BUILTIN_CREW_DATA = [
         # (姓名, 联系方式, 执照号码, 证件号码)
         ("庚凡", "139 2463 9747", "430104197901184015", "430104197901184015"),
@@ -145,41 +143,15 @@ with tab1:
         ("黄海东", "138 0179 9315", "310105197506021215", "310105197506021215"),
     ]
 
-    # ---------- 机组信息持久化 ----------
-    CREW_DATA_FILE = "crew_directory.json"
     CREW_COLUMNS = ["姓名", "联系方式", "执照号码", "证件号码"]
 
-    def build_default_crew_records():
-        return [
+    # 页面临时工作区：页面打开时从 BUILTIN_CREW_DATA 初始化；
+    # 你在维护面板里的编辑只影响当次会话，刷新后回到代码版本。
+    if "crew_records" not in st.session_state:
+        st.session_state.crew_records = [
             {"姓名": n, "联系方式": c, "执照号码": l, "证件号码": i}
             for n, c, l, i in BUILTIN_CREW_DATA
         ]
-
-    def save_crew_records(records):
-        try:
-            with open(CREW_DATA_FILE, "w", encoding="utf-8") as f:
-                json.dump({"records": records}, f, ensure_ascii=False, indent=2)
-            return True
-        except Exception as e:
-            st.error(f"❌ 保存失败：{e}")
-            return False
-
-    def load_crew_records():
-        if os.path.exists(CREW_DATA_FILE):
-            try:
-                with open(CREW_DATA_FILE, "r", encoding="utf-8") as f:
-                    data = json.load(f)
-                records = data.get("records", [])
-                if isinstance(records, list):
-                    return records
-            except Exception:
-                pass
-        records = build_default_crew_records()
-        save_crew_records(records)
-        return records
-
-    if "crew_records" not in st.session_state:
-        st.session_state.crew_records = load_crew_records()
     if "crew_editor_version" not in st.session_state:
         st.session_state.crew_editor_version = 0
 
@@ -222,11 +194,7 @@ with tab1:
             return full_name
 
     def normalize_name(name):
-        """姓名规范化：去中文、去逗号、去多余空格、转小写、按单词排序。
-        这样以下写法都等价：
-            杨涛 / Tao, YANG  ↔  YANG Tao  ↔  Tao YANG  ↔  Tao, YANG
-            Herve Daniel, STAMM  ↔  Herve Daniel STAMM  ↔  STAMM Herve Daniel
-        """
+        """姓名规范化：去中文、去逗号、去多余空格、转小写、按单词排序。"""
         if not name:
             return ""
         name = re.sub(r'[\u4e00-\u9fff]+', '', name)
@@ -234,13 +202,10 @@ with tab1:
         return ' '.join(sorted(name.split()))
 
     def _split_crew_name(name_val):
-        """拆分复合姓名；分隔符支持 / | 、"""
         return [p.strip() for p in re.split(r'\s*[/|、]\s*', name_val) if p.strip()]
 
     def _find_crew_field(crew_name, field):
-        """从页面维护的机组信息表中查找指定字段。
-        同名多条记录时，取维护表中**最下面**（最新添加）的那条。
-        """
+        """从页面临时工作区中查找指定字段；同名多条时取最下面（最新）的那条。"""
         if not crew_name:
             return ""
         records = st.session_state.get("crew_records") or []
@@ -252,17 +217,15 @@ with tab1:
         target_norm = normalize_name(target)
 
         result = ""
-        for rec in records:  # 顺序遍历，最后一个匹配的生效
+        for rec in records:
             name_val = str(rec.get("姓名", "") or "").strip()
             if not name_val:
                 continue
             parts = _split_crew_name(name_val)
 
             matched = False
-            # 1) 整名直接相等
             if name_val == target:
                 matched = True
-            # 2) 拆分后逐个匹配（中文名精确、英文名规范化）
             if not matched:
                 for p in parts:
                     if p == target:
@@ -277,7 +240,7 @@ with tab1:
             if matched:
                 val = str(rec.get(field, "") or "").strip()
                 if val:
-                    result = val  # 不立即返回，让后面（更靠下）的记录覆盖
+                    result = val
         return result
 
     def find_contact(crew_name):
@@ -290,18 +253,12 @@ with tab1:
         return _find_crew_field(crew_name, "证件号码")
 
     def is_18digit_id_card(val):
-        """判断是否为 18 位身份证号码（17 位数字 + 数字/X 校验位）"""
         if not val:
             return False
         s = re.sub(r'\s+', '', str(val))
         return bool(re.match(r'^[0-9]{17}[0-9Xx]$', s))
 
     def resolve_crew_id_and_license(crew_name, fallback_passport=""):
-        """返回 (证件号码填表值, 执照号码填表值)：
-        · 证件号是 18 位身份证 → 证件号码和执照号码都填身份证号
-        · 否则 → 证件号码优先用维护表里的（没有则用 GD单 中的护照号），
-                 执照号码用维护表里的执照号码（如 蔡国俊 → 17203/1 FCL）
-        """
         id_val = find_id(crew_name)
         license_val = find_license(crew_name)
         if is_18digit_id_card(id_val):
@@ -342,11 +299,9 @@ with tab1:
         try:
             time_part = utc_str.replace('Z', '').strip()
             if len(time_part) == 4:
-                hour = int(time_part[:2])
-                minute = int(time_part[2:])
+                hour = int(time_part[:2]); minute = int(time_part[2:])
             elif len(time_part) == 3:
-                hour = int(time_part[:1])
-                minute = int(time_part[1:])
+                hour = int(time_part[:1]); minute = int(time_part[1:])
             else:
                 return "0000"
             day = int(re.search(r'\d+', date_str).group()) if re.search(r'\d+', date_str) else 1
@@ -354,9 +309,7 @@ with tab1:
                          "Jul":7,"Aug":8,"Sep":9,"Oct":10,"Nov":11,"Dec":12}
             month_str = re.search(r'[A-Za-z]{3}', date_str).group() if re.search(r'[A-Za-z]{3}', date_str) else "Jan"
             month = month_map.get(month_str[:3], 1)
-            year = 2026
-            dt = datetime(year, month, day, hour, minute)
-            dt_beijing = dt + timedelta(hours=8)
+            dt_beijing = datetime(2026, month, day, hour, minute) + timedelta(hours=8)
             return dt_beijing.strftime("%H%M")
         except:
             return "0000"
@@ -378,11 +331,9 @@ with tab1:
         try:
             time_part = utc_time_str.replace('Z', '').strip()
             if len(time_part) == 4:
-                hour = int(time_part[:2])
-                minute = int(time_part[2:])
+                hour = int(time_part[:2]); minute = int(time_part[2:])
             elif len(time_part) == 3:
-                hour = int(time_part[:1])
-                minute = int(time_part[1:])
+                hour = int(time_part[:1]); minute = int(time_part[1:])
             else:
                 return parse_date_display(date_str)
             day = int(re.search(r'\d+', date_str).group())
@@ -390,9 +341,7 @@ with tab1:
             month_map = {"Jan":1,"Feb":2,"Mar":3,"Apr":4,"May":5,"Jun":6,
                          "Jul":7,"Aug":8,"Sep":9,"Oct":10,"Nov":11,"Dec":12}
             month = month_map.get(month_str[:3], 1)
-            year = 2026
-            dt_utc = datetime(year, month, day, hour, minute)
-            dt_beijing = dt_utc + timedelta(hours=8)
+            dt_beijing = datetime(2026, month, day, hour, minute) + timedelta(hours=8)
             return f"{dt_beijing.month}月{dt_beijing.day}日"
         except:
             return parse_date_display(date_str)
@@ -409,15 +358,13 @@ with tab1:
         text = input_text.strip()
         lines = [line.strip() for line in text.split('\n') if line.strip()]
         if len(lines) >= 2:
-            first_line = lines[0]
-            second_line = lines[1]
+            first_line = lines[0]; second_line = lines[1]
             flight_number = first_line.split()[0] if first_line.split() else None
             if not flight_number:
                 return None
             parts = re.split(r'\s*[-—–]\s*', second_line)
             if len(parts) >= 2:
-                dep_airport = parts[0].strip()
-                arr_airport = parts[1].strip()
+                dep_airport = parts[0].strip(); arr_airport = parts[1].strip()
                 if dep_airport and arr_airport:
                     return f"{date_display} {flight_number} {dep_airport}-{arr_airport}"
         else:
@@ -429,15 +376,11 @@ with tab1:
             remaining = re.sub(r'\s*\+\s*\d+\s*', '', remaining).strip()
             airport_parts = re.split(r'\s*[-—–]\s*', remaining)
             if len(airport_parts) >= 2:
-                dep_airport = airport_parts[-2].strip()
-                arr_airport = airport_parts[-1].strip()
+                dep_airport = airport_parts[-2].strip(); arr_airport = airport_parts[-1].strip()
                 ch_dep = re.findall(r'[\u4e00-\u9fff]+', dep_airport)
                 ch_arr = re.findall(r'[\u4e00-\u9fff]+', arr_airport)
                 if ch_dep and ch_arr:
-                    dep_airport = ''.join(ch_dep)
-                    arr_airport = ''.join(ch_arr)
-                elif ch_dep and not ch_arr:
-                    pass
+                    dep_airport = ''.join(ch_dep); arr_airport = ''.join(ch_arr)
                 if dep_airport and arr_airport:
                     return f"{date_display} {flight_number} {dep_airport}-{arr_airport}"
         return None
@@ -450,15 +393,13 @@ with tab1:
         time_pattern = r'(\d{1,2}:\d{2})\s*[-—–]\s*(\d{1,2}:\d{2})'
         time_match = re.search(time_pattern, text)
         if time_match:
-            dep_time = time_match.group(1).replace(':', '')
-            arr_time = time_match.group(2).replace(':', '')
+            dep_time = time_match.group(1).replace(':', ''); arr_time = time_match.group(2).replace(':', '')
             remaining = re.sub(time_pattern, '', text).strip()
         else:
             time_pattern2 = r'(\d{1,2}:\d{2})\s+(\d{1,2}:\d{2})'
             time_match2 = re.search(time_pattern2, text)
             if time_match2:
-                dep_time = time_match2.group(1).replace(':', '')
-                arr_time = time_match2.group(2).replace(':', '')
+                dep_time = time_match2.group(1).replace(':', ''); arr_time = time_match2.group(2).replace(':', '')
                 remaining = re.sub(time_pattern2, '', text).strip()
             else:
                 return input_text
@@ -466,13 +407,11 @@ with tab1:
         airport_pattern = r'(.+?)\s*[-—–]\s*(.+)'
         airport_match = re.search(airport_pattern, remaining)
         if airport_match:
-            dep_airport = airport_match.group(1).strip()
-            arr_airport = airport_match.group(2).strip()
+            dep_airport = airport_match.group(1).strip(); arr_airport = airport_match.group(2).strip()
             def extract_chinese(text):
                 chinese = re.findall(r'[\u4e00-\u9fff]+', text)
                 return ''.join(chinese) if chinese else text
-            dep_airport = extract_chinese(dep_airport)
-            arr_airport = extract_chinese(arr_airport)
+            dep_airport = extract_chinese(dep_airport); arr_airport = extract_chinese(arr_airport)
             if dep_airport and arr_airport:
                 return f"{date_display} {dep_airport}{dep_time}-{arr_time}{arr_airport}"
         return input_text
@@ -496,8 +435,7 @@ with tab1:
                             data["flt"] = parts[1]
                     elif "AC TYPE:" in val:
                         data["ac_type_raw"] = get_value_right(ws, cell.row, cell.column+1)
-                        reg = data.get("reg", "")
-                        data["ac_type"] = correct_aircraft_type(reg, data["ac_type_raw"])
+                        data["ac_type"] = correct_aircraft_type(data.get("reg", ""), data["ac_type_raw"])
                     elif "FROM:" in val:
                         data["from"] = get_value_right(ws, cell.row, cell.column+1)
                     elif "TO:" in val:
@@ -509,54 +447,46 @@ with tab1:
                             parts = date_time.split()
                             data["utc_time"] = parts[0] if len(parts) > 0 else ""
                             data["date_str"] = parts[1] if len(parts) > 1 else ""
-        crew_data = []
-        passenger_data = []
-        section = None
+        crew_data = []; passenger_data = []; section = None
         for row in ws.iter_rows(min_row=1):
             for cell in row:
                 if cell.value and isinstance(cell.value, str):
                     val = cell.value.strip()
                     if "CREW MANIFEST" in val:
-                        section = 'crew'
-                        break
+                        section = 'crew'; break
                     elif "PASSENGER MANIFEST" in val:
-                        section = 'passenger'
-                        break
+                        section = 'passenger'; break
                     elif "CARGO MANIFEST" in val or "DECLARATION OF HEALTH" in val:
-                        section = None
-                        break
+                        section = None; break
             if section == 'crew':
                 first_cell = row[0]
-                if first_cell.value and isinstance(first_cell.value, (int, float)):
-                    if len(row) >= 7:
-                        name_cell = row[1]
-                        if name_cell.value and isinstance(name_cell.value, str):
-                            crew_data.append({
-                                "name": name_cell.value.strip(),
-                                "dob": row[2].value if row[2].value else "",
-                                "gender": row[3].value if row[3].value else "",
-                                "nationality": row[4].value if row[4].value else "",
-                                "doc_type": row[5].value if row[5].value else "",
-                                "passport_no": row[6].value if row[6].value else "",
-                            })
+                if first_cell.value and isinstance(first_cell.value, (int, float)) and len(row) >= 7:
+                    name_cell = row[1]
+                    if name_cell.value and isinstance(name_cell.value, str):
+                        crew_data.append({
+                            "name": name_cell.value.strip(),
+                            "dob": row[2].value if row[2].value else "",
+                            "gender": row[3].value if row[3].value else "",
+                            "nationality": row[4].value if row[4].value else "",
+                            "doc_type": row[5].value if row[5].value else "",
+                            "passport_no": row[6].value if row[6].value else "",
+                        })
             elif section == 'passenger':
                 first_cell = row[0]
-                if first_cell.value and isinstance(first_cell.value, (int, float)):
-                    if len(row) >= 7:
-                        name_cell = row[1]
-                        if name_cell.value and isinstance(name_cell.value, str):
-                            passenger_data.append({
-                                "name": name_cell.value.strip(),
-                                "dob": row[2].value if row[2].value else "",
-                                "gender": row[3].value if row[3].value else "",
-                                "nationality": row[4].value if row[4].value else "",
-                                "doc_type": row[5].value if row[5].value else "",
-                                "passport_no": row[6].value if row[6].value else "",
-                            })
+                if first_cell.value and isinstance(first_cell.value, (int, float)) and len(row) >= 7:
+                    name_cell = row[1]
+                    if name_cell.value and isinstance(name_cell.value, str):
+                        passenger_data.append({
+                            "name": name_cell.value.strip(),
+                            "dob": row[2].value if row[2].value else "",
+                            "gender": row[3].value if row[3].value else "",
+                            "nationality": row[4].value if row[4].value else "",
+                            "doc_type": row[5].value if row[5].value else "",
+                            "passport_no": row[6].value if row[6].value else "",
+                        })
         return data, crew_data, passenger_data
 
     def _fill_one_crew_row(ws, label_keyword, crew):
-        """在模板中查找包含 label_keyword 的行，填入机组成员信息"""
         for row in ws.iter_rows(min_row=1, max_row=50):
             for cell in row:
                 if cell.value and isinstance(cell.value, str) and label_keyword in cell.value:
@@ -574,17 +504,12 @@ with tab1:
         return False
 
     def _fill_empty_crew_row(ws, label_keyword):
-        """找不到对应人员时，填「无」"""
         for row in ws.iter_rows(min_row=1, max_row=50):
             for cell in row:
                 if cell.value and isinstance(cell.value, str) and label_keyword in cell.value:
                     row_num = cell.row
-                    safe_set_cell_value(ws, row_num, 2, "无")
-                    safe_set_cell_value(ws, row_num, 3, "")
-                    safe_set_cell_value(ws, row_num, 4, "")
-                    safe_set_cell_value(ws, row_num, 5, "")
-                    safe_set_cell_value(ws, row_num, 6, "")
-                    safe_set_cell_value(ws, row_num, 7, "")
+                    for c in range(2, 8):
+                        safe_set_cell_value(ws, row_num, c, "无" if c == 2 else "")
                     return True
         return False
 
@@ -603,8 +528,7 @@ with tab1:
             for row in ws.iter_rows(min_row=1, max_row=10):
                 for cell in row:
                     if cell.value and isinstance(cell.value, str) and "飞行目的" in cell.value:
-                        target_row = cell.row + 1
-                        safe_set_cell_value(ws, target_row, 2, "调机")
+                        safe_set_cell_value(ws, cell.row + 1, 2, "调机")
                         break
                 else:
                     continue
@@ -614,13 +538,9 @@ with tab1:
         for row in ws.iter_rows(min_row=1, max_row=20):
             for cell in row:
                 if cell.value and isinstance(cell.value, str):
-                    val = cell.value.strip()
-                    if val in ["机型", "注册号", "航班号", "航班行程"]:
-                        info_row = cell.row
-                        break
-            if info_row:
-                break
-
+                    if cell.value.strip() in ["机型", "注册号", "航班号", "航班行程"]:
+                        info_row = cell.row; break
+            if info_row: break
         if info_row:
             data_row = info_row + 1
             safe_set_cell_value(ws, data_row, 2, data.get("ac_type", ""))
@@ -628,17 +548,12 @@ with tab1:
             safe_set_cell_value(ws, data_row, 4, data.get("flt", ""))
             safe_set_cell_value(ws, data_row, 5, route_display if route_display else "")
 
-        # 机长
         if len(crew_list) >= 1:
             _fill_one_crew_row(ws, "机长", crew_list[0])
-
-        # 副驾驶
         if len(crew_list) >= 2:
             _fill_one_crew_row(ws, "副驾驶", crew_list[1])
 
-        # 乘务 / 机务（按性别自动分配）
-        cabin_crew = None
-        mechanic = None
+        cabin_crew = None; mechanic = None
         for i in range(2, len(crew_list)):
             crew = crew_list[i]
             gender = str(crew.get("gender", "")).strip()
@@ -646,14 +561,12 @@ with tab1:
                 cabin_crew = crew
             elif gender in ["男", "Male", "M"] and mechanic is None:
                 mechanic = crew
-            if cabin_crew and mechanic:
-                break
+            if cabin_crew and mechanic: break
 
         if cabin_crew:
             _fill_one_crew_row(ws, "乘务", cabin_crew)
         else:
             _fill_empty_crew_row(ws, "乘务")
-
         if mechanic:
             _fill_one_crew_row(ws, "机务", mechanic)
         else:
@@ -665,19 +578,14 @@ with tab1:
                 if cell.value and isinstance(cell.value, str):
                     val = cell.value.strip()
                     if "姓名" in val and "性别" in val and "出生日期" in val:
-                        passenger_start_row = cell.row + 1
-                        break
-            if passenger_start_row:
-                break
-
+                        passenger_start_row = cell.row + 1; break
+            if passenger_start_row: break
         if passenger_start_row is None:
             for row in ws.iter_rows(min_row=1, max_row=100):
                 for cell in row:
                     if cell.value and isinstance(cell.value, str) and "乘客信息" in cell.value:
-                        passenger_start_row = cell.row + 2
-                        break
-                if passenger_start_row:
-                    break
+                        passenger_start_row = cell.row + 2; break
+                if passenger_start_row: break
 
         if passenger_start_row:
             for i, pax in enumerate(passenger_list):
@@ -689,16 +597,12 @@ with tab1:
                 safe_set_cell_value(ws, row_num, 3, pax.get("dob", ""))
                 safe_set_cell_value(ws, row_num, 4, get_nation_name(pax.get("nationality", "")))
                 doc_type = pax.get("doc_type", "")
-                if pd.notna(doc_type) and str(doc_type).strip():
-                    doc_type_clean = parse_document_type("", doc_type)
-                else:
-                    doc_type_clean = parse_document_type(pax.get("passport_no", ""), "")
+                doc_type_clean = parse_document_type("", doc_type) if (pd.notna(doc_type) and str(doc_type).strip()) else parse_document_type(pax.get("passport_no", ""), "")
                 safe_set_cell_value(ws, row_num, 5, doc_type_clean)
                 safe_set_cell_value(ws, row_num, 6, pax.get("passport_no", ""))
 
         output = BytesIO()
-        wb.save(output)
-        output.seek(0)
+        wb.save(output); output.seek(0)
         return output
 
     # ---------- 功能1 UI ----------
@@ -712,22 +616,16 @@ with tab1:
         try:
             data, crew_list, passenger_list = parse_general_declaration(data_file)
             st.success(f"✅ 解析成功：机组 {len(crew_list)} 人，乘客 {len(passenger_list)} 人")
-
             if crew_list:
                 crew_names = [extract_chinese_name(crew["name"]) for crew in crew_list if crew.get("name")]
                 st.write("👨‍✈️ 机组名单：", ", ".join(crew_names) if crew_names else "无")
 
-            from_code = data.get("from", "")
-            to_code = data.get("to", "")
-            date_str = data.get("date_str", "")
-            utc_time = data.get("utc_time", "")
+            from_code = data.get("from", ""); to_code = data.get("to", "")
+            date_str = data.get("date_str", ""); utc_time = data.get("utc_time", "")
             default_route = ""
             date_display = get_beijing_date_display(utc_time, date_str) if date_str else ""
             if date_str and from_code and to_code:
-                if utc_time:
-                    bj_time = parse_utc_to_beijing(utc_time, date_str)
-                else:
-                    bj_time = "0000"
+                bj_time = parse_utc_to_beijing(utc_time, date_str) if utc_time else "0000"
                 default_route = f"{date_display} {from_code} {bj_time} XXXX {to_code}"
             else:
                 default_route = f"{from_code}-{to_code}" if from_code and to_code else ""
@@ -782,19 +680,18 @@ with tab1:
 
     if st.session_state.get("show_crew_panel", False):
         st.subheader("👥 机组人员信息维护")
+        st.warning(
+            "⚠️ **这里的修改只对当前会话生效**（页面刷新 / 重新部署后会恢复成代码里的版本）。\n\n"
+            "**想长期保存**：改完后点最下方的「📋 导出更新后的名单」，把生成的内容复制发我，"
+            "我更新到代码里 → 你 push 到 GitHub → Streamlit 自动重新部署，全网生效。"
+        )
+
         st.caption(
-            "📌 **姓名列格式**：「中文名 / 英文名」（英文名可以是多种写法，用 `/` 分隔），只有一个名字时只写一个。\n\n"
-            "**匹配规则**（系统会自动归一化，以下写法都视为同一个人）：\n"
-            "- 中文名精确匹配：`杨涛` == `杨涛`\n"
-            "- 英文名去逗号、转小写、按单词排序后匹配：\n"
-            "  · `Tao, YANG` == `YANG Tao` == `Tao YANG`\n"
-            "  · `Herve Daniel, STAMM` == `Herve Daniel STAMM` == `STAMM Herve Daniel`\n\n"
-            "**执照号码规则**：\n"
-            "- 证件号码是 18 位身份证 → 执照号码自动填成同一个身份证号\n"
-            "- 否则 → 执照号码填本表里填的值（如 `蔡国俊` 的证件号 `360019647` 不是 18 位，执照号就用 `17203/1 FCL`）\n\n"
-            "**同名优先**：若同一姓名在表中出现多次，会取**最下面**（最新添加）的那条。\n\n"
-            "操作：直接点单元格修改；在最后一行输入内容即可新增；选中行后按 Delete 键删除。"
-            f"改完点「💾 保存修改」，数据会写入 `{CREW_DATA_FILE}`，下次打开页面自动加载，无需再改代码。"
+            "**姓名列格式**：`中文名 / 英文名`，多个英文写法用 `/` 分隔；只有单一名字时只写一个。\n"
+            "英文名匹配自动忽略逗号、大小写、词序（`Tao, YANG` = `YANG Tao` = `Tao YANG`）。\n\n"
+            "**执照号码规则**：证件号是 18 位身份证 → 执照号自动用身份证号；否则用你填的执照号。\n\n"
+            "**同名优先**：同一姓名出现多次时，取表格里**最下面**那条。\n\n"
+            "操作：直接点单元格改；最后一行输入内容即可新增；选中行按 Delete 删除。"
         )
 
         df_crew = pd.DataFrame(st.session_state.crew_records)
@@ -817,9 +714,9 @@ with tab1:
             },
         )
 
-        col_save, col_reset, col_count = st.columns([1, 1, 3])
-        with col_save:
-            if st.button("💾 保存修改", type="primary", use_container_width=True, key="save_crew_records"):
+        col_apply, col_reset, col_count = st.columns([1, 1, 3])
+        with col_apply:
+            if st.button("✅ 应用到本次会话", type="primary", use_container_width=True, key="apply_crew_records"):
                 new_records = edited_df.fillna("").astype(str).to_dict("records")
                 new_records = [
                     {k: str(r.get(k, "")).strip() for k in CREW_COLUMNS}
@@ -827,20 +724,45 @@ with tab1:
                     if any(str(r.get(k, "")).strip() for k in CREW_COLUMNS)
                 ]
                 st.session_state.crew_records = new_records
-                if save_crew_records(new_records):
-                    st.session_state.crew_editor_version += 1
-                    st.toast(f"✅ 已保存 {len(new_records)} 条机组信息", icon="✅")
-                    st.rerun()
-        with col_reset:
-            if st.button("♻️ 恢复内置默认", use_container_width=True, key="reset_crew_records"):
-                default_records = build_default_crew_records()
-                st.session_state.crew_records = default_records
-                save_crew_records(default_records)
                 st.session_state.crew_editor_version += 1
-                st.toast("已恢复为内置默认数据", icon="♻️")
+                st.toast(f"✅ 已应用 {len(new_records)} 条机组信息（仅当前会话）", icon="✅")
+                st.rerun()
+        with col_reset:
+            if st.button("↩️ 恢复为代码版本", use_container_width=True, key="reset_crew_records"):
+                st.session_state.crew_records = [
+                    {"姓名": n, "联系方式": c, "执照号码": l, "证件号码": i}
+                    for n, c, l, i in BUILTIN_CREW_DATA
+                ]
+                st.session_state.crew_editor_version += 1
+                st.toast("已恢复为代码内置版本", icon="↩️")
                 st.rerun()
         with col_count:
-            st.caption(f"当前共 {len(st.session_state.crew_records)} 条记录")
+            st.caption(f"当前会话共 {len(st.session_state.crew_records)} 条记录")
+
+        # ---------- 导出面板 ----------
+        st.markdown("---")
+        st.markdown("### 📋 导出更新后的名单")
+        st.caption("复制下面的内容发给我，我直接替换代码里的 `BUILTIN_CREW_DATA`，你 push 后就长期生效。")
+
+        # 生成可直接粘贴到代码里的格式
+        export_lines = []
+        for rec in st.session_state.crew_records:
+            n = str(rec.get("姓名", "") or "")
+            c = str(rec.get("联系方式", "") or "")
+            l = str(rec.get("执照号码", "") or "")
+            i = str(rec.get("证件号码", "") or "")
+            export_lines.append(f'        ("{n}", "{c}", "{l}", "{i}"),')
+        export_text = "    BUILTIN_CREW_DATA = [\n" + "\n".join(export_lines) + "\n    ]"
+
+        st.code(export_text, language="python")
+
+        st.download_button(
+            label="⬇️ 下载为 .txt 文件",
+            data=export_text.encode("utf-8"),
+            file_name="BUILTIN_CREW_DATA.txt",
+            mime="text/plain",
+            key="download_crew_export",
+        )
 
 # ================================================================
 # 功能2：世界时行程（带记忆对比功能）
