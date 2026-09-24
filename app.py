@@ -1,4 +1,5 @@
 import streamlit as st
+import streamlit.components.v1 as components
 import pandas as pd
 from io import BytesIO
 from openpyxl import load_workbook
@@ -345,7 +346,6 @@ with tab1:
             flight_number = text.split()[0] if text.split() else None
             if not flight_number:
                 return None
-            # 支持 06:00 和 0600 两种时间格式
             time_pattern = (
                 r'(?<![A-Za-z0-9])(\d{1,2}:\d{2}|\d{4})(?![A-Za-z0-9])'
                 r'\s*[-—–]\s*'
@@ -369,7 +369,6 @@ with tab1:
         if not input_text or not input_text.strip():
             return input_text
         text = input_text.strip()
-        # 支持 06:00 / 0600 两种时间格式；前后 lookaround 避免误匹配航班号里的数字
         time_pattern = (
             r'(?<![A-Za-z0-9])(\d{1,2}:\d{2}|\d{4})(?![A-Za-z0-9])'
             r'\s*[-—–]\s*'
@@ -1018,6 +1017,7 @@ with tab1:
     else:
         st.info("👆 请同时上传 GD单 和 模板文件。")
 
+
 # ================================================================
 # 功能2：世界时行程（HTML/JS 沙箱版 + localStorage 持久化）
 # ================================================================
@@ -1468,7 +1468,6 @@ with tab2:
 </body>
 </html>
 """
-    import streamlit.components.v1 as components
     components.html(F_HTML, height=1300, scrolling=True)
 
 
