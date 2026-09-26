@@ -1030,36 +1030,38 @@ with tab2:
     <title>世界时行程转换</title>
     <script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
     <style>
-        body { font-family: -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif; margin: 12px; color:#333; font-size:15px; }
-        input[type=file] { padding: 6px; }
-        button { padding: 8px 14px; font-size: 13px; border-radius: 6px; border: 1px solid #ddd; background:#fff; cursor: pointer; margin-right: 6px; margin-top: 6px; }
+        body { font-family: -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif; margin: 12px; color:#333; font-size:16px; }
+        .upload-hint { font-size: 15px; color: #555; margin: 4px 0 6px 0; }
+        input[type=file] { padding: 6px; font-size: 15px; }
+        button { padding: 9px 16px; font-size: 15px; border-radius: 6px; border: 1px solid #ddd; background:#fff; cursor: pointer; margin-right: 6px; margin-top: 6px; }
         button:hover { background:#f5f5f5; }
-        .reg-block { margin-bottom: 18px; }
-        .reg-title { font-weight: bold; font-size: 16px; margin-bottom: 6px; }
-        .new-flag { color:#d32f2f; font-size: 0.9rem; margin-left:8px; font-weight: normal; }
+        .reg-block { margin-bottom: 20px; }
+        .reg-title { font-weight: bold; font-size: 19px; margin-bottom: 8px; }
+        .new-flag { color:#d32f2f; font-size: 1rem; margin-left:8px; font-weight: normal; }
         .seg-list {
             background:#f7f7f7; border: 1px solid #ddd; border-radius: 6px;
-            padding: 8px 12px; font-family: Consolas, "Courier New", monospace;
-            font-size: 14px; line-height: 1.8; color:#222;
+            padding: 10px 14px; font-family: Consolas, "Courier New", monospace;
+            font-size: 16px; line-height: 1.9; color:#222;
         }
-        .seg-line { padding: 2px 0; }
-        .status { color:#555; font-size: 14px; margin-left: 8px; }
+        .seg-line { padding: 3px 0; }
+        .status { color:#555; font-size: 15px; margin-left: 8px; }
         .error { color:#d32f2f; background:#ffebee; padding:8px; border-radius:4px; margin:6px 0; }
         .success { color:#2e7d32; background:#e8f5e9; padding:8px; border-radius:4px; margin:6px 0; }
         .info { color:#1976d2; background:#e3f2fd; padding:8px; border-radius:4px; margin:6px 0; }
         details { margin: 10px 0; padding: 8px; border: 1px solid #eee; border-radius: 4px; background:#fafafa; }
-        summary { cursor: pointer; font-weight: bold; padding: 4px 0; }
+        summary { cursor: pointer; font-weight: bold; padding: 4px 0; font-size: 16px; }
         ol { margin: 6px 0 6px 20px; padding: 0; }
-        li { margin: 2px 0; }
+        li { margin: 2px 0; font-size: 15px; }
         .full-text-box {
             background:#f5f5f5; padding:10px; border-radius:4px;
-            font-family: Consolas, "Courier New", monospace; font-size: 14px;
+            font-family: Consolas, "Courier New", monospace; font-size: 16px;
             white-space: pre; overflow-x: auto; border:1px solid #e0e0e0;
             max-height: 400px; overflow-y: auto;
         }
     </style>
 </head>
 <body>
+    <div class="upload-hint">📤 上传未来航段（北京时间）：</div>
     <input type="file" id="fileInput" accept=".xlsx,.xls">
     <div id="status"></div>
 
@@ -1079,12 +1081,14 @@ with tab2:
     </div>
 
     <script>
+        // ======================= 常量 =======================
         const MONTHS = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
         const PRIORITY = ['B652Q', 'B65AP', 'B652S', 'MLLIN', 'N88AY', 'B652R'];
         const HISTORY_KEY = 'worldtime_history_v2';
         const LAST_PLANS_KEY = 'worldtime_last_plans_v2';
         const LAST_FILE_KEY = 'worldtime_last_file_v2';
 
+        // ======================= localStorage 封装 =======================
         function loadHistory() {
             try {
                 const raw = localStorage.getItem(HISTORY_KEY);
@@ -1107,6 +1111,7 @@ with tab2:
             try { localStorage.setItem(key, JSON.stringify(val)); } catch (e) {}
         }
 
+        // ======================= 基础工具 =======================
         function pad2(n) { return String(n).padStart(2, '0'); }
         function escapeHtml(s) {
             return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -1150,14 +1155,17 @@ with tab2:
             const parts = timeStr.split(':');
             const h = parseInt(parts[0]);
             const m = parseInt(parts[1]);
+
             let total = h * 60 + m - 8 * 60;
             let dayOff = 0;
             while (total < 0) { total += 24 * 60; dayOff--; }
             while (total >= 24 * 60) { total -= 24 * 60; dayOff++; }
             const uh = Math.floor(total / 60);
             const um = total % 60;
+
             const dd = new Date(d.getFullYear(), d.getMonth(), d.getDate());
             dd.setDate(dd.getDate() + dayOff);
+
             return {
                 day: dd.getDate(),
                 month: dd.getMonth() + 1,
@@ -1175,6 +1183,7 @@ with tab2:
             return pad2(u.day) + MONTHS[u.month - 1] + ' ' + pad2(u.hours) + pad2(u.minutes) + 'Z';
         }
 
+        // ======================= 核心处理 =======================
         function processRows(rows) {
             let headerIdx = -1;
             for (let i = 0; i < Math.min(rows.length, 10); i++) {
@@ -1187,6 +1196,7 @@ with tab2:
             if (headerIdx === -1) {
                 return {error: '未找到表头行（需包含：飞机注册号、出发地、到达地、计划出发）'};
             }
+
             const headers = rows[headerIdx].map(h => String(h).trim());
             function findCol(cands) {
                 for (const c of cands) {
@@ -1200,6 +1210,7 @@ with tab2:
                 }
                 return -1;
             }
+
             const colReg      = findCol(['飞机注册号', '注册号', '机号']);
             const colDep      = findCol(['出发地']);
             const colArr      = findCol(['到达地']);
@@ -1208,6 +1219,7 @@ with tab2:
             const colArrDate  = findCol(['到达日期']);
             const colArrTime  = findCol(['预计到达']);
             const colPurpose  = findCol(['用途']);
+
             const required = {
                 '飞机注册号': colReg, '出发地': colDep, '到达地': colArr,
                 '出发日期': colDepDate, '计划出发': colDepTime,
@@ -1216,35 +1228,46 @@ with tab2:
             for (const name in required) {
                 if (required[name] === -1) return {error: '缺少列：' + name};
             }
+
             const plans = {};
+
             for (let i = headerIdx + 1; i < rows.length; i++) {
                 const r = rows[i];
                 if (!r || r.length === 0) continue;
                 const get = idx => (idx >= 0 && idx < r.length) ? r[idx] : '';
+
                 const dep       = get(colDep);
                 const arr       = get(colArr);
                 const depDate   = get(colDepDate);
                 const depTimeRaw = get(colDepTime);
                 const arrDate   = get(colArrDate);
                 const arrTimeRaw = get(colArrTime);
+
                 if (dep === '' || arr === '' || depDate === '' || depTimeRaw === '') continue;
+
                 const depTimeStr = parseTime(depTimeRaw);
                 const arrTimeStr = parseTime(arrTimeRaw);
                 if (!depTimeStr || !arrTimeStr) continue;
+
                 const depUtc = toUTCLabel(depDate, depTimeStr);
                 const arrUtc = toUTCLabel(arrDate, arrTimeStr);
                 if (!depUtc || !arrUtc) continue;
+
                 let reg = get(colReg);
                 if (reg === '' || reg == null) reg = 'N/A';
                 else reg = String(reg).trim();
+
                 const use = String(get(colPurpose) || '');
                 const flightType = use.indexOf('调机') !== -1 ? 'FERRY' : 'PAX';
+
                 const line = 'ETD ' + String(dep).trim() + ' ' + formatLabel(depUtc) +
                              ' // ETA ' + String(arr).trim() + ' ' + formatLabel(arrUtc) +
                              '  ' + flightType;
+
                 if (!plans[reg]) plans[reg] = [];
                 plans[reg].push({sortKey: depUtc.sortKey, line: line});
             }
+
             const result = {};
             for (const reg in plans) {
                 plans[reg].sort((a, b) => a.sortKey - b.sortKey);
@@ -1283,22 +1306,27 @@ with tab2:
             return changes;
         }
 
+        // ======================= 渲染 =======================
         function renderPlans(plans, changes, isRestored) {
             const container = document.getElementById('plans');
             container.innerHTML = '';
             let fullText = '';
+
             for (const reg in plans) {
                 const text = plans[reg];
                 const lines = text.split('\n');
                 const routes = lines.filter(l => l !== reg);
                 const hasChanges = !isRestored && routes.some(line => changes[reg + '\u0001' + line]);
+
                 const block = document.createElement('div');
                 block.className = 'reg-block';
+
                 const titleDiv = document.createElement('div');
                 titleDiv.className = 'reg-title';
                 titleDiv.innerHTML = '✈️ ' + escapeHtml(reg) +
                     (hasChanges ? '<span class="new-flag">🔴 有新增或变更</span>' : '');
                 block.appendChild(titleDiv);
+
                 const segList = document.createElement('div');
                 segList.className = 'seg-list';
                 routes.forEach(line => {
@@ -1308,6 +1336,7 @@ with tab2:
                     segList.appendChild(lineDiv);
                 });
                 block.appendChild(segList);
+
                 const copyBtn = document.createElement('button');
                 copyBtn.textContent = '📋 复制该飞机';
                 copyBtn.onclick = () => {
@@ -1322,9 +1351,12 @@ with tab2:
                     });
                 };
                 block.appendChild(copyBtn);
+
                 container.appendChild(block);
+
                 fullText += reg + '\n' + routes.join('\n') + '\n\n';
             }
+
             document.getElementById('fullTextBox').textContent = fullText.trim();
         }
 
@@ -1353,9 +1385,11 @@ with tab2:
             document.body.removeChild(ta);
         }
 
+        // ======================= 主流程 =======================
         function handleFile(file) {
             const status = document.getElementById('status');
             status.innerHTML = '<div class="info">⏳ 正在读取文件...</div>';
+
             const reader = new FileReader();
             reader.onload = (ev) => {
                 try {
@@ -1363,22 +1397,28 @@ with tab2:
                     const wb = XLSX.read(data, { type: 'array', cellDates: true });
                     const ws = wb.Sheets[wb.SheetNames[0]];
                     const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '', raw: true });
+
                     const result = processRows(rows);
                     if (result.error) {
                         status.innerHTML = '<div class="error">❌ ' + escapeHtml(result.error) + '</div>';
                         return;
                     }
+
                     const newPlans = result.plans;
                     const sortedNewPlans = sortPlans(newPlans);
+
                     const history = loadHistory();
                     let oldPlans = {};
                     if (history.records.length > 0) {
                         oldPlans = history.records[history.records.length - 1].data || {};
                     }
+
                     const changes = diffPlans(oldPlans, newPlans);
+
                     const now = new Date();
                     const timestamp = now.getFullYear() + '-' + pad2(now.getMonth()+1) + '-' + pad2(now.getDate()) +
                                       ' ' + pad2(now.getHours()) + ':' + pad2(now.getMinutes()) + ':' + pad2(now.getSeconds());
+
                     history.records.push({
                         timestamp: timestamp,
                         filename: file.name,
@@ -1388,11 +1428,13 @@ with tab2:
                         history.records = history.records.slice(-20);
                     }
                     saveHistory(history);
+
                     saveJSON(LAST_PLANS_KEY, sortedNewPlans);
                     saveJSON(LAST_FILE_KEY, {name: file.name, timestamp: timestamp});
+
                     document.getElementById('result').style.display = 'block';
                     status.innerHTML = '<div class="success">✅ 文件读取成功：' +
-                        escapeHtml(file.name) + '（历史累计 ' + history.records.length + ' 条）</div>';
+                        escapeHtml(file.name) + '（' + timestamp + '，历史累计 ' + history.records.length + ' 条）</div>';
                     renderPlans(sortedNewPlans, changes, false);
                     renderHistory(history);
                 } catch (err) {
@@ -1407,6 +1449,7 @@ with tab2:
             const lastPlans = loadJSON(LAST_PLANS_KEY);
             const lastFile = loadJSON(LAST_FILE_KEY);
             const history = loadHistory();
+
             if (lastPlans && Object.keys(lastPlans).length > 0) {
                 document.getElementById('result').style.display = 'block';
                 const status = document.getElementById('status');
