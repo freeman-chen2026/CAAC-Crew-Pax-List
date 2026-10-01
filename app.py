@@ -1402,8 +1402,8 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
     PC_APPROVAL_RE = re.compile(
         r"^(?P<reg>[A-Z0-9\-]+)\s+"
         r"(?P<second>[A-Z0-9]+)\s+"
-        r"(?P<dep>[A-Z]{4})(?P<dep_time>\d{4})\s+"
-        r"(?P<arr_time>\d{4})(?P<arr>[A-Z]{4})\s+"
+        r"(?P<dep>[A-Z]{4})\s*(?P<dep_time>\d{4})\s+"
+        r"(?P<arr_time>\d{4})\s*(?P<arr>[A-Z]{4})\s+"
         r"ON\s+(?P<date>\d{2}[A-Z]{3}\d{2,4})\s+"
         r"(?P<rest>.+)$",
         re.IGNORECASE,
