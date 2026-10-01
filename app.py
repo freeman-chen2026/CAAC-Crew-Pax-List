@@ -1,20 +1,36 @@
+# -*- coding: utf-8 -*-
+"""
+备案表 / 世界时行程 / 航路处理 / 批复核对
+"""
+
 import streamlit as st
 import streamlit.components.v1 as components
 import pandas as pd
 from io import BytesIO
 from openpyxl import load_workbook
+from docx import Document
+from docx.oxml import OxmlElement
+from docx.oxml.ns import qn
 import re
+import csv
+import copy
+import datetime as _pcdt
 from datetime import datetime, timedelta
 import traceback
 import json
 import os
 
 # ---------- 页面设置 ----------
-st.set_page_config(page_title="备案表&世界时行程&航路处理", layout="wide")
-st.title("🛫 备案表 / 世界时行程 / 航路处理")
+st.set_page_config(page_title="备案表&世界时行程&航路处理&批复核对", layout="wide")
+st.title("🛫 备案表 / 世界时行程 / 航路处理 / 批复核对")
 
 # ---------- 创建选项卡 ----------
-tab1, tab2, tab3 = st.tabs(["📋 功能1：备案表生成", "🌐 功能2：世界时行程", "✈️ 功能3：航路处理工具"])
+tab1, tab2, tab3, tab4 = st.tabs([
+    "📋 功能1：备案表生成",
+    "🌐 功能2：世界时行程",
+    "✈️ 功能3：航路处理工具",
+    "🔍 功能4：批复核对",
+])
 
 # ================================================================
 # 功能1：备案表生成
@@ -22,9 +38,7 @@ tab1, tab2, tab3 = st.tabs(["📋 功能1：备案表生成", "🌐 功能2：�
 with tab1:
     st.markdown("上传 GD单 和模板，自动生成备案表（联系方式、执照号码及证件号码已内置）。")
 
-    # ---------- 内置机组信息（唯一真源） ----------
     BUILTIN_CREW_DATA = [
-        # (姓名, 联系方式, 执照号码, 证件号码)
         ("庚凡", "139 2463 9747", "430104197901184015", "430104197901184015"),
         ("张永一 / Yongyi ZHANG", "139 0125 9544", "110102196605202336", "110102196605202336"),
         ("梅峰 / Feng MEI", "135 0967 8127", "17205/1 FCL", "510107197911242636"),
@@ -141,7 +155,6 @@ with tab1:
     CREW_COLUMNS = ["姓名", "联系方式", "执照号码", "证件号码"]
     CREW_FILL_COLUMNS = ["职务", "姓名", "性别", "出生日期", "证件号码", "执照号码", "联系方式"]
 
-    # ---------- 国籍映射 ----------
     NATION_MAP = {
         "CHN": "中国", "HKG": "香港", "DEU": "德国", "USA": "美国", "GBR": "英国",
         "FRA": "法国", "RUS": "俄罗斯", "JPN": "日本", "KOR": "韩国", "SGP": "新加坡",
@@ -155,7 +168,6 @@ with tab1:
         "TWN": "中国台湾", "MAC": "澳门"
     }
 
-    # ---------- 默认机型表（按注册号，不再依赖 GD 单） ----------
     AIRCRAFT_TYPE_MAP = {
         "B3926": "LJ60", "B652R": "GLF4", "B8105": "GLEX", "B8160": "GLF5",
         "B8262": "GLF4", "B8292": "GLF5", "B8309": "GLF5", "MLLIN": "GLEX",
@@ -166,10 +178,6 @@ with tab1:
     }
 
     def get_aircraft_type(reg, gd_type=""):
-        """
-        根据注册号查表确定机型；
-        查不到时才回退到 GD单 上的机型。
-        """
         reg_clean = str(reg).strip().upper() if reg else ""
         gd_type_str = str(gd_type).strip() if gd_type else ""
         if reg_clean and reg_clean in AIRCRAFT_TYPE_MAP:
@@ -177,7 +185,6 @@ with tab1:
             if gd_type_str and gd_type_str.upper() != mapped.upper():
                 st.info(f"✈️ 机型按注册号确定：{gd_type_str} → {mapped}（注册号 {reg_clean}）")
             return mapped
-        # 注册号不在表中 → 兜底使用 GD单机型
         return gd_type_str
 
     def get_nation_name(code):
@@ -437,7 +444,6 @@ with tab1:
                         if len(parts) > 1:
                             data["flt"] = parts[1]
                     elif "AC TYPE:" in val:
-                        # 先记录 GD单 原始机型，等注册号解析完后统一映射
                         data["ac_type_raw"] = get_value_right(ws, cell.row, cell.column+1)
                     elif "FROM:" in val:
                         data["from"] = get_value_right(ws, cell.row, cell.column+1)
@@ -450,7 +456,6 @@ with tab1:
                             parts = date_time.split()
                             data["utc_time"] = parts[0] if len(parts) > 0 else ""
                             data["date_str"] = parts[1] if len(parts) > 1 else ""
-        # ---------- 统一按注册号映射机型（不依赖 GD单） ----------
         data["ac_type"] = get_aircraft_type(
             data.get("reg", ""), data.get("ac_type_raw", "")
         )
@@ -494,7 +499,6 @@ with tab1:
                         })
         return data, crew_data, passenger_data
 
-    # ---------- 航段数据解析与匹配 ----------
     def _parse_hhmm(val):
         if val is None:
             return None
@@ -628,7 +632,6 @@ with tab1:
         arr_time_clean = arr_time.replace(':', '')
         return f"F {reg} {dep_time_clean} - {arr_time_clean}  {dep_city} - {arr_city}"
 
-    # ---------- 姓名单元格样式优化 ----------
     from copy import copy as _copy_style
 
     def _style_name_cell(ws, row, col, text):
@@ -799,7 +802,6 @@ with tab1:
         wb.save(output); output.seek(0)
         return output
 
-    # ---------- 功能1 UI ----------
     st.subheader("📂 上传文件")
     st.info("⚠️ 注意：模板文件必须是 **.xlsx** 格式（非 .xls）。联系方式、执照号码及证件号码已内置，机型已内置，无需额外上传。")
 
@@ -821,7 +823,6 @@ with tab1:
             data, crew_list, passenger_list = parse_general_declaration(data_file)
             st.success(f"✅ 解析成功：机组 {len(crew_list)} 人，乘客 {len(passenger_list)} 人")
 
-            # 显示最终采用的机型（按注册号映射）
             if data.get("ac_type") or data.get("reg"):
                 st.caption(
                     f"✈️ 注册号：**{data.get('reg', '')}** ｜ 机型：**{data.get('ac_type', '')}**"
@@ -829,7 +830,6 @@ with tab1:
                        if data.get('ac_type_raw') and data.get('ac_type_raw') != data.get('ac_type') else "")
                 )
 
-            # ---------- 本次机组信息（可编辑） ----------
             st.subheader("📋 本次机组信息（可编辑）")
             st.caption(
                 "系统已从内置名单匹配出**将要写入的证件号码 / 执照号码 / 联系方式**，"
@@ -928,7 +928,6 @@ with tab1:
                 if not edited_crew_df.empty else []
             )
 
-            # ---------- 乘客数量警告 ----------
             MAX_PAX_ROWS = 14
             if len(passenger_list) > MAX_PAX_ROWS:
                 extra = len(passenger_list) - MAX_PAX_ROWS
@@ -959,13 +958,11 @@ with tab1:
 
             st.markdown("---")
 
-            # ---------- 航班信息 ----------
             from_code = data.get("from", ""); to_code = data.get("to", "")
             date_str = data.get("date_str", ""); utc_time = data.get("utc_time", "")
             reg = data.get("reg", "")
             date_display = get_beijing_date_display(utc_time, date_str) if date_str else ""
 
-            # 优先从航段数据匹配
             default_route = ""
             matched_note = ""
             gd_date_parsed = _parse_gd_date(date_str)
@@ -987,7 +984,6 @@ with tab1:
                                 f"{from_code} → {to_code}，{date_hint}），已预填到下方输入框"
                             )
 
-            # 未匹配到则用 GD 单信息生成默认值
             if not default_route:
                 if date_str and from_code and to_code:
                     bj_time = parse_utc_to_beijing(utc_time, date_str) if utc_time else "0000"
@@ -1048,867 +1044,1503 @@ with tab1:
 
 
 # ================================================================
-# 功能2：世界时行程（HTML/JS 沙箱版 + localStorage 持久化）
+# 功能2：世界时行程
 # ================================================================
 with tab2:
-    F_HTML = r"""
-<!DOCTYPE html>
+    F_HTML = r"""<!DOCTYPE html>
 <html>
 <head>
-    <meta charset="UTF-8">
-    <title>世界时行程转换</title>
-    <script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
-    <style>
-        body { font-family: -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif; margin: 12px; color:#333; font-size:16px; }
-        .upload-hint { font-size: 15px; color: #555; margin: 4px 0 6px 0; }
-        input[type=file] { padding: 6px; font-size: 15px; }
-        button { padding: 9px 16px; font-size: 15px; border-radius: 6px; border: 1px solid #ddd; background:#fff; cursor: pointer; margin-right: 6px; margin-top: 6px; }
-        button:hover { background:#f5f5f5; }
-        .reg-block { margin-bottom: 20px; }
-        .reg-title { font-weight: bold; font-size: 19px; margin-bottom: 8px; }
-        .new-flag { color:#d32f2f; font-size: 1rem; margin-left:8px; font-weight: normal; }
-        .seg-list {
-            background:#f7f7f7; border: 1px solid #ddd; border-radius: 6px;
-            padding: 10px 14px; font-family: Consolas, "Courier New", monospace;
-            font-size: 16px; line-height: 1.9; color:#222;
-        }
-        .seg-line { padding: 3px 0; }
-        .status { color:#555; font-size: 15px; margin-left: 8px; }
-        .error { color:#d32f2f; background:#ffebee; padding:8px; border-radius:4px; margin:6px 0; }
-        .success { color:#2e7d32; background:#e8f5e9; padding:8px; border-radius:4px; margin:6px 0; }
-        .info { color:#1976d2; background:#e3f2fd; padding:8px; border-radius:4px; margin:6px 0; }
-        details { margin: 10px 0; padding: 8px; border: 1px solid #eee; border-radius: 4px; background:#fafafa; }
-        summary { cursor: pointer; font-weight: bold; padding: 4px 0; font-size: 16px; }
-        ol { margin: 6px 0 6px 20px; padding: 0; }
-        li { margin: 2px 0; font-size: 15px; }
-        .full-text-box {
-            background:#f5f5f5; padding:10px; border-radius:4px;
-            font-family: Consolas, "Courier New", monospace; font-size: 16px;
-            white-space: pre; overflow-x: auto; border:1px solid #e0e0e0;
-            max-height: 400px; overflow-y: auto;
-        }
-    </style>
+<meta charset="UTF-8"><title>世界时行程转换</title>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
+<style>
+body{font-family:-apple-system,"Segoe UI","Microsoft YaHei",sans-serif;margin:12px;color:#333;font-size:16px;}
+.upload-hint{font-size:15px;color:#555;margin:4px 0 6px 0;}
+input[type=file]{padding:6px;font-size:15px;}
+button{padding:9px 16px;font-size:15px;border-radius:6px;border:1px solid #ddd;background:#fff;cursor:pointer;margin-right:6px;margin-top:6px;}
+button:hover{background:#f5f5f5;}
+.reg-block{margin-bottom:20px;}
+.reg-title{font-weight:bold;font-size:19px;margin-bottom:8px;}
+.new-flag{color:#d32f2f;font-size:1rem;margin-left:8px;font-weight:normal;}
+.seg-list{background:#f7f7f7;border:1px solid #ddd;border-radius:6px;padding:10px 14px;font-family:Consolas,"Courier New",monospace;font-size:16px;line-height:1.9;color:#222;}
+.seg-line{padding:3px 0;}
+.status{color:#555;font-size:15px;margin-left:8px;}
+.error{color:#d32f2f;background:#ffebee;padding:8px;border-radius:4px;margin:6px 0;}
+.success{color:#2e7d32;background:#e8f5e9;padding:8px;border-radius:4px;margin:6px 0;}
+.info{color:#1976d2;background:#e3f2fd;padding:8px;border-radius:4px;margin:6px 0;}
+details{margin:10px 0;padding:8px;border:1px solid #eee;border-radius:4px;background:#fafafa;}
+summary{cursor:pointer;font-weight:bold;padding:4px 0;font-size:16px;}
+ol{margin:6px 0 6px 20px;padding:0;} li{margin:2px 0;font-size:15px;}
+.full-text-box{background:#f5f5f5;padding:10px;border-radius:4px;font-family:Consolas,"Courier New",monospace;font-size:16px;white-space:pre;overflow-x:auto;border:1px solid #e0e0e0;max-height:400px;overflow-y:auto;}
+</style>
 </head>
 <body>
-    <div class="upload-hint">📤 上传未来航段（北京时间）：</div>
-    <input type="file" id="fileInput" accept=".xlsx,.xls">
-    <div id="status"></div>
-
-    <div id="result" style="display:none;">
-        <div id="plans"></div>
-
-        <details>
-            <summary>📦 全部计划合并（点击展开）</summary>
-            <div class="full-text-box" id="fullTextBox"></div>
-        </details>
-
-        <details>
-            <summary>📜 历史记录</summary>
-            <div id="historyList"></div>
-            <button id="clearHistoryBtn" style="margin-top:8px;">🗑️ 清除所有历史</button>
-        </details>
-    </div>
-
-    <script>
-        // ======================= 常量 =======================
-        const MONTHS = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
-        const PRIORITY = ['B652Q', 'B65AP', 'B652S', 'MLLIN', 'N88AY', 'B652R'];
-        const HISTORY_KEY = 'worldtime_history_v2';
-        const LAST_PLANS_KEY = 'worldtime_last_plans_v2';
-        const LAST_FILE_KEY = 'worldtime_last_file_v2';
-
-        // ======================= localStorage 封装 =======================
-        function loadHistory() {
-            try {
-                const raw = localStorage.getItem(HISTORY_KEY);
-                if (!raw) return {records: []};
-                const obj = JSON.parse(raw);
-                if (!obj.records) obj.records = [];
-                return obj;
-            } catch (e) { return {records: []}; }
-        }
-        function saveHistory(h) {
-            try { localStorage.setItem(HISTORY_KEY, JSON.stringify(h)); } catch (e) {}
-        }
-        function loadJSON(key) {
-            try {
-                const raw = localStorage.getItem(key);
-                return raw ? JSON.parse(raw) : null;
-            } catch (e) { return null; }
-        }
-        function saveJSON(key, val) {
-            try { localStorage.setItem(key, JSON.stringify(val)); } catch (e) {}
-        }
-
-        // ======================= 基础工具 =======================
-        function pad2(n) { return String(n).padStart(2, '0'); }
-        function escapeHtml(s) {
-            return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-        }
-
-        function parseDate(v) {
-            if (v == null || v === '') return null;
-            if (v instanceof Date) return new Date(v.getFullYear(), v.getMonth(), v.getDate());
-            if (typeof v === 'number') {
-                const ms = Math.round((v - 25569) * 86400 * 1000);
-                const d = new Date(ms);
-                return new Date(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
-            }
-            const s = String(v).trim();
-            if (!s) return null;
-            const m = s.match(/^(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})/);
-            if (m) return new Date(parseInt(m[1]), parseInt(m[2])-1, parseInt(m[3]));
-            const d = new Date(s);
-            if (!isNaN(d.getTime())) return new Date(d.getFullYear(), d.getMonth(), d.getDate());
-            return null;
-        }
-
-        function parseTime(v) {
-            if (v == null || v === '') return null;
-            if (v instanceof Date) return pad2(v.getHours()) + ':' + pad2(v.getMinutes());
-            if (typeof v === 'number') {
-                let frac = v;
-                if (v > 1) frac = v - Math.floor(v);
-                const totalMin = Math.round(frac * 24 * 60);
-                return pad2(Math.floor(totalMin / 60) % 24) + ':' + pad2(totalMin % 60);
-            }
-            const s = String(v).trim();
-            const m = s.match(/(\d{1,2}):(\d{2})/);
-            if (m) return pad2(parseInt(m[1])) + ':' + m[2];
-            return null;
-        }
-
-        function toUTCLabel(dateVal, timeStr) {
-            const d = parseDate(dateVal);
-            if (!d || !timeStr) return null;
-            const parts = timeStr.split(':');
-            const h = parseInt(parts[0]);
-            const m = parseInt(parts[1]);
-
-            let total = h * 60 + m - 8 * 60;
-            let dayOff = 0;
-            while (total < 0) { total += 24 * 60; dayOff--; }
-            while (total >= 24 * 60) { total -= 24 * 60; dayOff++; }
-            const uh = Math.floor(total / 60);
-            const um = total % 60;
-
-            const dd = new Date(d.getFullYear(), d.getMonth(), d.getDate());
-            dd.setDate(dd.getDate() + dayOff);
-
-            return {
-                day: dd.getDate(),
-                month: dd.getMonth() + 1,
-                hours: uh,
-                minutes: um,
-                sortKey: dd.getFullYear() * 100000000
-                       + (dd.getMonth() + 1) * 1000000
-                       + dd.getDate() * 10000
-                       + uh * 100 + um
-            };
-        }
-
-        function formatLabel(u) {
-            if (!u) return '';
-            return pad2(u.day) + MONTHS[u.month - 1] + ' ' + pad2(u.hours) + pad2(u.minutes) + 'Z';
-        }
-
-        // ======================= 核心处理 =======================
-        function processRows(rows) {
-            let headerIdx = -1;
-            for (let i = 0; i < Math.min(rows.length, 10); i++) {
-                const vals = rows[i].map(v => String(v).trim());
-                if (vals.includes('飞机注册号') && vals.includes('出发地') && vals.includes('到达地') && vals.includes('计划出发')) {
-                    headerIdx = i;
-                    break;
-                }
-            }
-            if (headerIdx === -1) {
-                return {error: '未找到表头行（需包含：飞机注册号、出发地、到达地、计划出发）'};
-            }
-
-            const headers = rows[headerIdx].map(h => String(h).trim());
-            function findCol(cands) {
-                for (const c of cands) {
-                    const idx = headers.indexOf(c);
-                    if (idx !== -1) return idx;
-                }
-                for (const c of cands) {
-                    for (let i = 0; i < headers.length; i++) {
-                        if (headers[i].includes(c)) return i;
-                    }
-                }
-                return -1;
-            }
-
-            const colReg      = findCol(['飞机注册号', '注册号', '机号']);
-            const colDep      = findCol(['出发地']);
-            const colArr      = findCol(['到达地']);
-            const colDepDate  = findCol(['出发日期']);
-            const colDepTime  = findCol(['计划出发']);
-            const colArrDate  = findCol(['到达日期']);
-            const colArrTime  = findCol(['预计到达']);
-            const colPurpose  = findCol(['用途']);
-
-            const required = {
-                '飞机注册号': colReg, '出发地': colDep, '到达地': colArr,
-                '出发日期': colDepDate, '计划出发': colDepTime,
-                '到达日期': colArrDate, '预计到达': colArrTime, '用途': colPurpose
-            };
-            for (const name in required) {
-                if (required[name] === -1) return {error: '缺少列：' + name};
-            }
-
-            const plans = {};
-
-            for (let i = headerIdx + 1; i < rows.length; i++) {
-                const r = rows[i];
-                if (!r || r.length === 0) continue;
-                const get = idx => (idx >= 0 && idx < r.length) ? r[idx] : '';
-
-                const dep       = get(colDep);
-                const arr       = get(colArr);
-                const depDate   = get(colDepDate);
-                const depTimeRaw = get(colDepTime);
-                const arrDate   = get(colArrDate);
-                const arrTimeRaw = get(colArrTime);
-
-                if (dep === '' || arr === '' || depDate === '' || depTimeRaw === '') continue;
-
-                const depTimeStr = parseTime(depTimeRaw);
-                const arrTimeStr = parseTime(arrTimeRaw);
-                if (!depTimeStr || !arrTimeStr) continue;
-
-                const depUtc = toUTCLabel(depDate, depTimeStr);
-                const arrUtc = toUTCLabel(arrDate, arrTimeStr);
-                if (!depUtc || !arrUtc) continue;
-
-                let reg = get(colReg);
-                if (reg === '' || reg == null) reg = 'N/A';
-                else reg = String(reg).trim();
-
-                const use = String(get(colPurpose) || '');
-                const flightType = use.indexOf('调机') !== -1 ? 'FERRY' : 'PAX';
-
-                const line = 'ETD ' + String(dep).trim() + ' ' + formatLabel(depUtc) +
-                             ' // ETA ' + String(arr).trim() + ' ' + formatLabel(arrUtc) +
-                             '  ' + flightType;
-
-                if (!plans[reg]) plans[reg] = [];
-                plans[reg].push({sortKey: depUtc.sortKey, line: line});
-            }
-
-            const result = {};
-            for (const reg in plans) {
-                plans[reg].sort((a, b) => a.sortKey - b.sortKey);
-                const lines = [reg];
-                plans[reg].forEach(it => lines.push(it.line));
-                result[reg] = lines.join('\n');
-            }
-            return {plans: result};
-        }
-
-        function sortPlans(plans) {
-            const keys = Object.keys(plans);
-            const priorityKeys = PRIORITY.filter(k => keys.indexOf(k) !== -1);
-            const remainingKeys = keys.filter(k => PRIORITY.indexOf(k) === -1 && k !== 'N/A').sort();
-            const naKeys = keys.filter(k => k === 'N/A');
-            const sorted = priorityKeys.concat(remainingKeys, naKeys);
-            const result = {};
-            sorted.forEach(k => result[k] = plans[k]);
-            return result;
-        }
-
-        function diffPlans(oldPlans, newPlans) {
-            const changes = {};
-            const allRegs = new Set(Object.keys(oldPlans || {}).concat(Object.keys(newPlans || {})));
-            allRegs.forEach(reg => {
-                const oldLines = new Set(((oldPlans && oldPlans[reg]) || '').split('\n'));
-                const newLines = new Set(((newPlans && newPlans[reg]) || '').split('\n'));
-                oldLines.delete(reg);
-                newLines.delete(reg);
-                newLines.forEach(line => {
-                    if (!oldLines.has(line)) {
-                        changes[reg + '\u0001' + line] = 'added';
-                    }
-                });
-            });
-            return changes;
-        }
-
-        // ======================= 渲染 =======================
-        function renderPlans(plans, changes, isRestored) {
-            const container = document.getElementById('plans');
-            container.innerHTML = '';
-            let fullText = '';
-
-            for (const reg in plans) {
-                const text = plans[reg];
-                const lines = text.split('\n');
-                const routes = lines.filter(l => l !== reg);
-                const hasChanges = !isRestored && routes.some(line => changes[reg + '\u0001' + line]);
-
-                const block = document.createElement('div');
-                block.className = 'reg-block';
-
-                const titleDiv = document.createElement('div');
-                titleDiv.className = 'reg-title';
-                titleDiv.innerHTML = '✈️ ' + escapeHtml(reg) +
-                    (hasChanges ? '<span class="new-flag">🔴 有新增或变更</span>' : '');
-                block.appendChild(titleDiv);
-
-                const segList = document.createElement('div');
-                segList.className = 'seg-list';
-                routes.forEach(line => {
-                    const lineDiv = document.createElement('div');
-                    lineDiv.className = 'seg-line';
-                    lineDiv.textContent = line;
-                    segList.appendChild(lineDiv);
-                });
-                block.appendChild(segList);
-
-                const copyBtn = document.createElement('button');
-                copyBtn.textContent = '📋 复制该飞机';
-                copyBtn.onclick = () => {
-                    const copyText = reg + '\n' + routes.join('\n');
-                    navigator.clipboard.writeText(copyText).then(() => {
-                        copyBtn.textContent = '✅ 已复制';
-                        setTimeout(() => { copyBtn.textContent = '📋 复制该飞机'; }, 1500);
-                    }).catch(() => {
-                        fallbackCopy(copyText);
-                        copyBtn.textContent = '✅ 已复制';
-                        setTimeout(() => { copyBtn.textContent = '📋 复制该飞机'; }, 1500);
-                    });
-                };
-                block.appendChild(copyBtn);
-
-                container.appendChild(block);
-
-                fullText += reg + '\n' + routes.join('\n') + '\n\n';
-            }
-
-            document.getElementById('fullTextBox').textContent = fullText.trim();
-        }
-
-        function renderHistory(history) {
-            const container = document.getElementById('historyList');
-            if (!history.records || history.records.length === 0) {
-                container.innerHTML = '<div class="info">暂无历史记录</div>';
-                return;
-            }
-            let html = '<ol>';
-            for (const rec of history.records) {
-                html += '<li>' + escapeHtml(rec.timestamp) + ' - ' + escapeHtml(rec.filename) + '</li>';
-            }
-            html += '</ol>';
-            container.innerHTML = html;
-        }
-
-        function fallbackCopy(text) {
-            const ta = document.createElement('textarea');
-            ta.value = text;
-            ta.style.position = 'fixed';
-            ta.style.left = '-9999px';
-            document.body.appendChild(ta);
-            ta.select();
-            try { document.execCommand('copy'); } catch (e) {}
-            document.body.removeChild(ta);
-        }
-
-        // ======================= 主流程 =======================
-        function handleFile(file) {
-            const status = document.getElementById('status');
-            status.innerHTML = '<div class="info">⏳ 正在读取文件...</div>';
-
-            const reader = new FileReader();
-            reader.onload = (ev) => {
-                try {
-                    const data = new Uint8Array(ev.target.result);
-                    const wb = XLSX.read(data, { type: 'array', cellDates: true });
-                    const ws = wb.Sheets[wb.SheetNames[0]];
-                    const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '', raw: true });
-
-                    const result = processRows(rows);
-                    if (result.error) {
-                        status.innerHTML = '<div class="error">❌ ' + escapeHtml(result.error) + '</div>';
-                        return;
-                    }
-
-                    const newPlans = result.plans;
-                    const sortedNewPlans = sortPlans(newPlans);
-
-                    const history = loadHistory();
-                    let oldPlans = {};
-                    if (history.records.length > 0) {
-                        oldPlans = history.records[history.records.length - 1].data || {};
-                    }
-
-                    const changes = diffPlans(oldPlans, newPlans);
-
-                    const now = new Date();
-                    const timestamp = now.getFullYear() + '-' + pad2(now.getMonth()+1) + '-' + pad2(now.getDate()) +
-                                      ' ' + pad2(now.getHours()) + ':' + pad2(now.getMinutes()) + ':' + pad2(now.getSeconds());
-
-                    history.records.push({
-                        timestamp: timestamp,
-                        filename: file.name,
-                        data: newPlans
-                    });
-                    if (history.records.length > 20) {
-                        history.records = history.records.slice(-20);
-                    }
-                    saveHistory(history);
-
-                    saveJSON(LAST_PLANS_KEY, sortedNewPlans);
-                    saveJSON(LAST_FILE_KEY, {name: file.name, timestamp: timestamp});
-
-                    document.getElementById('result').style.display = 'block';
-                    status.innerHTML = '<div class="success">✅ 文件读取成功：' +
-                        escapeHtml(file.name) + '（' + timestamp + '，历史累计 ' + history.records.length + ' 条）</div>';
-                    renderPlans(sortedNewPlans, changes, false);
-                    renderHistory(history);
-                } catch (err) {
-                    status.innerHTML = '<div class="error">❌ 处理失败：' + escapeHtml(err.message) + '</div>';
-                    console.error(err);
-                }
-            };
-            reader.readAsArrayBuffer(file);
-        }
-
-        window.addEventListener('DOMContentLoaded', () => {
-            const lastPlans = loadJSON(LAST_PLANS_KEY);
-            const lastFile = loadJSON(LAST_FILE_KEY);
-            const history = loadHistory();
-
-            if (lastPlans && Object.keys(lastPlans).length > 0) {
-                document.getElementById('result').style.display = 'block';
-                const status = document.getElementById('status');
-                const info = lastFile
-                    ? '（上次加载：' + escapeHtml(lastFile.name) + '，' + escapeHtml(lastFile.timestamp) + '）'
-                    : '';
-                status.innerHTML = '<div class="info">💾 已恢复上次解析结果 ' + info + '</div>';
-                renderPlans(lastPlans, {}, true);
-                renderHistory(history);
-            }
-        });
-
-        document.getElementById('fileInput').addEventListener('change', (e) => {
-            const f = e.target.files[0];
-            if (f) handleFile(f);
-        });
-
-        document.getElementById('clearHistoryBtn').addEventListener('click', () => {
-            if (!confirm('确定清除所有历史记录吗？')) return;
-            saveHistory({records: []});
-            try {
-                localStorage.removeItem(LAST_PLANS_KEY);
-                localStorage.removeItem(LAST_FILE_KEY);
-            } catch (e) {}
-            location.reload();
-        });
-    </script>
+<div class="upload-hint">📤 上传未来航段（北京时间）：</div>
+<input type="file" id="fileInput" accept=".xlsx,.xls">
+<div id="status"></div>
+<div id="result" style="display:none;">
+<div id="plans"></div>
+<details><summary>📦 全部计划合并（点击展开）</summary><div class="full-text-box" id="fullTextBox"></div></details>
+<details><summary>📜 历史记录</summary><div id="historyList"></div><button id="clearHistoryBtn" style="margin-top:8px;">🗑️ 清除所有历史</button></details>
+</div>
+<script>
+const MONTHS=['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
+const PRIORITY=['B652Q','B65AP','B652S','MLLIN','N88AY','B652R'];
+const HISTORY_KEY='worldtime_history_v2',LAST_PLANS_KEY='worldtime_last_plans_v2',LAST_FILE_KEY='worldtime_last_file_v2';
+function loadHistory(){try{const r=localStorage.getItem(HISTORY_KEY);if(!r)return{records:[]};const o=JSON.parse(r);if(!o.records)o.records=[];return o;}catch(e){return{records:[]};}}
+function saveHistory(h){try{localStorage.setItem(HISTORY_KEY,JSON.stringify(h));}catch(e){}}
+function loadJSON(k){try{const r=localStorage.getItem(k);return r?JSON.parse(r):null;}catch(e){return null;}}
+function saveJSON(k,v){try{localStorage.setItem(k,JSON.stringify(v));}catch(e){}}
+function pad2(n){return String(n).padStart(2,'0');}
+function escapeHtml(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function parseDate(v){if(v==null||v==='')return null;if(v instanceof Date)return new Date(v.getFullYear(),v.getMonth(),v.getDate());if(typeof v==='number'){const ms=Math.round((v-25569)*86400*1000);const d=new Date(ms);return new Date(d.getUTCFullYear(),d.getUTCMonth(),d.getUTCDate());}const s=String(v).trim();if(!s)return null;const m=s.match(/^(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})/);if(m)return new Date(parseInt(m[1]),parseInt(m[2])-1,parseInt(m[3]));const d=new Date(s);if(!isNaN(d.getTime()))return new Date(d.getFullYear(),d.getMonth(),d.getDate());return null;}
+function parseTime(v){if(v==null||v==='')return null;if(v instanceof Date)return pad2(v.getHours())+':'+pad2(v.getMinutes());if(typeof v==='number'){let f=v;if(v>1)f=v-Math.floor(v);const t=Math.round(f*24*60);return pad2(Math.floor(t/60)%24)+':'+pad2(t%60);}const s=String(v).trim();const m=s.match(/(\d{1,2}):(\d{2})/);if(m)return pad2(parseInt(m[1]))+':'+m[2];return null;}
+function toUTCLabel(dateVal,timeStr){const d=parseDate(dateVal);if(!d||!timeStr)return null;const p=timeStr.split(':');const h=parseInt(p[0]),m=parseInt(p[1]);let t=h*60+m-8*60;let off=0;while(t<0){t+=24*60;off--;}while(t>=24*60){t-=24*60;off++;}const uh=Math.floor(t/60),um=t%60;const dd=new Date(d.getFullYear(),d.getMonth(),d.getDate());dd.setDate(dd.getDate()+off);return{day:dd.getDate(),month:dd.getMonth()+1,hours:uh,minutes:um,sortKey:dd.getFullYear()*100000000+(dd.getMonth()+1)*1000000+dd.getDate()*10000+uh*100+um};}
+function formatLabel(u){if(!u)return'';return pad2(u.day)+MONTHS[u.month-1]+' '+pad2(u.hours)+pad2(u.minutes)+'Z';}
+function processRows(rows){let h=-1;for(let i=0;i<Math.min(rows.length,10);i++){const v=rows[i].map(x=>String(x).trim());if(v.includes('飞机注册号')&&v.includes('出发地')&&v.includes('到达地')&&v.includes('计划出发')){h=i;break;}}if(h===-1)return{error:'未找到表头行'};const hs=rows[h].map(x=>String(x).trim());function fc(c){for(const n of c){const i=hs.indexOf(n);if(i!==-1)return i;}for(const n of c){for(let i=0;i<hs.length;i++){if(hs[i].includes(n))return i;}}return -1;}const colReg=fc(['飞机注册号','注册号','机号']),colDep=fc(['出发地']),colArr=fc(['到达地']),colDepDate=fc(['出发日期']),colDepTime=fc(['计划出发']),colArrDate=fc(['到达日期']),colArrTime=fc(['预计到达']),colPurpose=fc(['用途']);const req={'飞机注册号':colReg,'出发地':colDep,'到达地':colArr,'出发日期':colDepDate,'计划出发':colDepTime,'到达日期':colArrDate,'预计到达':colArrTime,'用途':colPurpose};for(const n in req){if(req[n]===-1)return{error:'缺少列：'+n};}const plans={};for(let i=h+1;i<rows.length;i++){const r=rows[i];if(!r||r.length===0)continue;const g=i=>i>=0&&i<r.length?r[i]:'';const dep=g(colDep),arr=g(colArr),depDate=g(colDepDate),depTimeRaw=g(colDepTime),arrDate=g(colArrDate),arrTimeRaw=g(colArrTime);if(dep===''||arr===''||depDate===''||depTimeRaw==='')continue;const dts=parseTime(depTimeRaw),ats=parseTime(arrTimeRaw);if(!dts||!ats)continue;const du=toUTCLabel(depDate,dts),au=toUTCLabel(arrDate,ats);if(!du||!au)continue;let reg=g(colReg);if(reg===''||reg==null)reg='N/A';else reg=String(reg).trim();const use=String(g(colPurpose)||'');const ft=use.indexOf('调机')!==-1?'FERRY':'PAX';const line='ETD '+String(dep).trim()+' '+formatLabel(du)+' // ETA '+String(arr).trim()+' '+formatLabel(au)+'  '+ft;if(!plans[reg])plans[reg]=[];plans[reg].push({sortKey:du.sortKey,line:line});}const res={};for(const reg in plans){plans[reg].sort((a,b)=>a.sortKey-b.sortKey);const ls=[reg];plans[reg].forEach(it=>ls.push(it.line));res[reg]=ls.join('\n');}return{plans:res};}
+function sortPlans(p){const ks=Object.keys(p);const pk=PRIORITY.filter(k=>ks.indexOf(k)!==-1);const rk=ks.filter(k=>PRIORITY.indexOf(k)===-1&&k!=='N/A').sort();const nk=ks.filter(k=>k==='N/A');const so=pk.concat(rk,nk);const r={};so.forEach(k=>r[k]=p[k]);return r;}
+function diffPlans(o,n){const c={};const all=new Set(Object.keys(o||{}).concat(Object.keys(n||{})));all.forEach(reg=>{const ol=new Set(((o&&o[reg])||'').split('\n'));const nl=new Set(((n&&n[reg])||'').split('\n'));ol.delete(reg);nl.delete(reg);nl.forEach(l=>{if(!ol.has(l)){c[reg+'\u0001'+l]='added';}});});return c;}
+function renderPlans(plans,changes,restored){const con=document.getElementById('plans');con.innerHTML='';let ft='';for(const reg in plans){const text=plans[reg];const lines=text.split('\n');const routes=lines.filter(l=>l!==reg);const hc=!restored&&routes.some(l=>changes[reg+'\u0001'+l]);const b=document.createElement('div');b.className='reg-block';const t=document.createElement('div');t.className='reg-title';t.innerHTML='✈️ '+escapeHtml(reg)+(hc?'<span class="new-flag">🔴 有新增或变更</span>':'');b.appendChild(t);const sl=document.createElement('div');sl.className='seg-list';routes.forEach(l=>{const d=document.createElement('div');d.className='seg-line';d.textContent=l;sl.appendChild(d);});b.appendChild(sl);const cb=document.createElement('button');cb.textContent='📋 复制该飞机';cb.onclick=()=>{const ct=reg+'\n'+routes.join('\n');navigator.clipboard.writeText(ct).then(()=>{cb.textContent='✅ 已复制';setTimeout(()=>{cb.textContent='📋 复制该飞机';},1500);}).catch(()=>{fb(ct);cb.textContent='✅ 已复制';setTimeout(()=>{cb.textContent='📋 复制该飞机';},1500);});};b.appendChild(cb);con.appendChild(b);ft+=reg+'\n'+routes.join('\n')+'\n\n';}document.getElementById('fullTextBox').textContent=ft.trim();}
+function renderHistory(h){const c=document.getElementById('historyList');if(!h.records||h.records.length===0){c.innerHTML='<div class="info">暂无历史记录</div>';return;}let html='<ol>';for(const r of h.records){html+='<li>'+escapeHtml(r.timestamp)+' - '+escapeHtml(r.filename)+'</li>';}html+='</ol>';c.innerHTML=html;}
+function fb(t){const ta=document.createElement('textarea');ta.value=t;ta.style.position='fixed';ta.style.left='-9999px';document.body.appendChild(ta);ta.select();try{document.execCommand('copy');}catch(e){}document.body.removeChild(ta);}
+function handleFile(file){const s=document.getElementById('status');s.innerHTML='<div class="info">⏳ 正在读取文件...</div>';const rd=new FileReader();rd.onload=(ev)=>{try{const data=new Uint8Array(ev.target.result);const wb=XLSX.read(data,{type:'array',cellDates:true});const ws=wb.Sheets[wb.SheetNames[0]];const rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:'',raw:true});const r=processRows(rows);if(r.error){s.innerHTML='<div class="error">❌ '+escapeHtml(r.error)+'</div>';return;}const np=r.plans;const sp=sortPlans(np);const h=loadHistory();let op={};if(h.records.length>0){op=h.records[h.records.length-1].data||{};}const ch=diffPlans(op,np);const now=new Date();const ts=now.getFullYear()+'-'+pad2(now.getMonth()+1)+'-'+pad2(now.getDate())+' '+pad2(now.getHours())+':'+pad2(now.getMinutes())+':'+pad2(now.getSeconds());h.records.push({timestamp:ts,filename:file.name,data:np});if(h.records.length>20){h.records=h.records.slice(-20);}saveHistory(h);saveJSON(LAST_PLANS_KEY,sp);saveJSON(LAST_FILE_KEY,{name:file.name,timestamp:ts});document.getElementById('result').style.display='block';s.innerHTML='<div class="success">✅ 文件读取成功：'+escapeHtml(file.name)+'（'+ts+'，历史累计 '+h.records.length+' 条）</div>';renderPlans(sp,ch,false);renderHistory(h);}catch(err){s.innerHTML='<div class="error">❌ 处理失败：'+escapeHtml(err.message)+'</div>';console.error(err);}};rd.readAsArrayBuffer(file);}
+window.addEventListener('DOMContentLoaded',()=>{const lp=loadJSON(LAST_PLANS_KEY);const lf=loadJSON(LAST_FILE_KEY);const h=loadHistory();if(lp&&Object.keys(lp).length>0){document.getElementById('result').style.display='block';const s=document.getElementById('status');const i=lf?'（上次加载：'+escapeHtml(lf.name)+'，'+escapeHtml(lf.timestamp)+'）':'';s.innerHTML='<div class="info">💾 已恢复上次解析结果 '+i+'</div>';renderPlans(lp,{},true);renderHistory(h);}});
+document.getElementById('fileInput').addEventListener('change',(e)=>{const f=e.target.files[0];if(f)handleFile(f);});
+document.getElementById('clearHistoryBtn').addEventListener('click',()=>{if(!confirm('确定清除所有历史记录吗？'))return;saveHistory({records:[]});try{localStorage.removeItem(LAST_PLANS_KEY);localStorage.removeItem(LAST_FILE_KEY);}catch(e){}location.reload();});
+</script>
 </body>
 </html>
 """
     components.html(F_HTML, height=1000, scrolling=True)
 
 # ================================================================
-# 功能3：航路处理工具（HTML/JS 沙箱版）
+# 功能3：航路处理工具
 # ================================================================
 with tab3:
-    G_HTML = r"""
-<!DOCTYPE html>
+    G_HTML = r"""<!DOCTYPE html>
 <html>
 <head>
-    <meta charset="UTF-8">
-    <title>航路处理工具</title>
-    <style>
-        body { font-family: -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif; margin: 12px; color:#333; font-size:16px; }
-        textarea {
-            width: 100%; height: 300px; box-sizing: border-box;
-            font-family: Consolas, "Courier New", monospace; font-size: 15px;
-            padding: 10px; border: 1px solid #ccc; border-radius: 6px;
-            line-height: 1.6;
-        }
-        button {
-            padding: 10px 20px; font-size: 16px; border-radius: 6px;
-            border: 1px solid #ddd; background: #fff; cursor: pointer; margin-right: 8px;
-        }
-        button.primary { background: #ff4b4b; color: #fff; border-color: #ff4b4b; font-weight: bold; }
-        button.primary:hover { background: #e63939; }
-        button:hover { background: #f5f5f5; }
-        button.primary:hover { background: #e63939; }
-        .toolbar { margin: 12px 0; }
-        .result-box {
-            background: #f5f5f5; border: 1px solid #e0e0e0; border-radius: 6px;
-            padding: 14px; font-family: Consolas, "Courier New", monospace;
-            font-size: 16px; line-height: 1.7; white-space: pre-wrap; word-break: break-all;
-            max-height: 500px; overflow-y: auto;
-        }
-        .success { color: #2e7d32; background: #e8f5e9; padding: 8px; border-radius: 4px; margin: 8px 0; font-size: 15px; }
-        .error { color: #d32f2f; background: #ffebee; padding: 8px; border-radius: 4px; margin: 8px 0; font-size: 15px; }
-        .info { color: #1976d2; background: #e3f2fd; padding: 8px; border-radius: 4px; margin: 8px 0; font-size: 15px; }
-        .label { color: #555; font-size: 15px; margin: 6px 0; }
-    </style>
+<meta charset="UTF-8"><title>航路处理工具</title>
+<style>
+body{font-family:-apple-system,"Segoe UI","Microsoft YaHei",sans-serif;margin:12px;color:#333;font-size:16px;}
+textarea{width:100%;height:300px;box-sizing:border-box;font-family:Consolas,"Courier New",monospace;font-size:15px;padding:10px;border:1px solid #ccc;border-radius:6px;line-height:1.6;}
+button{padding:10px 20px;font-size:16px;border-radius:6px;border:1px solid #ddd;background:#fff;cursor:pointer;margin-right:8px;}
+button.primary{background:#ff4b4b;color:#fff;border-color:#ff4b4b;font-weight:bold;}
+button.primary:hover{background:#e63939;}
+button:hover{background:#f5f5f5;}
+.toolbar{margin:12px 0;}
+.result-box{background:#f5f5f5;border:1px solid #e0e0e0;border-radius:6px;padding:14px;font-family:Consolas,"Courier New",monospace;font-size:16px;line-height:1.7;white-space:pre-wrap;word-break:break-all;max-height:500px;overflow-y:auto;}
+.success{color:#2e7d32;background:#e8f5e9;padding:8px;border-radius:4px;margin:8px 0;font-size:15px;}
+.error{color:#d32f2f;background:#ffebee;padding:8px;border-radius:4px;margin:8px 0;font-size:15px;}
+.info{color:#1976d2;background:#e3f2fd;padding:8px;border-radius:4px;margin:8px 0;font-size:15px;}
+.label{color:#555;font-size:15px;margin:6px 0;}
+</style>
 </head>
 <body>
-    <div class="label">📋 请输入待处理的航路文本</div>
-    <textarea id="inputText" placeholder="粘贴民航航线数据，支持多行表格格式/纯中文描述格式..."></textarea>
-
-    <div class="toolbar">
-        <button class="primary" id="processBtn">⚙️ 处理</button>
-        <button id="clearBtn">🗑️ 清空</button>
-        <button id="copyBtn">📋 复制结果</button>
-        <span id="copyStatus" style="margin-left:8px; color:#2e7d32; font-size:15px;"></span>
-    </div>
-
-    <div id="status"></div>
-
-    <div id="resultSection" style="display:none;">
-        <div class="label">📊 处理结果</div>
-        <div class="result-box" id="resultBox"></div>
-    </div>
-
-    <script>
-        const INPUT_CACHE_KEY = 'route_input_cache_v1';
-
-        // ===== localStorage =====
-        function saveInput(text) {
-            try { localStorage.setItem(INPUT_CACHE_KEY, text); } catch(e) {}
-        }
-        function loadInput() {
-            try { return localStorage.getItem(INPUT_CACHE_KEY) || ''; } catch(e) { return ''; }
-        }
-        function escapeHtml(s) {
-            return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-        }
-
-        // ===== 基础工具（对应 Python 同名函数） =====
-        function parseCoord(coordStr) {
-            const letter = coordStr[0];
-            const numPart = coordStr.slice(1);
-            if (letter === 'N') {
-                let deg = parseInt(numPart.slice(0, 2));
-                let minute = parseInt(numPart.slice(2, 4));
-                let secPart = numPart.slice(4);
-                let secInt;
-                if (secPart.indexOf('.') !== -1) {
-                    secInt = Math.round(parseFloat(secPart));
-                } else {
-                    secInt = parseInt(secPart);
-                }
-                if (secInt >= 60) {
-                    secInt -= 60;
-                    minute += 1;
-                    if (minute >= 60) { minute -= 60; deg += 1; }
-                }
-                return String(deg).padStart(2, '0') + String(minute).padStart(2, '0') + String(secInt).padStart(2, '0');
-            } else if (letter === 'E') {
-                let deg = parseInt(numPart.slice(0, 3));
-                let minute = parseInt(numPart.slice(3, 5));
-                let secPart = numPart.slice(5);
-                let secInt;
-                if (secPart.indexOf('.') !== -1) {
-                    secInt = Math.round(parseFloat(secPart));
-                } else {
-                    secInt = parseInt(secPart);
-                }
-                if (secInt >= 60) {
-                    secInt -= 60;
-                    minute += 1;
-                    if (minute >= 60) { minute -= 60; deg += 1; }
-                }
-                return String(deg).padStart(3, '0') + String(minute).padStart(2, '0') + String(secInt).padStart(2, '0');
-            }
-            throw new Error('未知的坐标前缀: ' + letter);
-        }
-
-        function baseName(s) { return s.split('@')[0]; }
-
-        function isOpenPoint(s) {
-            const base = baseName(s);
-            if (/^[A-Z]{2,5}$/.test(base)) return true;
-            if (/^P[A-Z]+$/.test(base)) return true;
-            return false;
-        }
-
-        function isPPoint(s) {
-            const base = baseName(s);
-            return /^P\d+$/.test(base);
-        }
-
-        function cleanRoute(r) {
-            if (r.startsWith('#')) return r.slice(1);
-            return r;
-        }
-
-        function isOpenRoute(rt) {
-            return rt && (rt[0] !== 'H' && rt[0] !== 'J' && rt[0] !== 'V');
-        }
-
-        function isClosedRoute(rt) {
-            return rt.startsWith('H') || rt.startsWith('J') || rt.startsWith('V');
-        }
-
-        // ===== 表格格式提取 =====
-        function extractTable(text) {
-            let tokens = text.trim().split(/\s+/);
-            let startIdx = 0;
-            for (let i = 0; i < tokens.length; i++) {
-                if (/^\d+$/.test(tokens[i]) && parseInt(tokens[i]) >= 1 && parseInt(tokens[i]) <= 40) {
-                    startIdx = i;
-                    break;
-                }
-            }
-            tokens = tokens.slice(startIdx);
-
-            const lines = [];
-            let i = 0;
-            while (i < tokens.length) {
-                if (/^\d+$/.test(tokens[i])) {
-                    const line = [tokens[i]];
-                    i++;
-                    while (i < tokens.length && !/^\d+$/.test(tokens[i])) {
-                        line.push(tokens[i]);
-                        i++;
-                    }
-                    lines.push(line);
-                } else {
-                    i++;
-                }
-            }
-
-            const points = [];
-            const routes = [];
-            for (const line of lines) {
-                let latIdx = -1;
-                for (let idx = 0; idx < line.length; idx++) {
-                    const tok = line[idx];
-                    if (tok.startsWith('N') && /^\d+(\.\d+)?$/.test(tok.slice(1))) {
-                        latIdx = idx;
-                        break;
-                    }
-                }
-                if (latIdx === -1) continue;
-                const lonIdx = latIdx + 1;
-                if (lonIdx >= line.length || !line[lonIdx].startsWith('E')) continue;
-                const latStr = line[latIdx];
-                const lonStr = line[lonIdx];
-
-                let route = null;
-                if (lonIdx + 1 < line.length) {
-                    const nextTok = line[lonIdx + 1];
-                    if (/^[A-Z][A-Z0-9]*$/.test(nextTok) && !/^\d/.test(nextTok[0])) {
-                        route = nextTok;
-                    }
-                }
-
-                let pointName = null;
-                for (let j = latIdx - 1; j > 0; j--) {
-                    const tok = line[j];
-                    if (isOpenPoint(tok) || isPPoint(tok)) {
-                        pointName = tok;
-                        break;
-                    }
-                }
-                if (pointName === null) continue;
-
-                let pointDisplay;
-                if (isPPoint(pointName)) {
-                    const latInt = parseCoord(latStr);
-                    const lonInt = parseCoord(lonStr);
-                    pointDisplay = pointName + '@' + latInt + 'N' + lonInt + 'E';
-                } else {
-                    pointDisplay = pointName;
-                }
-
-                points.push(pointDisplay);
-                if (route !== null) routes.push(route);
-            }
-
-            const seq = [];
-            for (let i = 0; i < points.length; i++) {
-                seq.push(points[i]);
-                if (i < routes.length) seq.push(routes[i]);
-            }
-            return seq;
-        }
-
-        // ===== 中文描述格式提取 =====
-        function extractChinese(text) {
-            // 去掉中文标点（保留英文括号和字母数字）
-            text = text.replace(/[\u4e00-\u9fa5，、。；：""''（）【】]/g, ' ');
-            const words = text.split(/\s+/).filter(w => w);
-            const seq = [];
-            for (const w of words) {
-                if (w.indexOf('(') !== -1 && w.indexOf(')') !== -1) {
-                    const m = w.match(/\(([A-Z]+)\)/);
-                    if (m) {
-                        const point = m[1];
-                        const prefix = w.slice(0, w.indexOf('('));
-                        const mRoute = prefix.match(/([A-Z]\d+)$/);
-                        if (mRoute) seq.push(mRoute[1]);
-                        seq.push(point);
-                    }
-                } else if (/^[A-Z]\d+[A-Z]{2,5}$/.test(w) || /^[A-Z]\d+P\d+$/.test(w)) {
-                    const m = w.match(/^([A-Z]\d+)([A-Z]{2,5}|P\d+)$/);
-                    if (m) {
-                        seq.push(m[1]);
-                        seq.push(m[2]);
-                    }
-                } else if (/^[A-Z]\d+$/.test(w)) {
-                    seq.push(w);
-                } else if (isOpenPoint(w) || isPPoint(w)) {
-                    seq.push(w);
-                }
-            }
-            return seq;
-        }
-
-        // ===== 步骤 =====
-        function step1Extract(text) {
-            if (/N\d{5,6}(\.\d+)?\s+E\d{6,7}(\.\d+)?/.test(text)) {
-                return { seq: extractTable(text), fmt: 'table' };
-            } else {
-                return { seq: extractChinese(text), fmt: 'chinese' };
-            }
-        }
-
-        function step2Reduce(seq) {
-            let L = seq.slice();
-            let changed = true;
-            while (changed) {
-                changed = false;
-                const n = L.length;
-                const candidates = [];
-                for (let i = 0; i < n; i += 2) {
-                    if (!isOpenPoint(L[i])) continue;
-                    if (i + 1 >= n) continue;
-                    const firstRoute = cleanRoute(L[i + 1]);
-                    if (!isOpenRoute(firstRoute)) continue;
-                    for (let j = i + 2; j < n; j += 2) {
-                        let allSame = true;
-                        for (let k = i + 1; k < j; k += 2) {
-                            const rt = cleanRoute(L[k]);
-                            if (rt !== firstRoute || !isOpenRoute(rt)) {
-                                allSame = false;
-                                break;
-                            }
-                        }
-                        if (!allSame) break;
-                        if (isOpenPoint(L[j])) {
-                            const length = Math.floor((j - i) / 2);
-                            if (length >= 2) {
-                                candidates.push([i, j, length]);
-                            }
-                        }
-                    }
-                }
-                if (candidates.length === 0) break;
-                candidates.sort((a, b) => b[2] - a[2]);
-                const [bestI, bestJ] = candidates[0];
-                const newSegment = [L[bestI], L[bestI + 1], L[bestJ]];
-                L = L.slice(0, bestI).concat(newSegment).concat(L.slice(bestJ + 1));
-                changed = true;
-            }
-            return L;
-        }
-
-        function step3AddHash(seq) {
-            const pts = seq.filter((_, i) => i % 2 === 0);
-            const rts = seq.filter((_, i) => i % 2 === 1);
-            const res = [pts[0]];
-            for (let i = 0; i < rts.length; i++) {
-                const rt = rts[i];
-                const left = pts[i];
-                const right = pts[i + 1];
-                let needHash = false;
-                if (isClosedRoute(rt)) needHash = true;
-                else if (isPPoint(left) || isPPoint(right)) needHash = true;
-                res.push(needHash ? '#' + rt : rt);
-                res.push(right);
-            }
-            return res;
-        }
-
-        // ===== 主流程 =====
-        function process() {
-            const status = document.getElementById('status');
-            const inputText = document.getElementById('inputText').value;
-            if (!inputText.trim()) {
-                status.innerHTML = '<div class="error">请输入待处理的航路文本</div>';
-                document.getElementById('resultSection').style.display = 'none';
-                return;
-            }
-            try {
-                const { seq: seq1, fmt } = step1Extract(inputText);
-                let seq = seq1;
-                if (fmt === 'table') {
-                    seq = step2Reduce(seq);
-                    seq = step3AddHash(seq);
-                }
-                const result = seq.length > 0 ? seq.join(' ') : '⚠️ 未提取到有效航路数据';
-
-                document.getElementById('resultBox').textContent = result;
-                document.getElementById('resultSection').style.display = 'block';
-                status.innerHTML = '<div class="success">✅ 处理完成</div>';
-            } catch (e) {
-                status.innerHTML = '<div class="error">❌ 处理失败：' + escapeHtml(e.message) + '</div>';
-                console.error(e);
-            }
-        }
-
-        // ===== 事件绑定 =====
-        const inputEl = document.getElementById('inputText');
-        let saveTimer = null;
-        inputEl.addEventListener('input', () => {
-            clearTimeout(saveTimer);
-            saveTimer = setTimeout(() => saveInput(inputEl.value), 500);
-        });
-
-        document.getElementById('processBtn').addEventListener('click', process);
-
-        document.getElementById('clearBtn').addEventListener('click', () => {
-            inputEl.value = '';
-            saveInput('');
-            document.getElementById('resultSection').style.display = 'none';
-            document.getElementById('status').innerHTML = '';
-            document.getElementById('copyStatus').textContent = '';
-        });
-
-        document.getElementById('copyBtn').addEventListener('click', async () => {
-            const text = document.getElementById('resultBox').textContent;
-            if (!text) { return; }
-            const statusEl = document.getElementById('copyStatus');
-            try {
-                await navigator.clipboard.writeText(text);
-                statusEl.textContent = '✅ 已复制';
-                setTimeout(() => { statusEl.textContent = ''; }, 1500);
-            } catch (e) {
-                const ta = document.createElement('textarea');
-                ta.value = text;
-                ta.style.position = 'fixed';
-                ta.style.left = '-9999px';
-                document.body.appendChild(ta);
-                ta.select();
-                try {
-                    document.execCommand('copy');
-                    statusEl.textContent = '✅ 已复制';
-                    setTimeout(() => { statusEl.textContent = ''; }, 1500);
-                } catch (e2) {
-                    statusEl.textContent = '❌ 复制失败';
-                    statusEl.style.color = '#d32f2f';
-                }
-                document.body.removeChild(ta);
-            }
-        });
-
-        // ===== 页面加载：恢复上次输入 =====
-        window.addEventListener('DOMContentLoaded', () => {
-            const saved = loadInput();
-            if (saved) inputEl.value = saved;
-        });
-    </script>
+<div class="label">📋 请输入待处理的航路文本</div>
+<textarea id="inputText" placeholder="粘贴民航航线数据，支持多行表格格式/纯中文描述格式..."></textarea>
+<div class="toolbar">
+<button class="primary" id="processBtn">⚙️ 处理</button>
+<button id="clearBtn">🗑️ 清空</button>
+<button id="copyBtn">📋 复制结果</button>
+<span id="copyStatus" style="margin-left:8px;color:#2e7d32;font-size:15px;"></span>
+</div>
+<div id="status"></div>
+<div id="resultSection" style="display:none;">
+<div class="label">📊 处理结果</div>
+<div class="result-box" id="resultBox"></div>
+</div>
+<script>
+const INPUT_CACHE_KEY='route_input_cache_v1';
+function saveInput(t){try{localStorage.setItem(INPUT_CACHE_KEY,t);}catch(e){}}
+function loadInput(){try{return localStorage.getItem(INPUT_CACHE_KEY)||'';}catch(e){return'';}}
+function escapeHtml(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function parseCoord(c){const l=c[0],n=c.slice(1);if(l==='N'){let d=parseInt(n.slice(0,2)),m=parseInt(n.slice(2,4)),sp=n.slice(4),si;if(sp.indexOf('.')!==-1)si=Math.round(parseFloat(sp));else si=parseInt(sp);if(si>=60){si-=60;m+=1;if(m>=60){m-=60;d+=1;}}return String(d).padStart(2,'0')+String(m).padStart(2,'0')+String(si).padStart(2,'0');}else if(l==='E'){let d=parseInt(n.slice(0,3)),m=parseInt(n.slice(3,5)),sp=n.slice(5),si;if(sp.indexOf('.')!==-1)si=Math.round(parseFloat(sp));else si=parseInt(sp);if(si>=60){si-=60;m+=1;if(m>=60){m-=60;d+=1;}}return String(d).padStart(3,'0')+String(m).padStart(2,'0')+String(si).padStart(2,'0');}throw new Error('未知的坐标前缀: '+l);}
+function baseName(s){return s.split('@')[0];}
+function isOpenPoint(s){const b=baseName(s);if(/^[A-Z]{2,5}$/.test(b))return true;if(/^P[A-Z]+$/.test(b))return true;return false;}
+function isPPoint(s){const b=baseName(s);return /^P\d+$/.test(b);}
+function cleanRoute(r){if(r.startsWith('#'))return r.slice(1);return r;}
+function isOpenRoute(rt){return rt&&(rt[0]!=='H'&&rt[0]!=='J'&&rt[0]!=='V');}
+function isClosedRoute(rt){return rt.startsWith('H')||rt.startsWith('J')||rt.startsWith('V');}
+function extractTable(text){let t=text.trim().split(/\s+/);let si=0;for(let i=0;i<t.length;i++){if(/^\d+$/.test(t[i])&&parseInt(t[i])>=1&&parseInt(t[i])<=40){si=i;break;}}t=t.slice(si);const lines=[];let i=0;while(i<t.length){if(/^\d+$/.test(t[i])){const l=[t[i]];i++;while(i<t.length&&!/^\d+$/.test(t[i])){l.push(t[i]);i++;}lines.push(l);}else{i++;}}const pts=[],rts=[];for(const l of lines){let la=-1;for(let k=0;k<l.length;k++){if(l[k].startsWith('N')&&/^\d+(\.\d+)?$/.test(l[k].slice(1))){la=k;break;}}if(la===-1)continue;const lo=la+1;if(lo>=l.length||!l[lo].startsWith('E'))continue;const lat=l[la],lon=l[lo];let rt=null;if(lo+1<l.length){const nt=l[lo+1];if(/^[A-Z][A-Z0-9]*$/.test(nt)&&!/^\d/.test(nt[0]))rt=nt;}let pn=null;for(let j=la-1;j>0;j--){if(isOpenPoint(l[j])||isPPoint(l[j])){pn=l[j];break;}}if(pn===null)continue;let pd;if(isPPoint(pn)){const li=parseCoord(lat),loi=parseCoord(lon);pd=pn+'@'+li+'N'+loi+'E';}else{pd=pn;}pts.push(pd);if(rt!==null)rts.push(rt);}const seq=[];for(let i=0;i<pts.length;i++){seq.push(pts[i]);if(i<rts.length)seq.push(rts[i]);}return seq;}
+function extractChinese(text){text=text.replace(/[\u4e00-\u9fa5，、。；：""''（）【】]/g,' ');const ws=text.split(/\s+/).filter(w=>w);const seq=[];for(const w of ws){if(w.indexOf('(')!==-1&&w.indexOf(')')!==-1){const m=w.match(/\(([A-Z]+)\)/);if(m){const p=m[1];const pr=w.slice(0,w.indexOf('('));const mr=pr.match(/([A-Z]\d+)$/);if(mr)seq.push(mr[1]);seq.push(p);}}else if(/^[A-Z]\d+[A-Z]{2,5}$/.test(w)||/^[A-Z]\d+P\d+$/.test(w)){const m=w.match(/^([A-Z]\d+)([A-Z]{2,5}|P\d+)$/);if(m){seq.push(m[1]);seq.push(m[2]);}}else if(/^[A-Z]\d+$/.test(w)){seq.push(w);}else if(isOpenPoint(w)||isPPoint(w)){seq.push(w);}}return seq;}
+function step1Extract(t){if(/N\d{5,6}(\.\d+)?\s+E\d{6,7}(\.\d+)?/.test(t)){return{seq:extractTable(t),fmt:'table'};}else{return{seq:extractChinese(t),fmt:'chinese'};}}
+function step2Reduce(s){let L=s.slice();let ch=true;while(ch){ch=false;const n=L.length;const c=[];for(let i=0;i<n;i+=2){if(!isOpenPoint(L[i]))continue;if(i+1>=n)continue;const fr=cleanRoute(L[i+1]);if(!isOpenRoute(fr))continue;for(let j=i+2;j<n;j+=2){let all=true;for(let k=i+1;k<j;k+=2){const rt=cleanRoute(L[k]);if(rt!==fr||!isOpenRoute(rt)){all=false;break;}}if(!all)break;if(isOpenPoint(L[j])){const len=Math.floor((j-i)/2);if(len>=2)c.push([i,j,len]);}}}if(c.length===0)break;c.sort((a,b)=>b[2]-a[2]);const[bi,bj]=c[0];const ns=[L[bi],L[bi+1],L[bj]];L=L.slice(0,bi).concat(ns).concat(L.slice(bj+1));ch=true;}return L;}
+function step3AddHash(s){const p=s.filter((_,i)=>i%2===0),r=s.filter((_,i)=>i%2===1);const res=[p[0]];for(let i=0;i<r.length;i++){const rt=r[i],lf=p[i],rg=p[i+1];let nh=false;if(isClosedRoute(rt))nh=true;else if(isPPoint(lf)||isPPoint(rg))nh=true;res.push(nh?'#'+rt:rt);res.push(rg);}return res;}
+function process(){const s=document.getElementById('status');const it=document.getElementById('inputText').value;if(!it.trim()){s.innerHTML='<div class="error">请输入待处理的航路文本</div>';document.getElementById('resultSection').style.display='none';return;}try{const{seq:s1,fmt}=step1Extract(it);let seq=s1;if(fmt==='table'){seq=step2Reduce(seq);seq=step3AddHash(seq);}const res=seq.length>0?seq.join(' '):'⚠️ 未提取到有效航路数据';document.getElementById('resultBox').textContent=res;document.getElementById('resultSection').style.display='block';s.innerHTML='<div class="success">✅ 处理完成</div>';}catch(e){s.innerHTML='<div class="error">❌ 处理失败：'+escapeHtml(e.message)+'</div>';console.error(e);}}
+const ie=document.getElementById('inputText');let st=null;ie.addEventListener('input',()=>{clearTimeout(st);st=setTimeout(()=>saveInput(ie.value),500);});
+document.getElementById('processBtn').addEventListener('click',process);
+document.getElementById('clearBtn').addEventListener('click',()=>{ie.value='';saveInput('');document.getElementById('resultSection').style.display='none';document.getElementById('status').innerHTML='';document.getElementById('copyStatus').textContent='';});
+document.getElementById('copyBtn').addEventListener('click',async()=>{const t=document.getElementById('resultBox').textContent;if(!t)return;const se=document.getElementById('copyStatus');try{await navigator.clipboard.writeText(t);se.textContent='✅ 已复制';setTimeout(()=>{se.textContent='';},1500);}catch(e){const ta=document.createElement('textarea');ta.value=t;ta.style.position='fixed';ta.style.left='-9999px';document.body.appendChild(ta);ta.select();try{document.execCommand('copy');se.textContent='✅ 已复制';setTimeout(()=>{se.textContent='';},1500);}catch(e2){se.textContent='❌ 复制失败';se.style.color='#d32f2f';}document.body.removeChild(ta);}});
+window.addEventListener('DOMContentLoaded',()=>{const s=loadInput();if(s)ie.value=s;});
+</script>
 </body>
 </html>
 """
     components.html(G_HTML, height=900, scrolling=True)
+
+
+# ================================================================
+# 功能4：批复核对
+# ================================================================
+with tab4:
+    st.markdown("上传批复汇总表 + 航段数据，粘贴文本航班信息，即可自动核对差异。")
+
+    PC_MONTHS = {
+        "JAN": 1, "FEB": 2, "MAR": 3, "APR": 4,
+        "MAY": 5, "JUN": 6, "JUL": 7, "AUG": 8,
+        "SEP": 9, "OCT": 10, "NOV": 11, "DEC": 12,
+    }
+
+    PC_RED = "FF0000"
+    PC_GREEN = "00B050"
+    PC_HIGHLIGHT_YELLOW = "yellow"
+
+    PC_MAX_CROSS_DAY_GAP_MIN = 600
+    PC_EARLY_GREEN_THRESHOLD_MIN = 600
+
+    PC_PILOT_RAW = """P001,庚凡,gengfan@amber-aviation.com
+P002,张永一,zhangyongyi@amber-aviation.com
+P003,梅峰,fmei@amber-aviation.com
+P004,王斌,wangbin@amber-aviation.com
+P019,"HEALY, Darran William",darranhealy@amber-aviation.com
+P020,"BEEBE, Thaddeus John",thaddeusbeebe@amber-aviation.com
+P032,林毅,ericlin@amber-aviation.com
+P035,"Peter Robert, JACKSON",prjackson@amber-aviation.com
+P036,王少雄,warrenwang@amber-aviation.com
+P038,苗旺旺,johnmiao@amber-aviation.com
+P039,"Yiftah, RAUCH",yiftahrauch@amber-aviation.com
+P044,李辛欣,rockli@amber-aviation.com
+P046,赵岩松,zhyszhao@amber-aviation.com
+P051,彭罡,eugene.peng@humbleholding.com
+P052,胡君量,brian.wu@humbleholding.com
+P053,"Bruce Roderick, WAINES",brwaines@amber-aviation.com
+P054,"Rodolfo, BONETTI",rbonetti@amber-aviation.com
+P056,"Keith Robert, SHERREN",krsherren@amber-aviation.com
+P057,"Oliver Viktor, RACZ",ovracz@amber-aviation.com
+P059,蔡国俊,kctsai@amber-aviation.com
+P061,李庆宏,qhli@amber-aviation.com
+P065,宋炜,wsong@amber-aviation.com
+P068,昝昭君,zjzan@amber-aviation.com
+P069,"ROEDER, SIMONE ELKE",simoneroeder@amber-aviation.com
+P070,"Herve Daniel, STAMM",hdstamm@amber-aviation.com
+P071,孙浩,jasonsun@amber-aviation.com
+P072,朱正宇,zyzhu@amber-aviation.com
+P074,金尚明,smjin@amber-aviation.com
+P075,"Eduard Pascal, Roski",eduardroski@amber-aviation.com
+P077,刘凯,andyliu@amber-aviation.com
+P078,张帆,fzhang@amber-aviation.com
+P079,魏思远,wesleywei@amber-aviation.com
+P080,刘爽,sliu@amber-aviation.com
+P081,吴鹏,richardwu@amber-aviation.com
+P082,刘汇川,frankliu@amber-aviation.com
+P083,尤欣,xyou@amber-aviation.com
+P084,李亚民,ymli@amber-aviation.com
+P085,赵镭,lzhao@amber-aviation.com
+P086,张贺新,hxzhang@amber-aviation.com
+P087,孙赫,hesun@amber-aviation.com
+P088,马坚,harryma@amber-aviation.com
+P089,李晓龙,xlli@amber-aviation.com
+P090,黄海东,hdhuang@amber-aviation.com
+P091,马洪双,mikema@amber-aviation.com
+PJZ001,张哲,zzhang@amber-aviation.com
+PJZ002,郭春旭,charlesguo@amber-aviation.com
+PJZ004,王国勤,leowang@amber-aviation.com
+PJZ005,王莹,evawang@amber-aviation.com
+PJZ007,徐卓,frankxu@amber-aviation.com
+PJZ008,杨华,ariayang@amber-aviation.com
+W070,王彦海,wang_yanhai@163.com
+W213,沈志伟,cshum@tagaviation.com
+W267,"Nathon Andrew G, NORBERG",naten7@hotmail.com
+W268,"Daniel, RICHTER",pilotlocalizer@gmail.com
+W270,杨涛,yang_tao2005@aliyun.com
+W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
+"""
+
+    PC_AIRCRAFT_TYPE_MAP = {
+        "B3926": "LJ60", "B652R": "GLF4", "B8105": "GLEX", "B8160": "GLF5",
+        "B8262": "GLF4", "B8292": "GLF5", "B8309": "GLF5", "MLLIN": "GLEX",
+        "N2QE": "GL5T", "N328LM": "GL7T", "N550DR": "GLF5", "N577QT": "F900",
+        "N7777U": "GLEX", "N777ZH": "GLF5", "N88AY": "GLF5", "T7178HT": "GL7T",
+        "T7CJK": "GLEX", "VPCSZ": "GL7T", "VPCVA": "GLF6", "B652Q": "GLF4",
+        "B652S": "GLF4", "B65AP": "GLF4",
+    }
+
+    PC_FERRY_KEYWORDS = ("调机", "维修")
+
+    # ---------- 工具 ----------
+    def pc_parse_date_token(token):
+        token = token.strip().upper()
+        day = int(token[:2])
+        mon = PC_MONTHS[token[2:5]]
+        year_str = token[5:]
+        year = 2000 + int(year_str) if len(year_str) == 2 else int(year_str)
+        return _pcdt.date(year, mon, day)
+
+    def pc_parse_hhmm(token):
+        token = str(token).strip().zfill(4)
+        return _pcdt.time(int(token[:2]), int(token[2:]))
+
+    def pc_parse_hhmm_str(s):
+        if not s:
+            return None
+        m = re.match(r"^(\d{1,2}):(\d{2})$", str(s).strip())
+        if not m:
+            return None
+        return _pcdt.time(int(m.group(1)), int(m.group(2)))
+
+    def pc_is_b_reg(reg):
+        return str(reg).strip().upper().startswith("B")
+
+    def pc_to_beijing_datetime(reg, date_obj, hhmm_token):
+        dt = _pcdt.datetime.combine(date_obj, pc_parse_hhmm(hhmm_token))
+        if not pc_is_b_reg(reg):
+            dt += _pcdt.timedelta(hours=8)
+        return dt
+
+    def pc_fmt_time(value):
+        if value is None:
+            return ""
+        if isinstance(value, _pcdt.datetime):
+            return value.strftime("%H:%M")
+        if isinstance(value, _pcdt.time):
+            return value.strftime("%H:%M")
+        s = str(value).strip()
+        m = re.match(r"(\d{1,2}):(\d{2})", s)
+        return f"{int(m.group(1)):02d}:{m.group(2)}" if m else s
+
+    def pc_fmt_date(value):
+        if value is None:
+            return None
+        if isinstance(value, _pcdt.datetime):
+            return value.date()
+        if isinstance(value, _pcdt.date):
+            return value
+        s = str(value).strip()
+        for fmt in ("%Y-%m-%d", "%Y/%m/%d", "%Y.%m.%d"):
+            try:
+                return _pcdt.datetime.strptime(s, fmt).date()
+            except ValueError:
+                pass
+        return None
+
+    def pc_has_chinese(text):
+        return bool(re.search(r"[\u4e00-\u9fff]", str(text)))
+
+    def pc_time_diff_minutes(t1, t2):
+        def to_min(t):
+            h, m = t.split(":")
+            return int(h) * 60 + int(m)
+        try:
+            return abs(to_min(t1) - to_min(t2))
+        except Exception:
+            return 9999
+
+    def pc_hhmm_to_minutes(t):
+        h, m = t.split(":")
+        return int(h) * 60 + int(m)
+
+    def pc_flight_duration_minutes(dep_t, arr_t):
+        try:
+            d = pc_hhmm_to_minutes(dep_t)
+            a = pc_hhmm_to_minutes(arr_t)
+        except Exception:
+            return None
+        if a < d:
+            a += 1440
+        return a - d
+
+    def pc_fmt_duration(mins):
+        if mins is None:
+            return ""
+        sign = "-" if mins < 0 else ""
+        m = abs(mins)
+        return f"{sign}{m // 60}:{m % 60:02d}"
+
+    def pc_compute_real_minute_diff(ap_date, ap_time_str, xl_date, xl_time_str):
+        if ap_date is None or xl_date is None:
+            return None
+        try:
+            ap_min = pc_hhmm_to_minutes(ap_time_str)
+            xl_min = pc_hhmm_to_minutes(xl_time_str)
+        except Exception:
+            return None
+        ap_abs = ap_date.toordinal() * 1440 + ap_min
+        xl_abs = xl_date.toordinal() * 1440 + xl_min
+        return ap_abs - xl_abs
+
+    @st.cache_data
+    def pc_load_pilots():
+        pilots = {}
+        for line in PC_PILOT_RAW.strip().splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                parts = next(csv.reader([line]))
+            except Exception:
+                parts = line.split(",")
+            if len(parts) >= 2:
+                pilots[parts[0].strip()] = parts[1].strip().strip('"')
+        return pilots
+
+    def pc_crew_all_chinese(crew_codes, pilots):
+        pilot_codes = [c.strip() for c in crew_codes if c.strip().startswith(("P", "W"))]
+        if not pilot_codes:
+            return None
+        for code in pilot_codes:
+            if code not in pilots:
+                return None
+            if not pc_has_chinese(pilots[code]):
+                return False
+        return True
+
+    def pc_is_ferry_use(use_text):
+        return any(k in use_text for k in PC_FERRY_KEYWORDS)
+
+    # ---------- 解析批复 ----------
+    PC_APPROVAL_RE = re.compile(
+        r"^(?P<reg>[A-Z0-9\-]+)\s+"
+        r"(?P<second>[A-Z0-9]+)\s+"
+        r"(?P<dep>[A-Z]{4})(?P<dep_time>\d{4})\s+"
+        r"(?P<arr_time>\d{4})(?P<arr>[A-Z]{4})\s+"
+        r"ON\s+(?P<date>\d{2}[A-Z]{3}\d{2,4})\s+"
+        r"(?P<rest>.+)$",
+        re.IGNORECASE,
+    )
+
+    def pc_parse_approval_line(text):
+        m = PC_APPROVAL_RE.match(text.strip())
+        if not m:
+            return None
+
+        reg = m.group("reg").upper().replace("-", "")
+        second = m.group("second").upper()
+        dep = m.group("dep").upper()
+        arr = m.group("arr").upper()
+        dep_raw = m.group("dep_time")
+        arr_raw = m.group("arr_time")
+        date_raw = m.group("date").upper()
+        rest = m.group("rest").strip()
+
+        if pc_is_b_reg(reg):
+            ac_type = second
+            flight_no = ""
+        else:
+            if second == reg:
+                flight_no = second
+                ac_type = ""
+            else:
+                ac_type = second
+                flight_no = ""
+
+        service, remark = "", ""
+        sm = re.match(r"^(U/H|N/M)\s*(.*)$", rest, re.IGNORECASE)
+        if sm:
+            service = sm.group(1).upper()
+            remark = sm.group(2).strip()
+        else:
+            upper = rest.upper()
+            if upper.startswith("FERRY"):
+                service = "N/M"
+                remark = rest[5:].strip(" -–—\t")
+            elif upper.startswith("BUSINESS"):
+                service = "U/H"
+                remark = rest[8:].strip(" -–—\t")
+            else:
+                parts = rest.split(None, 1)
+                service = parts[0].upper() if parts else ""
+                remark = parts[1].strip() if len(parts) > 1 else ""
+
+        date_obj = pc_parse_date_token(date_raw)
+        return {
+            "raw": text.strip(),
+            "reg": reg,
+            "type": ac_type,
+            "flight_no": flight_no,
+            "is_domestic": pc_is_b_reg(reg),
+            "dep": dep,
+            "dep_time_raw": dep_raw,
+            "arr_time_raw": arr_raw,
+            "arr": arr,
+            "date_raw": date_raw,
+            "dep_dt_bj": pc_to_beijing_datetime(reg, date_obj, dep_raw),
+            "arr_dt_bj": pc_to_beijing_datetime(reg, date_obj, arr_raw),
+            "service": service,
+            "remark": remark,
+        }
+
+    def pc_iter_doc_paragraphs(doc):
+        for p in doc.paragraphs:
+            yield p
+        for table in doc.tables:
+            for row in table.rows:
+                for cell in row.cells:
+                    for p in cell.paragraphs:
+                        yield p
+                    for nested in cell.tables:
+                        for nrow in nested.rows:
+                            for ncell in nrow.cells:
+                                for np in ncell.paragraphs:
+                                    yield np
+
+    def pc_collect_all_paragraphs(doc):
+        result = []
+        for p in doc.paragraphs:
+            result.append(p)
+        for table in doc.tables:
+            for row in table.rows:
+                for cell in row.cells:
+                    for p in cell.paragraphs:
+                        result.append(p)
+                    for nested in cell.tables:
+                        for nrow in nested.rows:
+                            for ncell in nrow.cells:
+                                for np in ncell.paragraphs:
+                                    result.append(np)
+        return result
+
+    def pc_split_paragraph_by_br(p_elem):
+        parent = p_elem.getparent()
+        if parent is None:
+            return
+        idx_in_parent = list(parent).index(p_elem)
+        pPr = p_elem.find(qn('w:pPr'))
+
+        groups = [[]]
+        for child in list(p_elem):
+            if child.tag == qn('w:pPr'):
+                continue
+            if child.tag == qn('w:r'):
+                brs = child.findall(qn('w:br'))
+                if not brs:
+                    groups[-1].append(copy.deepcopy(child))
+                else:
+                    cur = []
+                    for rc in list(child):
+                        if rc.tag == qn('w:br'):
+                            if cur:
+                                nr = OxmlElement('w:r')
+                                for x in cur:
+                                    nr.append(copy.deepcopy(x))
+                                groups[-1].append(nr)
+                                cur = []
+                            groups.append([])
+                        else:
+                            cur.append(rc)
+                    if cur:
+                        nr = OxmlElement('w:r')
+                        for x in cur:
+                            nr.append(copy.deepcopy(x))
+                        groups[-1].append(nr)
+            else:
+                groups[-1].append(copy.deepcopy(child))
+
+        if len(groups) <= 1:
+            return
+
+        parent.remove(p_elem)
+        for i, group in enumerate(groups):
+            new_p = OxmlElement('w:p')
+            if pPr is not None:
+                new_p.append(copy.deepcopy(pPr))
+            for child in group:
+                new_p.append(child)
+            parent.insert(idx_in_parent + i, new_p)
+
+    def pc_normalize_soft_breaks(doc):
+        for p in pc_collect_all_paragraphs(doc):
+            pc_split_paragraph_by_br(p._element)
+
+    # ---------- Excel ----------
+    def pc_load_excel_rows_from_bytes(data: bytes):
+        wb = load_workbook(io.BytesIO(data), data_only=True)
+        ws = wb["航段(北京时)"] if "航段(北京时)" in wb.sheetnames else wb.active
+
+        rows = []
+        for r in range(3, ws.max_row + 1):
+            reg = ws.cell(r, 3).value
+            if not reg:
+                continue
+            rows.append({
+                "_idx": len(rows),
+                "reg": str(reg).strip().upper(),
+                "use": str(ws.cell(r, 4).value or "").strip(),
+                "dep_date": pc_fmt_date(ws.cell(r, 7).value),
+                "dep_time": pc_fmt_time(ws.cell(r, 8).value),
+                "dep": str(ws.cell(r, 11).value or "").strip().upper(),
+                "dep_city": str(ws.cell(r, 12).value or "").strip(),
+                "arr": str(ws.cell(r, 13).value or "").strip().upper(),
+                "arr_city": str(ws.cell(r, 14).value or "").strip(),
+                "arr_date": pc_fmt_date(ws.cell(r, 15).value),
+                "arr_time": pc_fmt_time(ws.cell(r, 16).value),
+            })
+        return rows
+
+    # ---------- 文本航班 ----------
+    PC_FLIGHT_HEADER_RE = re.compile(
+        r"^([A-Z0-9]+)\s+(\d{1,2}:\d{2})\s*-\s*(\d{1,2}:\d{2})(?:\s*\+1)?$"
+    )
+
+    def pc_load_text_flights(text: str):
+        lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
+        flights = []
+        i = 0
+        pending_f = False
+
+        while i < len(lines):
+            line = lines[i]
+
+            if line.upper() == "F":
+                pending_f = True
+                i += 1
+                continue
+
+            if line.upper() in ("TBA",):
+                i += 1
+                continue
+
+            m = PC_FLIGHT_HEADER_RE.match(line)
+            if m:
+                reg = m.group(1).upper()
+                dep_time, arr_time = m.group(2), m.group(3)
+                if i + 1 < len(lines):
+                    cm = re.match(r"^(.+?)\s+-\s+(.+)$", lines[i + 1])
+                    if cm:
+                        crew = []
+                        if i + 2 < len(lines):
+                            cl = lines[i + 2].replace(" ", "")
+                            if re.match(r"^[A-Z0-9,]+$", cl):
+                                crew = [x for x in cl.split(",") if x]
+
+                        flights.append({
+                            "_idx": len(flights),
+                            "reg": reg,
+                            "dep_time": dep_time,
+                            "arr_time": arr_time,
+                            "dep_city": cm.group(1).strip(),
+                            "arr_city": cm.group(2).strip(),
+                            "crew": crew,
+                            "is_ferry": pending_f,
+                        })
+                        pending_f = False
+                        i += 3
+                        continue
+            i += 1
+        return flights
+
+    # ---------- 覆盖率 ----------
+    def pc_check_text_coverage(excel_rows, text_flights, city_to_icao):
+        domestic_rows = [
+            r for r in excel_rows
+            if (r["dep"].startswith("Z") or r["arr"].startswith("Z"))
+            and r["dep"]
+            and r["arr"]
+        ]
+
+        text_by_reg = {}
+        for tf in text_flights:
+            text_by_reg.setdefault(tf["reg"], []).append(tf)
+
+        covered = 0
+        missing = []
+        for r in domestic_rows:
+            candidates = text_by_reg.get(r["reg"], [])
+            found = False
+            for tf in candidates:
+                dep_icao = city_to_icao.get(tf["dep_city"])
+                arr_icao = city_to_icao.get(tf["arr_city"])
+                if dep_icao == r["dep"] and arr_icao == r["arr"]:
+                    found = True
+                    break
+            if found:
+                covered += 1
+            else:
+                missing.append(r)
+
+        return len(domestic_rows), covered, missing
+
+    # ---------- 匹配 ----------
+    def pc_find_excel_match(approval, excel_rows, used_excel):
+        base_candidates = [
+            r for r in excel_rows
+            if r["_idx"] not in used_excel
+            and r["reg"] == approval["reg"]
+            and r["dep"] == approval["dep"]
+            and r["arr"] == approval["arr"]
+        ]
+        if not base_candidates:
+            return None
+
+        approval_date = approval["dep_dt_bj"].date()
+        approval_dep_time = approval["dep_dt_bj"].strftime("%H:%M")
+
+        same_date = [r for r in base_candidates if r["dep_date"] == approval_date]
+        if same_date:
+            same_date.sort(key=lambda r: pc_time_diff_minutes(r["dep_time"], approval_dep_time))
+            matched = same_date[0]
+            used_excel.add(matched["_idx"])
+            return matched
+
+        close_date = []
+        for r in base_candidates:
+            if r["dep_date"] is None:
+                continue
+            delta_days = (approval_date - r["dep_date"]).days
+            if abs(delta_days) != 1:
+                continue
+            real_diff = pc_compute_real_minute_diff(
+                approval_date, approval_dep_time,
+                r["dep_date"], r["dep_time"]
+            )
+            if real_diff is not None and abs(real_diff) <= PC_MAX_CROSS_DAY_GAP_MIN:
+                close_date.append((abs(real_diff), r))
+
+        if close_date:
+            close_date.sort(key=lambda x: x[0])
+            matched = close_date[0][1]
+            used_excel.add(matched["_idx"])
+            return matched
+
+        return None
+
+    def pc_find_text_match(approval, text_flights, city_to_icao, used_text):
+        candidates = []
+        for i, tf in enumerate(text_flights):
+            if i in used_text:
+                continue
+            if tf["reg"] != approval["reg"]:
+                continue
+            if (city_to_icao.get(tf["dep_city"]) == approval["dep"]
+                    and city_to_icao.get(tf["arr_city"]) == approval["arr"]):
+                candidates.append((i, tf))
+
+        if not candidates:
+            return None
+
+        target = approval["dep_dt_bj"].strftime("%H:%M")
+        candidates.sort(key=lambda x: pc_time_diff_minutes(x[1]["dep_time"], target))
+        idx, matched = candidates[0]
+        used_text.add(idx)
+        return matched
+
+    # ---------- docx 样式 ----------
+    PC_W_R = qn('w:r')
+    PC_W_RPR = qn('w:rPr')
+    PC_W_COLOR = qn('w:color')
+    PC_W_T = qn('w:t')
+    PC_W_HIGHLIGHT = qn('w:highlight')
+
+    def pc_set_run_color(run_element, color_hex):
+        rPr = run_element.find(PC_W_RPR)
+        if rPr is None:
+            rPr = run_element.makeelement(PC_W_RPR, {})
+            run_element.insert(0, rPr)
+        for c in rPr.findall(PC_W_COLOR):
+            rPr.remove(c)
+        color = rPr.makeelement(PC_W_COLOR, {qn('w:val'): color_hex})
+        rPr.append(color)
+
+    def pc_set_run_highlight(run_element, color_name=PC_HIGHLIGHT_YELLOW):
+        rPr = run_element.find(PC_W_RPR)
+        if rPr is None:
+            rPr = run_element.makeelement(PC_W_RPR, {})
+            run_element.insert(0, rPr)
+        for h in rPr.findall(PC_W_HIGHLIGHT):
+            rPr.remove(h)
+        hl = rPr.makeelement(PC_W_HIGHLIGHT, {qn('w:val'): color_name})
+        rPr.append(hl)
+
+    def pc_make_run_like(src_run_elem, text, color_hex=None, highlight=None):
+        new_r = copy.deepcopy(src_run_elem)
+        for t in new_r.findall(PC_W_T):
+            new_r.remove(t)
+        t = new_r.makeelement(PC_W_T, {})
+        t.text = text
+        t.set(qn('xml:space'), 'preserve')
+        new_r.append(t)
+        if color_hex:
+            pc_set_run_color(new_r, color_hex)
+        if highlight:
+            pc_set_run_highlight(new_r, highlight)
+        return new_r
+
+    def pc_set_paragraph_runs(paragraph, text, color_overrides):
+        if not color_overrides:
+            return
+        runs = list(paragraph.runs)
+        if not runs:
+            return
+        full_text = "".join(r.text for r in runs)
+        if not full_text:
+            return
+
+        char_color = [None] * len(full_text)
+        for color_hex, parts in color_overrides:
+            for part in parts:
+                if not part:
+                    continue
+                start = 0
+                while True:
+                    idx = full_text.find(part, start)
+                    if idx == -1:
+                        break
+                    for i in range(idx, idx + len(part)):
+                        char_color[i] = color_hex
+                    start = idx + len(part)
+
+        if not any(c is not None for c in char_color):
+            return
+
+        pos = 0
+        for run in runs:
+            r_text = run.text
+            if not r_text:
+                continue
+            r_start = pos
+            r_len = len(r_text)
+            run_colors = [char_color[r_start + i] for i in range(r_len)]
+
+            unique_colors = set(run_colors)
+            if len(unique_colors) == 1:
+                color = run_colors[0]
+                if color is None:
+                    pos += r_len
+                    continue
+                pc_set_run_color(run._element, color)
+                pos += r_len
+                continue
+
+            run_elem = run._element
+            parent = run_elem.getparent()
+            idx_in_parent = list(parent).index(run_elem)
+
+            pieces = []
+            i = 0
+            while i < r_len:
+                c = run_colors[i]
+                j = i + 1
+                while j < r_len and run_colors[j] == c:
+                    j += 1
+                pieces.append((r_text[i:j], c))
+                i = j
+
+            parent.remove(run_elem)
+            for k, (seg, color) in enumerate(pieces):
+                new_r = pc_make_run_like(run_elem, seg, color)
+                parent.insert(idx_in_parent + k, new_r)
+
+            pos += r_len
+
+    def pc_append_red_text(paragraph, text):
+        runs = list(paragraph.runs)
+        p_elem = paragraph._element
+        if runs:
+            src = runs[-1]._element
+            new_r = pc_make_run_like(src, text, color_hex=PC_RED, highlight=PC_HIGHLIGHT_YELLOW)
+        else:
+            new_r = p_elem.makeelement(PC_W_R, {})
+            rPr = new_r.makeelement(PC_W_RPR, {})
+            new_r.insert(0, rPr)
+            color = rPr.makeelement(PC_W_COLOR, {qn('w:val'): PC_RED})
+            rPr.append(color)
+            hl = rPr.makeelement(PC_W_HIGHLIGHT, {qn('w:val'): PC_HIGHLIGHT_YELLOW})
+            rPr.append(hl)
+            t = new_r.makeelement(PC_W_T, {})
+            t.text = text
+            t.set(qn('xml:space'), 'preserve')
+            new_r.append(t)
+        p_elem.append(new_r)
+
+    def pc_find_target_cell(doc, reg):
+        reg_norm = reg.upper().replace("-", "")
+        for table in doc.tables:
+            for row in table.rows:
+                for cell in row.cells:
+                    for p in cell.paragraphs:
+                        ap = pc_parse_approval_line(p.text.strip())
+                        if ap and ap["reg"] == reg_norm:
+                            return cell
+        for table in doc.tables:
+            for row_idx, row in enumerate(table.rows):
+                for cell in row.cells:
+                    text = cell.text.strip().strip("*").strip().replace("-", "").upper()
+                    if text == reg_norm:
+                        if row_idx + 1 < len(table.rows):
+                            next_row = table.rows[row_idx + 1]
+                            return next_row.cells[0]
+                        return cell
+        return None
+
+    def pc_find_global_template_paragraph(doc):
+        for p in pc_iter_doc_paragraphs(doc):
+            if pc_parse_approval_line(p.text.strip()):
+                return p
+        return None
+
+    def pc_make_red_paragraph_element(text, template_p):
+        p_elem = OxmlElement('w:p')
+        if template_p is not None:
+            template_pPr = template_p._element.find(qn('w:pPr'))
+            if template_pPr is not None:
+                p_elem.append(copy.deepcopy(template_pPr))
+
+        r_elem = OxmlElement('w:r')
+        rPr = None
+        if template_p is not None:
+            for r in template_p.runs:
+                rPr_src = r._element.find(PC_W_RPR)
+                if rPr_src is not None:
+                    rPr = copy.deepcopy(rPr_src)
+                    break
+        if rPr is None:
+            rPr = OxmlElement('w:rPr')
+
+        for c in rPr.findall(PC_W_COLOR):
+            rPr.remove(c)
+        for h in rPr.findall(PC_W_HIGHLIGHT):
+            rPr.remove(h)
+
+        color = OxmlElement('w:color')
+        color.set(qn('w:val'), PC_RED)
+        rPr.append(color)
+
+        hl = OxmlElement('w:highlight')
+        hl.set(qn('w:val'), PC_HIGHLIGHT_YELLOW)
+        rPr.append(hl)
+
+        r_elem.append(rPr)
+
+        t_elem = OxmlElement('w:t')
+        t_elem.text = text
+        t_elem.set(qn('xml:space'), 'preserve')
+        r_elem.append(t_elem)
+
+        p_elem.append(r_elem)
+        return p_elem
+
+    def pc_reorder_cell_with_pending(cell, pending_items, global_template_p):
+        existing_items = []
+        template_p = None
+        for p in cell.paragraphs:
+            raw = p.text.strip()
+            ap = pc_parse_approval_line(raw)
+            if ap:
+                existing_items.append({
+                    "type": "existing",
+                    "dt": ap["dep_dt_bj"],
+                    "element": p._element,
+                })
+                if template_p is None:
+                    template_p = p
+        if template_p is None:
+            template_p = global_template_p
+
+        for item in pending_items:
+            existing_items.append({
+                "type": "pending",
+                "dt": item["dt"],
+                "text": item["text"],
+            })
+
+        existing_items.sort(key=lambda x: x["dt"])
+
+        tc = cell._tc
+        for p_elem in list(tc.findall(qn('w:p'))):
+            tc.remove(p_elem)
+
+        for item in existing_items:
+            if item["type"] == "existing":
+                tc.append(item["element"])
+            else:
+                new_p = pc_make_red_paragraph_element(item["text"], template_p)
+                tc.append(new_p)
+
+    def pc_build_approval_text(excel_row, is_domestic, note_kind=""):
+        reg = excel_row["reg"]
+        dep_date = excel_row["dep_date"]
+        if not dep_date:
+            return None
+
+        date_str = dep_date.strftime("%d%b").upper()
+        parts = [reg, f"{excel_row['dep']}-{excel_row['arr']}", date_str]
+
+        if is_domestic:
+            if note_kind == "中国籍":
+                parts.append("中国籍")
+            elif note_kind == "外籍":
+                parts.append("外籍")
+            elif note_kind == "机组未定":
+                parts.append("机组未定")
+
+        parts.append("待申请")
+        return " ".join(parts)
+
+    # ---------- 主核对 ----------
+    def pc_run_check(docx_bytes, excel_bytes, text_content, pilots):
+        excel_rows = pc_load_excel_rows_from_bytes(excel_bytes)
+        text_flights = pc_load_text_flights(text_content)
+
+        city_to_icao = {}
+        for row in excel_rows:
+            if row["dep_city"]:
+                city_to_icao[row["dep_city"]] = row["dep"]
+            if row["arr_city"]:
+                city_to_icao[row["arr_city"]] = row["arr"]
+
+        doc = Document(io.BytesIO(docx_bytes))
+        pc_normalize_soft_breaks(doc)
+
+        result_rows = []
+        approval_red_map = {}
+        approval_green_map = {}
+        cancel_paragraphs = set()
+        change_paragraphs = set()
+
+        used_excel = set()
+        used_text = set()
+        unapproved_keys = set()
+
+        for p in pc_iter_doc_paragraphs(doc):
+            raw_text = p.text.strip()
+            if not raw_text:
+                continue
+
+            approval = pc_parse_approval_line(raw_text)
+            if not approval:
+                continue
+
+            if not approval["is_domestic"] and approval["flight_no"]:
+                unapproved_keys.add(
+                    (approval["reg"], approval["dep"], approval["arr"])
+                )
+                result_rows.append({
+                    "批复": raw_text,
+                    "飞机号": approval["reg"],
+                    "航班号": approval["flight_no"],
+                    "机型": PC_AIRCRAFT_TYPE_MAP.get(approval["reg"], ""),
+                    "内/外机": "外机",
+                    "批复起飞(北京时)": approval["dep_dt_bj"].strftime("%H:%M"),
+                    "批复落地(北京时)": approval["arr_dt_bj"].strftime("%H:%M"),
+                    "批复日期": approval["dep_dt_bj"].date().isoformat(),
+                    "Excel 用途": "",
+                    "文本标记": "",
+                    "Excel 计划起飞": "",
+                    "Excel 计划落地": "",
+                    "Excel 出发地": "",
+                    "Excel 到达地": "",
+                    "差异": "外机未批（已申请）",
+                    "是否一致": "待确认",
+                    "备注": "未批",
+                })
+                continue
+
+            red_parts = []
+            green_parts = []
+            diffs = []
+            note_parts = []
+            info_note = ""
+
+            excel_row = pc_find_excel_match(approval, excel_rows, used_excel)
+
+            if excel_row is None:
+                note_parts.append("待取消")
+                red_parts.append(approval["dep"])
+                red_parts.append(approval["arr"])
+                red_parts.append(approval["date_raw"])
+
+                result_rows.append({
+                    "批复": raw_text,
+                    "飞机号": approval["reg"],
+                    "航班号": approval["flight_no"] if not approval["is_domestic"] else "",
+                    "机型": approval["type"] if approval["is_domestic"] else "",
+                    "内/外机": "内机" if approval["is_domestic"] else "外机",
+                    "批复起飞(北京时)": approval["dep_dt_bj"].strftime("%H:%M"),
+                    "批复落地(北京时)": approval["arr_dt_bj"].strftime("%H:%M"),
+                    "批复日期": approval["dep_dt_bj"].date().isoformat(),
+                    "Excel 用途": "",
+                    "文本标记": "",
+                    "Excel 计划起飞": "",
+                    "Excel 计划落地": "",
+                    "Excel 出发地": "",
+                    "Excel 到达地": "",
+                    "差异": f"Excel 中无 {approval['dep']}→{approval['arr']}（±1 天）匹配",
+                    "是否一致": "否",
+                    "备注": "待取消",
+                })
+                approval_red_map[raw_text] = red_parts
+                cancel_paragraphs.add(raw_text)
+                continue
+
+            text_flight = pc_find_text_match(
+                approval, text_flights, city_to_icao, used_text
+            )
+
+            approval_dep_time = approval["dep_dt_bj"].strftime("%H:%M")
+            approval_arr_time = approval["arr_dt_bj"].strftime("%H:%M")
+
+            if approval["is_domestic"]:
+                expected_type = PC_AIRCRAFT_TYPE_MAP.get(approval["reg"])
+                if expected_type is None:
+                    diffs.append(f"机型：注册号 {approval['reg']} 不在机型对照表中")
+                    red_parts.append(approval["type"])
+                elif approval["type"] != expected_type:
+                    diffs.append(f"机型：批复 {approval['type']} vs 对照表 {expected_type}")
+                    red_parts.append(approval["type"])
+
+            ap_dur = pc_flight_duration_minutes(approval_dep_time, approval_arr_time)
+            xl_dur = pc_flight_duration_minutes(excel_row["dep_time"], excel_row["arr_time"])
+            dur_diff = None
+            if ap_dur is not None and xl_dur is not None:
+                dur_diff = ap_dur - xl_dur
+                if abs(dur_diff) > 30:
+                    diffs.append(
+                        f"飞行时长：批复 {pc_fmt_duration(ap_dur)} vs 计划 {pc_fmt_duration(xl_dur)}"
+                        f"（差 {dur_diff:+d} 分钟）"
+                    )
+                    red_parts.append(approval["arr_time_raw"])
+
+            real_dep_diff = pc_compute_real_minute_diff(
+                approval["dep_dt_bj"].date(), approval_dep_time,
+                excel_row["dep_date"], excel_row["dep_time"]
+            )
+            dep_ok = False
+            if real_dep_diff is None:
+                dep_ok = False
+            elif real_dep_diff == 0:
+                dep_ok = True
+            elif -PC_EARLY_GREEN_THRESHOLD_MIN <= real_dep_diff < 0:
+                dep_ok = True
+                green_parts.append(approval["dep_time_raw"])
+            elif real_dep_diff > 0:
+                dep_ok = False
+                diffs.append(
+                    f"起飞时间：批复 {approval_dep_time} 晚于计划 {excel_row['dep_time']}，需重新申请"
+                )
+                red_parts.append(approval["dep_time_raw"])
+                change_paragraphs.add(raw_text)
+            else:
+                dep_ok = False
+                diffs.append(
+                    f"起飞时间：批复 {approval_dep_time} vs 计划 {excel_row['dep_time']}"
+                    f"（相差 {real_dep_diff} 分钟）"
+                )
+                red_parts.append(approval["dep_time_raw"])
+
+            xl_arr_date = excel_row["arr_date"] or excel_row["dep_date"]
+            real_arr_diff = pc_compute_real_minute_diff(
+                approval["arr_dt_bj"].date(), approval_arr_time,
+                xl_arr_date, excel_row["arr_time"]
+            )
+            if real_arr_diff is not None and real_arr_diff != 0:
+                if -PC_EARLY_GREEN_THRESHOLD_MIN <= real_arr_diff < 0 and dep_ok:
+                    green_parts.append(approval["arr_time_raw"])
+
+            excel_ferry = pc_is_ferry_use(excel_row["use"])
+            expected_service = "N/M" if excel_ferry else "U/H"
+
+            if approval["service"] != expected_service:
+                diffs.append(
+                    f"用途：批复 {approval['service']} vs 计划 {excel_row['use']}"
+                    f"（应为 {expected_service}）"
+                )
+                red_parts.append(approval["service"])
+
+            if text_flight is not None:
+                text_ferry = text_flight.get("is_ferry", False)
+                if excel_ferry and not text_ferry:
+                    diffs.append(
+                        f"⚠ 文本漏 F 标记（Excel 为调机：{excel_row['use']}）"
+                    )
+                    if approval["service"] not in red_parts:
+                        red_parts.append(approval["service"])
+                elif not excel_ferry and text_ferry:
+                    diffs.append(
+                        f"⚠ 文本多标 F 标记（Excel 为 {excel_row['use']}，非调机）"
+                    )
+                    if approval["service"] not in red_parts:
+                        red_parts.append(approval["service"])
+
+            if approval["is_domestic"]:
+                if text_flight:
+                    all_cn = pc_crew_all_chinese(text_flight["crew"], pilots)
+                    if all_cn is None:
+                        info_note = "待确认机组"
+                    else:
+                        has_cn = "中国籍" in approval["remark"]
+                        has_foreign = "外籍" in approval["remark"]
+                        if all_cn:
+                            if has_foreign:
+                                diffs.append("国籍标注错误（应为中国籍）")
+                                red_parts.append("外籍")
+                            elif not has_cn:
+                                diffs.append("国籍未标注（应为中国籍）")
+                        else:
+                            if has_cn:
+                                diffs.append("国籍标注错误（应为外籍）")
+                                red_parts.append("中国籍")
+                            elif not has_foreign:
+                                diffs.append("国籍未标注（应为外籍）")
+                else:
+                    info_note = "待确认机组"
+
+            if raw_text in change_paragraphs:
+                note_parts.append("待变更")
+
+            final_notes = list(note_parts)
+            if info_note:
+                final_notes.append(info_note)
+
+            if diffs or note_parts:
+                consistency = "否"
+            elif info_note:
+                consistency = "待确认"
+            else:
+                consistency = "是"
+
+            text_ferry_label = ""
+            if text_flight is not None:
+                text_ferry_label = "调机(F)" if text_flight.get("is_ferry", False) else "载客(无F)"
+
+            result_rows.append({
+                "批复": raw_text,
+                "飞机号": approval["reg"],
+                "航班号": approval["flight_no"] if not approval["is_domestic"] else "",
+                "机型": approval["type"] if approval["is_domestic"] else "",
+                "内/外机": "内机" if approval["is_domestic"] else "外机",
+                "批复起飞(北京时)": approval_dep_time,
+                "批复落地(北京时)": approval_arr_time,
+                "批复日期": approval["dep_dt_bj"].date().isoformat(),
+                "Excel 用途": excel_row["use"] if excel_row else "",
+                "文本标记": text_ferry_label,
+                "Excel 计划起飞": excel_row["dep_time"] if excel_row else "",
+                "Excel 计划落地": excel_row["arr_time"] if excel_row else "",
+                "Excel 出发地": excel_row["dep"] if excel_row else "",
+                "Excel 到达地": excel_row["arr"] if excel_row else "",
+                "差异": "；".join(diffs) if diffs else "无",
+                "是否一致": consistency,
+                "备注": "；".join(final_notes),
+            })
+
+            if red_parts:
+                approval_red_map[raw_text] = red_parts
+            if green_parts:
+                approval_green_map[raw_text] = green_parts
+
+        for p in pc_iter_doc_paragraphs(doc):
+            raw_text = p.text.strip()
+            red = approval_red_map.get(raw_text, [])
+            green = approval_green_map.get(raw_text, [])
+            if red or green:
+                pc_set_paragraph_runs(
+                    p, raw_text,
+                    [(PC_GREEN, green), (PC_RED, red)]
+                )
+
+        for p in pc_iter_doc_paragraphs(doc):
+            raw_text = p.text.strip()
+            if raw_text in cancel_paragraphs:
+                pc_append_red_text(p, "  待取消")
+            elif raw_text in change_paragraphs:
+                pc_append_red_text(p, "  待变更")
+
+        pending_by_reg = {}
+        for row in excel_rows:
+            if not row["reg"]:
+                continue
+            if not (row["dep"].startswith("Z") or row["arr"].startswith("Z")):
+                continue
+            if row["_idx"] in used_excel:
+                continue
+            if row["dep_date"] is None:
+                continue
+            if (row["reg"], row["dep"], row["arr"]) in unapproved_keys:
+                continue
+            pending_by_reg.setdefault(row["reg"], []).append(row)
+
+        pending_rows = []
+        global_template_p = pc_find_global_template_paragraph(doc)
+
+        for reg, rows in pending_by_reg.items():
+            target_cell = pc_find_target_cell(doc, reg)
+            if target_cell is None:
+                continue
+
+            is_domestic = pc_is_b_reg(reg)
+            items = []
+            for row in rows:
+                dep_t = pc_parse_hhmm_str(row["dep_time"])
+                if not row["dep_date"] or not dep_t:
+                    continue
+                dep_dt_bj = _pcdt.datetime.combine(row["dep_date"], dep_t)
+
+                note_kind = ""
+                if is_domestic:
+                    fake_ap = {
+                        "reg": reg,
+                        "dep": row["dep"],
+                        "arr": row["arr"],
+                        "dep_dt_bj": dep_dt_bj,
+                    }
+                    tf = pc_find_text_match(fake_ap, text_flights, city_to_icao, used_text)
+                    if tf is None or not tf["crew"]:
+                        note_kind = "机组未定"
+                    else:
+                        all_cn = pc_crew_all_chinese(tf["crew"], pilots)
+                        if all_cn is True:
+                            note_kind = "中国籍"
+                        elif all_cn is False:
+                            note_kind = "外籍"
+                        else:
+                            note_kind = "机组未定"
+
+                text = pc_build_approval_text(row, is_domestic, note_kind)
+                if not text:
+                    continue
+
+                items.append({
+                    "dt": dep_dt_bj,
+                    "text": text,
+                    "row": row,
+                    "note_kind": note_kind,
+                })
+
+            if not items:
+                continue
+
+            pc_reorder_cell_with_pending(target_cell, items, global_template_p)
+
+            for item in items:
+                row = item["row"]
+                if is_domestic:
+                    bj_dep = row["dep_time"]
+                    bj_arr = row["arr_time"]
+                else:
+                    dep_t2 = pc_parse_hhmm_str(row["dep_time"])
+                    arr_t2 = pc_parse_hhmm_str(row["arr_time"])
+                    if row["dep_date"] and dep_t2:
+                        bj_dep = (_pcdt.datetime.combine(row["dep_date"], dep_t2)
+                                  + _pcdt.timedelta(hours=8)).strftime("%H:%M")
+                    else:
+                        bj_dep = ""
+                    if row["arr_date"] and arr_t2:
+                        bj_arr = (_pcdt.datetime.combine(row["arr_date"], arr_t2)
+                                  + _pcdt.timedelta(hours=8)).strftime("%H:%M")
+                    else:
+                        bj_arr = ""
+
+                if item["note_kind"] == "机组未定":
+                    remark = "待申请（机组未定，需确认）"
+                    diff_text = "Excel 有计划，批复汇总表缺失；文本未提供该航段，机组需确认"
+                else:
+                    remark = "待申请"
+                    diff_text = "Excel 有计划，批复汇总表缺失"
+
+                pending_rows.append({
+                    "批复": item["text"],
+                    "飞机号": reg,
+                    "航班号": reg if not is_domestic else "",
+                    "机型": PC_AIRCRAFT_TYPE_MAP.get(reg, "") if is_domestic else "",
+                    "内/外机": "内机" if is_domestic else "外机",
+                    "批复起飞(北京时)": bj_dep,
+                    "批复落地(北京时)": bj_arr,
+                    "批复日期": row["dep_date"].isoformat() if row["dep_date"] else "",
+                    "Excel 用途": row["use"],
+                    "文本标记": "",
+                    "Excel 计划起飞": row["dep_time"],
+                    "Excel 计划落地": row["arr_time"],
+                    "Excel 出发地": row["dep"],
+                    "Excel 到达地": row["arr"],
+                    "差异": diff_text,
+                    "是否一致": "否",
+                    "备注": remark,
+                })
+
+        result_rows.extend(pending_rows)
+
+        out_buf = io.BytesIO()
+        doc.save(out_buf)
+        out_buf.seek(0)
+        return result_rows, out_buf
+
+    # ---------- 功能4 UI ----------
+    pc_col1, pc_col2 = st.columns([1, 1])
+    with pc_col1:
+        pc_docx_file = st.file_uploader(
+            "① 国内批复信息汇总表 (.docx)",
+            type=["docx"],
+            key="pc_docx",
+        )
+    with pc_col2:
+        pc_excel_file = st.file_uploader(
+            "② 航段数据导出 (.xlsx)",
+            type=["xlsx"],
+            key="pc_excel",
+        )
+
+    st.markdown(
+        "**说明**\n"
+        "- 飞行员名单、机型对照表已内置\n"
+        "- **软换行自动拆分**：Shift+Enter 产生的软换行会被拆成独立段落\n"
+        "- **文本覆盖率检查**：粘贴文本后立即执行，必须 **100%** 才能点「开始核对」\n"
+        "- **Excel 匹配**：注册号 + 起降机场 + 日期（同日优先；其次差 1 天且真实时差 ≤ 10 小时）\n"
+        "- **文本匹配**：注册号 + 起降城市 完全一致（一条只能用一次）\n"
+        "- **外机格式**：已批 `注册号 机型 ... FERRY/BUSINESS`；未批 `注册号 航班号(=注册号) ...`\n"
+        "- **用途映射**：`FERRY`→`N/M`；`BUSINESS`→`U/H`\n"
+        "- **三种结果**：是 / 否 / 待确认\n"
+        "- **待取消 / 待变更**：段落末尾追加**红字黄底**文字\n"
+        "- **待申请**：简洁格式插入（如 `VPCSZ ZGSZ-ZBAD 07OCT 待申请`），**红字黄底**\n"
+        "- **已有批复标红/标绿**：只改字体颜色，不加黄底"
+    )
+
+    pc_text_input = st.text_area(
+        "③ 粘贴文本版航班信息",
+        height=320,
+        key="pc_textarea",
+        placeholder=(
+            "例如：\n"
+            "B65AP 16:30 - 17:45\n"
+            "香港 - 泉州晋江\n"
+            "P057,P039,C046,M035"
+        ),
+    )
+
+    pc_text_content = pc_text_input.strip()
+
+    pc_coverage_ok = False
+    if pc_docx_file and pc_excel_file and pc_text_content:
+        preview_excel_rows = pc_load_excel_rows_from_bytes(pc_excel_file.getvalue())
+        preview_text_flights = pc_load_text_flights(pc_text_content)
+
+        preview_city_to_icao = {}
+        for row in preview_excel_rows:
+            if row["dep_city"]:
+                preview_city_to_icao[row["dep_city"]] = row["dep"]
+            if row["arr_city"]:
+                preview_city_to_icao[row["arr_city"]] = row["arr"]
+
+        total, covered, missing = pc_check_text_coverage(
+            preview_excel_rows, preview_text_flights, preview_city_to_icao
+        )
+
+        st.subheader("🔍 文本覆盖率检查")
+
+        if total == 0:
+            st.warning("Excel 里没有国内航段（Z 开头机场），无需核对。")
+            pc_coverage_ok = True
+        else:
+            coverage = covered / total
+
+            if coverage >= 1.0:
+                st.success(
+                    f"✅ 文本计划覆盖率：{covered}/{total}（100.0%）—— 可以开始核对"
+                )
+                pc_coverage_ok = True
+            else:
+                st.error(
+                    f"❌ 文本计划覆盖率不足：{covered}/{total}（{coverage*100:.1f}%），"
+                    f"缺 {total - covered} 条。**必须 100% 才能开始核对**，请先补全文本。"
+                )
+                pc_coverage_ok = False
+
+            if missing:
+                with st.expander(
+                    f"📋 缺失航段明细（{len(missing)} 条）—— 点开查看 / 复制",
+                    expanded=True,
+                ):
+                    missing_sorted = sorted(
+                        missing,
+                        key=lambda r: (
+                            r["dep_date"] or _pcdt.date.min,
+                            r["reg"],
+                            r["dep_time"],
+                        ),
+                    )
+                    lines = []
+                    for r in missing_sorted:
+                        date_str = r["dep_date"].strftime("%m-%d") if r["dep_date"] else "??-??"
+                        lines.append(
+                            f"{r['reg']}  {date_str}  {r['dep']}-{r['arr']}  "
+                            f"{r['dep_time']}-{r['arr_time']}  ({r['dep_city']} → {r['arr_city']})"
+                        )
+                    st.code("\n".join(lines), language=None)
+
+    pc_can_run = bool(pc_docx_file and pc_excel_file and pc_text_content) and pc_coverage_ok
+
+    if st.button("🚀 开始核对", type="primary", disabled=not pc_can_run, key="pc_run_btn"):
+        with st.spinner("正在核对..."):
+            try:
+                rows, out_buf = pc_run_check(
+                    pc_docx_file.getvalue(),
+                    pc_excel_file.getvalue(),
+                    pc_text_content,
+                    pc_load_pilots(),
+                )
+            except Exception as e:
+                st.exception(e)
+                st.stop()
+
+        df = pd.DataFrame(rows)
+        total_rows = len(df)
+        diff_count = (df["是否一致"] == "否").sum() if total_rows else 0
+        pending_count = (df["是否一致"] == "待确认").sum() if total_rows else 0
+
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric("批复条数", total_rows)
+        c2.metric("一致", total_rows - diff_count - pending_count)
+        c3.metric("有差异", diff_count)
+        c4.metric("待确认", pending_count)
+
+        st.subheader("📋 核对结果")
+        if total_rows == 0:
+            st.warning("未在 docx 中识别到任何批复行。")
+        else:
+            def highlight(row):
+                if row["是否一致"] == "待确认":
+                    return ["background-color: #fff3cd"] * len(row)
+                if row["是否一致"] == "否":
+                    if "待变更" in str(row["备注"]):
+                        return ["background-color: #e5f0ff"] * len(row)
+                    return ["background-color: #ffe5e5"] * len(row)
+                return [""] * len(row)
+
+            st.dataframe(
+                df.style.apply(highlight, axis=1),
+                use_container_width=True,
+                hide_index=True,
+            )
+
+            st.subheader("🚨 差异明细")
+            diffs_df = df[df["是否一致"] != "是"][["批复", "差异", "备注", "是否一致"]]
+            if diffs_df.empty:
+                st.success("✅ 所有批复与计划一致，未发现差异。")
+            else:
+                for _, r in diffs_df.iterrows():
+                    if r["是否一致"] == "待确认":
+                        note_html = (
+                            " <span style='color:#d97706;font-weight:bold'>"
+                            f"【{r['备注']}】</span>"
+                        )
+                    elif "待变更" in str(r["备注"]):
+                        note_html = (
+                            " <span style='color:#0066cc;font-weight:bold'>"
+                            f"【{r['备注']}】</span>"
+                        )
+                    elif r["备注"]:
+                        note_html = (
+                            f" <span style='color:red;font-weight:bold'>【{r['备注']}】</span>"
+                        )
+                    else:
+                        note_html = ""
+                    st.markdown(f"**`{r['批复']}`**{note_html}", unsafe_allow_html=True)
+                    if r["差异"] != "无":
+                        for line in r["差异"].split("；"):
+                            st.markdown(f"- {line}")
+
+        st.subheader("📥 下载标红后的批复汇总表")
+        st.download_button(
+            label=f"下载 {pc_docx_file.name}",
+            data=out_buf.getvalue(),
+            file_name=pc_docx_file.name,
+            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            key="pc_download_btn",
+        )
