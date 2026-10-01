@@ -6,6 +6,7 @@
 import streamlit as st
 import streamlit.components.v1 as components
 import pandas as pd
+import io
 from io import BytesIO
 from openpyxl import load_workbook
 from docx import Document
