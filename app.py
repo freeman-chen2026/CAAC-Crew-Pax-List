@@ -1608,10 +1608,12 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
                     cm = re.match(r"^(.+?)\s+-\s+(.+)$", lines[i + 1])
                     if cm:
                         crew = []
+                        step = 2  # 默认只跳 2 行（航班头 + 城市行）
                         if i + 2 < len(lines):
                             cl = lines[i + 2].replace(" ", "")
                             if re.match(r"^[A-Z0-9,]+$", cl):
                                 crew = [x for x in cl.split(",") if x]
+                                step = 3  # 有合法机组行时才跳 3 行
 
                         flights.append({
                             "_idx": len(flights),
@@ -1624,7 +1626,7 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
                             "is_ferry": pending_f,
                         })
                         pending_f = False
-                        i += 3
+                        i += step
                         continue
             i += 1
         return flights
