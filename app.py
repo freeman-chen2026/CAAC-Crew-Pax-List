@@ -155,15 +155,30 @@ with tab1:
         "TWN": "中国台湾", "MAC": "澳门"
     }
 
-    AIRCRAFT_TYPE_CORRECTION = {"B3926": "LJ60"}
+    # ---------- 默认机型表（按注册号，不再依赖 GD 单） ----------
+    AIRCRAFT_TYPE_MAP = {
+        "B3926": "LJ60", "B652R": "GLF4", "B8105": "GLEX", "B8160": "GLF5",
+        "B8262": "GLF4", "B8292": "GLF5", "B8309": "GLF5", "MLLIN": "GLEX",
+        "N2QE": "GL5T", "N328LM": "GL7T", "N550DR": "GLF5", "N577QT": "F900",
+        "N7777U": "GLEX", "N777ZH": "GLF5", "N88AY": "GLF5", "T7178HT": "GL7T",
+        "T7CJK": "GLEX", "VPCSZ": "GL7T", "VPCVA": "GLF6", "B652Q": "GLF4",
+        "B652S": "GLF4", "B65AP": "GLF4",
+    }
 
-    def correct_aircraft_type(reg, ac_type):
-        if reg in AIRCRAFT_TYPE_CORRECTION:
-            corrected = AIRCRAFT_TYPE_CORRECTION[reg]
-            if ac_type != corrected:
-                st.info(f"✈️ 机型修正：{ac_type} → {corrected}（注册号 {reg}）")
-            return corrected
-        return ac_type
+    def get_aircraft_type(reg, gd_type=""):
+        """
+        根据注册号查表确定机型；
+        查不到时才回退到 GD单 上的机型。
+        """
+        reg_clean = str(reg).strip().upper() if reg else ""
+        gd_type_str = str(gd_type).strip() if gd_type else ""
+        if reg_clean and reg_clean in AIRCRAFT_TYPE_MAP:
+            mapped = AIRCRAFT_TYPE_MAP[reg_clean]
+            if gd_type_str and gd_type_str.upper() != mapped.upper():
+                st.info(f"✈️ 机型按注册号确定：{gd_type_str} → {mapped}（注册号 {reg_clean}）")
+            return mapped
+        # 注册号不在表中 → 兜底使用 GD单机型
+        return gd_type_str
 
     def get_nation_name(code):
         code = code.strip().upper()
@@ -422,8 +437,8 @@ with tab1:
                         if len(parts) > 1:
                             data["flt"] = parts[1]
                     elif "AC TYPE:" in val:
+                        # 先记录 GD单 原始机型，等注册号解析完后统一映射
                         data["ac_type_raw"] = get_value_right(ws, cell.row, cell.column+1)
-                        data["ac_type"] = correct_aircraft_type(data.get("reg", ""), data["ac_type_raw"])
                     elif "FROM:" in val:
                         data["from"] = get_value_right(ws, cell.row, cell.column+1)
                     elif "TO:" in val:
@@ -435,6 +450,11 @@ with tab1:
                             parts = date_time.split()
                             data["utc_time"] = parts[0] if len(parts) > 0 else ""
                             data["date_str"] = parts[1] if len(parts) > 1 else ""
+        # ---------- 统一按注册号映射机型（不依赖 GD单） ----------
+        data["ac_type"] = get_aircraft_type(
+            data.get("reg", ""), data.get("ac_type_raw", "")
+        )
+
         crew_data = []; passenger_data = []; section = None
         for row in ws.iter_rows(min_row=1):
             for cell in row:
@@ -781,7 +801,7 @@ with tab1:
 
     # ---------- 功能1 UI ----------
     st.subheader("📂 上传文件")
-    st.info("⚠️ 注意：模板文件必须是 **.xlsx** 格式（非 .xls）。联系方式、执照号码及证件号码已内置，无需额外上传。")
+    st.info("⚠️ 注意：模板文件必须是 **.xlsx** 格式（非 .xls）。联系方式、执照号码及证件号码已内置，机型已内置，无需额外上传。")
 
     data_file = st.file_uploader(
         "上传 GD单（General Declaration）Excel（.xlsx）",
@@ -800,6 +820,14 @@ with tab1:
         try:
             data, crew_list, passenger_list = parse_general_declaration(data_file)
             st.success(f"✅ 解析成功：机组 {len(crew_list)} 人，乘客 {len(passenger_list)} 人")
+
+            # 显示最终采用的机型（按注册号映射）
+            if data.get("ac_type") or data.get("reg"):
+                st.caption(
+                    f"✈️ 注册号：**{data.get('reg', '')}** ｜ 机型：**{data.get('ac_type', '')}**"
+                    + (f"（GD单原始机型：{data.get('ac_type_raw', '')}）"
+                       if data.get('ac_type_raw') and data.get('ac_type_raw') != data.get('ac_type') else "")
+                )
 
             # ---------- 本次机组信息（可编辑） ----------
             st.subheader("📋 本次机组信息（可编辑）")
