@@ -1194,7 +1194,6 @@ with tab4:
 
     PC_RED = "FF0000"
     PC_GREEN = "00B050"
-    PC_ORANGE = "BF8F00"          # 机组国籍待确认：橙字 + 黄底
     PC_HIGHLIGHT_YELLOW = "yellow"
 
     PC_MAX_CROSS_DAY_GAP_MIN = 600
@@ -1471,6 +1470,50 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
             "service": service,
             "remark": remark,
         }
+
+    # ---------- 待申请行签名 ----------
+    def pc_parse_pending_signature(text):
+        """识别'待申请行'（手写或系统生成），返回 (dep, arr, month, day) 或 None。
+
+        支持两类格式：
+          1. REG DEP-ARR DDMON ...   如 B652S ZSSS-RJTT 03OCT 中国籍 待申请
+          2. MM.DD DEP-ARR ...       如 10.08 LKPR-ZBAA 待申请 / 10.14 ZBAA-ZBTJ待申请
+
+        签名不含 reg（cell 内所有行都是同一注册号）。
+        """
+        text = str(text).strip()
+        if not text:
+            return None
+
+        # 格式1：REG DEP-ARR DDMON
+        m = re.match(
+            r'^[A-Z0-9\-]+\s+'
+            r'(?P<dep>[A-Z]{4})-(?P<arr>[A-Z]{4})\s+'
+            r'(?P<day>\d{1,2})(?P<mon>[A-Za-z]{3})',
+            text
+        )
+        if m:
+            try:
+                mon = PC_MONTHS[m.group("mon").upper()[:3]]
+                return (m.group("dep").upper(), m.group("arr").upper(),
+                        mon, int(m.group("day")))
+            except Exception:
+                pass
+
+        # 格式2：MM.DD DEP-ARR（注意 ZBAA-ZBTJ待申请 这种没空格的也要能吃）
+        m = re.match(
+            r'^(?P<month>\d{1,2})[.\-/](?P<day>\d{1,2})\s+'
+            r'(?P<dep>[A-Z]{4})-(?P<arr>[A-Z]{4})',
+            text
+        )
+        if m:
+            try:
+                return (m.group("dep").upper(), m.group("arr").upper(),
+                        int(m.group("month")), int(m.group("day")))
+            except Exception:
+                pass
+
+        return None
 
     def pc_iter_doc_paragraphs(doc):
         for p in doc.paragraphs:
@@ -1932,63 +1975,47 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
         return p_elem
 
     def pc_reorder_cell_with_pending(cell, pending_items, global_template_p):
-        existing_items = []
+        # 收集 cell 里所有段落（全部保留），并识别已有的"待申请"签名
         template_p = None
-        has_unparseable = False
+        existing_pending_sigs = set()
 
         for p in cell.paragraphs:
             raw = p.text.strip()
             if not raw:
                 continue
-            ap = pc_parse_approval_line(raw)
-            if ap:
-                existing_items.append({
-                    "type": "existing",
-                    "dt": ap["dep_dt_bj"],
-                    "element": p._element,
-                })
-                if template_p is None:
-                    template_p = p
-            else:
-                # cell 里存在无法解析为批复的段落（例如用户手写的
-                # "10.14 ZBAA-ZBTJ待申请"），标记为需要保护
-                has_unparseable = True
+            if template_p is None and pc_parse_approval_line(raw):
+                template_p = p
+            sig = pc_parse_pending_signature(raw)
+            if sig:
+                existing_pending_sigs.add(sig)
 
         if template_p is None:
             template_p = global_template_p
+        if template_p is None:
+            return
 
         tc = cell._tc
 
-        # ── 保护性策略 ──
-        # 只要 cell 中存在任何无法解析为批复的段落，就完全不重排、
-        # 不删除任何原有段落，pending 段落只追加到末尾，避免丢失
-        # 用户手写内容（例如计划外的日期、航线待申请）。
-        if has_unparseable:
-            for item in pending_items:
-                new_p = pc_make_red_paragraph_element(item["text"], template_p)
-                tc.append(new_p)
+        # 计算要追加的 pending（按签名去重）
+        new_items = []
+        for item in pending_items:
+            row = item["row"]
+            if row["dep_date"] is None:
+                continue
+            sig = (row["dep"], row["arr"],
+                   row["dep_date"].month, row["dep_date"].day)
+            if sig in existing_pending_sigs:
+                continue
+            existing_pending_sigs.add(sig)
+            new_items.append(item)
+
+        if not new_items:
             return
 
-        # ── 原有逻辑：cell 里全是可解析的批复行 ──
-        # 按时间重排 + 把 pending 段落按时间插入
-        for item in pending_items:
-            existing_items.append({
-                "type": "pending",
-                "dt": item["dt"],
-                "text": item["text"],
-            })
-
-        existing_items.sort(key=lambda x: x["dt"])
-
-        for p_elem in list(tc.findall(qn('w:p'))):
-            tc.remove(p_elem)
-
-        for item in existing_items:
-            if item["type"] == "existing":
-                tc.append(item["element"])
-            else:
-                new_p = pc_make_red_paragraph_element(item["text"], template_p)
-                tc.append(new_p)
+        # 追加到末尾（保留原有全部段落，不重排）
+        for item in new_items:
+            new_p = pc_make_red_paragraph_element(item["text"], template_p)
+            tc.append(new_p)
 
     def pc_build_approval_text(excel_row, is_domestic, note_kind=""):
         reg = excel_row["reg"]
@@ -2030,7 +2057,7 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
         approval_green_map = {}
         cancel_paragraphs = set()
         change_paragraphs = set()
-        nationality_pending_paragraphs = set()   # ← 新增：机组国籍待确认
+        nationality_pending_paragraphs = set()
 
         used_excel = set()
         used_text = set()
@@ -2201,7 +2228,6 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
                 if text_flight:
                     all_cn = pc_crew_all_chinese(text_flight["crew"], pilots)
                     if all_cn is None:
-                        # 文本无 P/W 飞行员代码（例如只给乘务/机务），或代码不在名单
                         info_note = "机组国籍待确认"
                     else:
                         has_cn = "中国籍" in approval["remark"]
@@ -2219,7 +2245,6 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
                             elif not has_foreign:
                                 diffs.append("国籍未标注（应为外籍）")
                 else:
-                    # 未匹配到文本航班（覆盖率检查应拦掉，双保险）
                     info_note = "机组国籍待确认"
 
             if raw_text in change_paragraphs:
@@ -2264,7 +2289,6 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
                 approval_red_map[raw_text] = red_parts
             if green_parts:
                 approval_green_map[raw_text] = green_parts
-            # ← 新增：把"机组国籍待确认"也记下来，稍后写回 docx
             if info_note:
                 nationality_pending_paragraphs.add(raw_text)
 
@@ -2278,7 +2302,6 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
                     [(PC_GREEN, green), (PC_RED, red)]
                 )
 
-        # ← 修改：追加"待取消/待变更"（红字黄底）以及"机组国籍待确认"（橙字黄底）
         for p in pc_iter_doc_paragraphs(doc):
             raw_text = p.text.strip()
             if raw_text in cancel_paragraphs:
@@ -2547,7 +2570,7 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
                 for _, r in diffs_df.iterrows():
                     if r["是否一致"] == "待确认":
                         note_html = (
-                            " <span style='color:#b26a00;font-weight:bold;"
+                            " <span style='color:#cc0000;font-weight:bold;"
                             "background-color:#ffe082;padding:1px 6px;border-radius:3px'>"
                             f"【{r['备注']}】</span>"
                         )
