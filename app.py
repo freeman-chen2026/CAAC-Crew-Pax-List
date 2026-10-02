@@ -1975,19 +1975,44 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
         return p_elem
 
     def pc_reorder_cell_with_pending(cell, pending_items, global_template_p):
-        # 收集 cell 里所有段落（全部保留），并识别已有的"待申请"签名
+        """重排 cell：
+        - 批复行（可解析）和手写待申请行（能识别签名）都提取时间，合并按时间排序
+        - 有完全无法解析的段落 → 保护性策略，原顺序不动，pending 追加末尾
+        - 签名去重：手写行和系统 pending 语义相同时，保留手写行
+        """
         template_p = None
         existing_pending_sigs = set()
+        has_unparseable = False
 
+        parsed_existing = []  # [(dt, element)]
         for p in cell.paragraphs:
             raw = p.text.strip()
             if not raw:
                 continue
-            if template_p is None and pc_parse_approval_line(raw):
-                template_p = p
+
+            ap = pc_parse_approval_line(raw)
+            if ap:
+                if template_p is None:
+                    template_p = p
+                parsed_existing.append((ap["dep_dt_bj"], p._element))
+                continue
+
             sig = pc_parse_pending_signature(raw)
             if sig:
+                dep, arr, month, day = sig
+                try:
+                    dt = _pcdt.datetime(2026, month, day, 0, 0)
+                except Exception:
+                    has_unparseable = True
+                    continue
                 existing_pending_sigs.add(sig)
+                parsed_existing.append((dt, p._element))
+                if template_p is None:
+                    template_p = p
+                continue
+
+            # 完全无法解析的段落 → 保护性
+            has_unparseable = True
 
         if template_p is None:
             template_p = global_template_p
@@ -1996,8 +2021,29 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
 
         tc = cell._tc
 
-        # 计算要追加的 pending（按签名去重）
-        new_items = []
+        # ── 保护性策略：有无法解析内容 → 原顺序不动，pending 追加末尾 ──
+        if has_unparseable:
+            new_texts = []
+            for item in pending_items:
+                row = item["row"]
+                if row["dep_date"] is None:
+                    continue
+                sig = (row["dep"], row["arr"],
+                       row["dep_date"].month, row["dep_date"].day)
+                if sig in existing_pending_sigs:
+                    continue
+                existing_pending_sigs.add(sig)
+                new_texts.append(item["text"])
+            for text in new_texts:
+                new_p = pc_make_red_paragraph_element(text, template_p)
+                tc.append(new_p)
+            return
+
+        # ── 正常策略：合并排序 ──
+        combined = []
+        for dt, elem in parsed_existing:
+            combined.append({"dt": dt, "elem": elem, "text": None})
+
         for item in pending_items:
             row = item["row"]
             if row["dep_date"] is None:
@@ -2007,15 +2053,21 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
             if sig in existing_pending_sigs:
                 continue
             existing_pending_sigs.add(sig)
-            new_items.append(item)
+            combined.append({"dt": item["dt"], "elem": None, "text": item["text"]})
 
-        if not new_items:
-            return
+        # 稳定排序，同一时间保持原有顺序
+        combined.sort(key=lambda x: x["dt"])
 
-        # 追加到末尾（保留原有全部段落，不重排）
-        for item in new_items:
-            new_p = pc_make_red_paragraph_element(item["text"], template_p)
-            tc.append(new_p)
+        # 清空并重建
+        for p_elem in list(tc.findall(qn('w:p'))):
+            tc.remove(p_elem)
+
+        for entry in combined:
+            if entry["elem"] is not None:
+                tc.append(entry["elem"])
+            else:
+                new_p = pc_make_red_paragraph_element(entry["text"], template_p)
+                tc.append(new_p)
 
     def pc_build_approval_text(excel_row, is_domestic, note_kind=""):
         reg = excel_row["reg"]
