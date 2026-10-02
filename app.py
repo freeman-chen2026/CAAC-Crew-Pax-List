@@ -1934,8 +1934,12 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
     def pc_reorder_cell_with_pending(cell, pending_items, global_template_p):
         existing_items = []
         template_p = None
+        has_unparseable = False
+
         for p in cell.paragraphs:
             raw = p.text.strip()
+            if not raw:
+                continue
             ap = pc_parse_approval_line(raw)
             if ap:
                 existing_items.append({
@@ -1945,9 +1949,28 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
                 })
                 if template_p is None:
                     template_p = p
+            else:
+                # cell 里存在无法解析为批复的段落（例如用户手写的
+                # "10.14 ZBAA-ZBTJ待申请"），标记为需要保护
+                has_unparseable = True
+
         if template_p is None:
             template_p = global_template_p
 
+        tc = cell._tc
+
+        # ── 保护性策略 ──
+        # 只要 cell 中存在任何无法解析为批复的段落，就完全不重排、
+        # 不删除任何原有段落，pending 段落只追加到末尾，避免丢失
+        # 用户手写内容（例如计划外的日期、航线待申请）。
+        if has_unparseable:
+            for item in pending_items:
+                new_p = pc_make_red_paragraph_element(item["text"], template_p)
+                tc.append(new_p)
+            return
+
+        # ── 原有逻辑：cell 里全是可解析的批复行 ──
+        # 按时间重排 + 把 pending 段落按时间插入
         for item in pending_items:
             existing_items.append({
                 "type": "pending",
@@ -1957,7 +1980,6 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
 
         existing_items.sort(key=lambda x: x["dt"])
 
-        tc = cell._tc
         for p_elem in list(tc.findall(qn('w:p'))):
             tc.remove(p_elem)
 
