@@ -1194,6 +1194,7 @@ with tab4:
 
     PC_RED = "FF0000"
     PC_GREEN = "00B050"
+    PC_ORANGE = "BF8F00"          # 机组国籍待确认：橙字 + 黄底
     PC_HIGHLIGHT_YELLOW = "yellow"
 
     PC_MAX_CROSS_DAY_GAP_MIN = 600
@@ -1385,7 +1386,7 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
         return pilots
 
     def pc_crew_all_chinese(crew_codes, pilots):
-        """返回 True=全中国籍, False=含外籍, None=无法判断（无P/W飞行员代码或代码不在名单里）"""
+        """True=全中国籍；False=含外籍；None=无法判断（无 P/W 飞行员代码或代码不在名单）"""
         pilot_codes = [c.strip() for c in crew_codes if c.strip().startswith(("P", "W"))]
         if not pilot_codes:
             return None
@@ -1609,12 +1610,12 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
                     cm = re.match(r"^(.+?)\s+-\s+(.+)$", lines[i + 1])
                     if cm:
                         crew = []
-                        step = 2  # 默认只跳 2 行（航班头 + 城市行）
+                        step = 2
                         if i + 2 < len(lines):
                             cl = lines[i + 2].replace(" ", "")
                             if re.match(r"^[A-Z0-9,]+$", cl):
                                 crew = [x for x in cl.split(",") if x]
-                                step = 3  # 有合法机组行时才跳 3 行
+                                step = 3
 
                         flights.append({
                             "_idx": len(flights),
@@ -1835,17 +1836,18 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
 
             pos += r_len
 
-    def pc_append_red_text(paragraph, text):
+    def _pc_append_styled_text(paragraph, text, color_hex):
+        """通用的段落尾追加：复制最后一个 run 的样式，改为指定颜色 + 黄色高亮。"""
         runs = list(paragraph.runs)
         p_elem = paragraph._element
         if runs:
             src = runs[-1]._element
-            new_r = pc_make_run_like(src, text, color_hex=PC_RED, highlight=PC_HIGHLIGHT_YELLOW)
+            new_r = pc_make_run_like(src, text, color_hex=color_hex, highlight=PC_HIGHLIGHT_YELLOW)
         else:
             new_r = p_elem.makeelement(PC_W_R, {})
             rPr = new_r.makeelement(PC_W_RPR, {})
             new_r.insert(0, rPr)
-            color = rPr.makeelement(PC_W_COLOR, {qn('w:val'): PC_RED})
+            color = rPr.makeelement(PC_W_COLOR, {qn('w:val'): color_hex})
             rPr.append(color)
             hl = rPr.makeelement(PC_W_HIGHLIGHT, {qn('w:val'): PC_HIGHLIGHT_YELLOW})
             rPr.append(hl)
@@ -1854,6 +1856,13 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
             t.set(qn('xml:space'), 'preserve')
             new_r.append(t)
         p_elem.append(new_r)
+
+    def pc_append_red_text(paragraph, text):
+        _pc_append_styled_text(paragraph, text, PC_RED)
+
+    def pc_append_warn_text(paragraph, text):
+        """机组国籍待确认：橙字 + 黄底"""
+        _pc_append_styled_text(paragraph, text, PC_ORANGE)
 
     def pc_find_target_cell(doc, reg):
         reg_norm = reg.upper().replace("-", "")
@@ -1999,6 +2008,7 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
         approval_green_map = {}
         cancel_paragraphs = set()
         change_paragraphs = set()
+        nationality_pending_paragraphs = set()   # ← 新增：机组国籍待确认
 
         used_excel = set()
         used_text = set()
@@ -2164,15 +2174,12 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
                     if approval["service"] not in red_parts:
                         red_parts.append(approval["service"])
 
-            # ========== 机组国籍核对（本次修改核心） ==========
+            # ========== 机组国籍核对 ==========
             if approval["is_domestic"]:
                 if text_flight:
                     all_cn = pc_crew_all_chinese(text_flight["crew"], pilots)
                     if all_cn is None:
-                        # 情况1：文本未提供机组信息
-                        # 情况2：只提供了 C/M 等乘务/机务代码，无 P/W 飞行员代码
-                        # 情况3：提供了 P/W 代码但不在名单里
-                        # 以上均无法判断国籍 → 提示用户，不直接通过
+                        # 文本无 P/W 飞行员代码（例如只给乘务/机务），或代码不在名单
                         info_note = "机组国籍待确认"
                     else:
                         has_cn = "中国籍" in approval["remark"]
@@ -2190,7 +2197,7 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
                             elif not has_foreign:
                                 diffs.append("国籍未标注（应为外籍）")
                 else:
-                    # 未匹配到文本航班（覆盖率检查应拦掉，此处双保险）
+                    # 未匹配到文本航班（覆盖率检查应拦掉，双保险）
                     info_note = "机组国籍待确认"
 
             if raw_text in change_paragraphs:
@@ -2235,6 +2242,9 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
                 approval_red_map[raw_text] = red_parts
             if green_parts:
                 approval_green_map[raw_text] = green_parts
+            # ← 新增：把"机组国籍待确认"也记下来，稍后写回 docx
+            if info_note:
+                nationality_pending_paragraphs.add(raw_text)
 
         for p in pc_iter_doc_paragraphs(doc):
             raw_text = p.text.strip()
@@ -2246,12 +2256,15 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
                     [(PC_GREEN, green), (PC_RED, red)]
                 )
 
+        # ← 修改：追加"待取消/待变更"（红字黄底）以及"机组国籍待确认"（橙字黄底）
         for p in pc_iter_doc_paragraphs(doc):
             raw_text = p.text.strip()
             if raw_text in cancel_paragraphs:
                 pc_append_red_text(p, "  待取消")
             elif raw_text in change_paragraphs:
                 pc_append_red_text(p, "  待变更")
+            if raw_text in nationality_pending_paragraphs:
+                pc_append_warn_text(p, "  机组国籍待确认")
 
         pending_by_reg = {}
         for row in excel_rows:
@@ -2490,7 +2503,6 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
             st.warning("未在 docx 中识别到任何批复行。")
         else:
             def highlight(row):
-                # 待确认：醒目黄底 + 加粗
                 if row["是否一致"] == "待确认":
                     return ["background-color: #ffe082; font-weight: bold"] * len(row)
                 if row["是否一致"] == "否":
