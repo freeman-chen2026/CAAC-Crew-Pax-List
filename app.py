@@ -1385,6 +1385,7 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
         return pilots
 
     def pc_crew_all_chinese(crew_codes, pilots):
+        """返回 True=全中国籍, False=含外籍, None=无法判断（无P/W飞行员代码或代码不在名单里）"""
         pilot_codes = [c.strip() for c in crew_codes if c.strip().startswith(("P", "W"))]
         if not pilot_codes:
             return None
@@ -2163,11 +2164,16 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
                     if approval["service"] not in red_parts:
                         red_parts.append(approval["service"])
 
+            # ========== 机组国籍核对（本次修改核心） ==========
             if approval["is_domestic"]:
                 if text_flight:
                     all_cn = pc_crew_all_chinese(text_flight["crew"], pilots)
                     if all_cn is None:
-                        info_note = "待确认机组"
+                        # 情况1：文本未提供机组信息
+                        # 情况2：只提供了 C/M 等乘务/机务代码，无 P/W 飞行员代码
+                        # 情况3：提供了 P/W 代码但不在名单里
+                        # 以上均无法判断国籍 → 提示用户，不直接通过
+                        info_note = "机组国籍待确认"
                     else:
                         has_cn = "中国籍" in approval["remark"]
                         has_foreign = "外籍" in approval["remark"]
@@ -2184,7 +2190,8 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
                             elif not has_foreign:
                                 diffs.append("国籍未标注（应为外籍）")
                 else:
-                    info_note = "待确认机组"
+                    # 未匹配到文本航班（覆盖率检查应拦掉，此处双保险）
+                    info_note = "机组国籍待确认"
 
             if raw_text in change_paragraphs:
                 note_parts.append("待变更")
@@ -2380,7 +2387,6 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
             key="pc_excel",
         )
 
-
     pc_text_input = st.text_area(
         "③ 粘贴文本版航班信息",
         height=320,
@@ -2484,8 +2490,9 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
             st.warning("未在 docx 中识别到任何批复行。")
         else:
             def highlight(row):
+                # 待确认：醒目黄底 + 加粗
                 if row["是否一致"] == "待确认":
-                    return ["background-color: #fff3cd"] * len(row)
+                    return ["background-color: #ffe082; font-weight: bold"] * len(row)
                 if row["是否一致"] == "否":
                     if "待变更" in str(row["备注"]):
                         return ["background-color: #e5f0ff"] * len(row)
@@ -2506,7 +2513,8 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
                 for _, r in diffs_df.iterrows():
                     if r["是否一致"] == "待确认":
                         note_html = (
-                            " <span style='color:#d97706;font-weight:bold'>"
+                            " <span style='color:#b26a00;font-weight:bold;"
+                            "background-color:#ffe082;padding:1px 6px;border-radius:3px'>"
                             f"【{r['备注']}】</span>"
                         )
                     elif "待变更" in str(r["备注"]):
