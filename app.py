@@ -1861,8 +1861,8 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
         _pc_append_styled_text(paragraph, text, PC_RED)
 
     def pc_append_warn_text(paragraph, text):
-        """机组国籍待确认：橙字 + 黄底"""
-        _pc_append_styled_text(paragraph, text, PC_ORANGE)
+        """机组国籍待确认：红字 + 黄底"""
+        _pc_append_styled_text(paragraph, text, PC_RED)
 
     def pc_find_target_cell(doc, reg):
         reg_norm = reg.upper().replace("-", "")
