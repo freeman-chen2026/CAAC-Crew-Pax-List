@@ -39,6 +39,8 @@ tab1, tab2, tab3, tab4 = st.tabs([
 with tab1:
     st.markdown("上传 GD单 和模板，自动生成备案表（联系方式、执照号码及证件号码已内置）。")
 
+    from copy import copy as _copy_style
+
     BUILTIN_CREW_DATA = [
         ("庚凡", "139 2463 9747", "430104197901184015", "430104197901184015"),
         ("张永一 / Yongyi ZHANG", "139 0125 9544", "110102196605202336", "110102196605202336"),
@@ -633,8 +635,6 @@ with tab1:
         arr_time_clean = arr_time.replace(':', '')
         return f"F {reg} {dep_time_clean} - {arr_time_clean}  {dep_city} - {arr_city}"
 
-    from copy import copy as _copy_style
-
     def _style_name_cell(ws, row, col, text):
         target_row, target_col = row, col
         for merged_range in ws.merged_cells.ranges:
@@ -701,24 +701,23 @@ with tab1:
         return False
 
     # ---------- ★ 新增：乘客区自动扩展 ----------
-def _style_snapshot(cell):
-    return {
-        'font': _copy_style(cell.font),
-        'border': _copy_style(cell.border),
-        'fill': _copy_style(cell.fill),
-        'number_format': cell.number_format,
-        'protection': _copy_style(cell.protection),
-        'alignment': _copy_style(cell.alignment),
-    }
+    def _style_snapshot(cell):
+        return {
+            'font': _copy_style(cell.font),
+            'border': _copy_style(cell.border),
+            'fill': _copy_style(cell.fill),
+            'number_format': cell.number_format,
+            'protection': _copy_style(cell.protection),
+            'alignment': _copy_style(cell.alignment),
+        }
 
-
-def _style_apply(cell, snap):
-    cell.font = _copy_style(snap['font'])
-    cell.border = _copy_style(snap['border'])
-    cell.fill = _copy_style(snap['fill'])
-    cell.number_format = snap['number_format']
-    cell.protection = _copy_style(snap['protection'])
-    cell.alignment = _copy_style(snap['alignment'])
+    def _style_apply(cell, snap):
+        cell.font = _copy_style(snap['font'])
+        cell.border = _copy_style(snap['border'])
+        cell.fill = _copy_style(snap['fill'])
+        cell.number_format = snap['number_format']
+        cell.protection = _copy_style(snap['protection'])
+        cell.alignment = _copy_style(snap['alignment'])
 
     def _find_first_content_row(ws, start_row, max_scan=300):
         """从 start_row 向下找第一个有内容的行（返回行号，找不到返回 None）。"""
@@ -734,7 +733,6 @@ def _style_apply(cell, snap):
         """确保乘客数据区至少有 needed_count 行；不够则在承诺行之前插入。
 
         复制最后一行空乘客行的样式/行高/合并单元格到新行。
-        返回 data_start_row（保持不变，因为在末尾之后插入）。
         """
         if needed_count <= 0:
             return data_start_row
@@ -752,7 +750,6 @@ def _style_apply(cell, snap):
         extra = needed_count - existing_rows
         template_row = end_row - 1  # 最后一个空乘客行
 
-        # 1. 快照模板行的样式
         max_col = ws.max_column or 10
         template_styles = {
             c: _style_snapshot(ws.cell(template_row, c))
@@ -760,23 +757,19 @@ def _style_apply(cell, snap):
         }
         template_height = ws.row_dimensions[template_row].height
 
-        # 2. 快照所有合并单元格（记录原始坐标）
         merged_ranges = [
             (mr.min_row, mr.min_col, mr.max_row, mr.max_col)
             for mr in list(ws.merged_cells.ranges)
         ]
 
-        # 3. 全部取消合并（openpyxl 的 insert_rows 不会自动调整合并区）
         for mr in list(ws.merged_cells.ranges):
             try:
                 ws.unmerge_cells(str(mr))
             except Exception:
                 pass
 
-        # 4. 插入行
         ws.insert_rows(end_row, extra)
 
-        # 5. 重新合并，按需下移
         for min_r, min_c, max_r, max_c in merged_ranges:
             if min_r >= end_row:
                 new_min_r, new_max_r = min_r + extra, max_r + extra
@@ -789,7 +782,6 @@ def _style_apply(cell, snap):
             except Exception:
                 pass
 
-        # 6. 给新行套上样式
         for i in range(extra):
             new_row = end_row + i
             for c, snap in template_styles.items():
@@ -883,7 +875,6 @@ def _style_apply(cell, snap):
                         passenger_start_row = cell.row + 2; break
                 if passenger_start_row: break
 
-        # ★ 新增：按需插入乘客行（不足时自动扩展）
         if passenger_start_row and passenger_list:
             passenger_start_row = _ensure_passenger_rows(
                 ws, passenger_start_row, len(passenger_list)
@@ -1035,7 +1026,6 @@ def _style_apply(cell, snap):
                 if not edited_crew_df.empty else []
             )
 
-            # ★ 修改：不再警告"超出 14 人"，改为一句说明
             if passenger_list:
                 st.caption(f"👥 本次乘客共 **{len(passenger_list)}** 人，模板行数不足时会自动插入行。")
 
@@ -1124,7 +1114,6 @@ def _style_apply(cell, snap):
             st.exception(e)
     else:
         st.info("👆 请同时上传 GD单 和 模板文件。")
-
 
 # ================================================================
 # 功能2：世界时行程
