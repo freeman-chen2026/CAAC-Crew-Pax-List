@@ -40,6 +40,7 @@ with tab1:
     st.markdown("上传 GD单 和模板，自动生成备案表（联系方式、执照号码及证件号码已内置）。")
 
     from copy import copy as _copy_style
+    import json as _json
 
     BUILTIN_CREW_DATA = [
         ("庚凡", "139 2463 9747", "430104197901184015", "430104197901184015"),
@@ -733,8 +734,7 @@ with tab1:
     def _shift_images_down(ws, end_row, extra):
         """insert_rows 之后调整图片/形状 anchor，让它们跟着内容整体下移。
 
-        ★ 关键：只要图片的 from.row 或 to.row 有一个在插入点之后，
-        整张图片（from.row 和 to.row 同时）+extra，保证图片宽高比不变。
+        ★ 只要图片的 from.row 或 to.row 有一个 ≥ 插入点，整张图片一起 +extra。
         openpyxl 内部的行号是 0-based。
         """
         if extra <= 0:
@@ -776,7 +776,7 @@ with tab1:
         """确保乘客数据区至少有 needed_count 行；不够则在承诺行之前插入。
 
         - 复制某一行（优先选有合并结构的行）的样式 + 行高 + 合并到新行
-        - 保存并恢复 end_row 及以下所有行的行高（openpyxl 的 insert_rows 不会下移 row_dimensions）
+        - 保存并恢复 end_row 及以下所有行的行高
         - 只处理受影响的合并单元格，其余不动
         - 图片整体下移，保持宽高比
         """
@@ -794,11 +794,10 @@ with tab1:
             return data_start_row
 
         extra = needed_count - existing_rows
-        template_row = end_row - 1  # 最后一个空乘客行
+        template_row = end_row - 1
 
         max_col = ws.max_column or 10
 
-        # ── 找一个"有单行内合并结构"的乘客行作为合并模板 ──
         merge_template_row = template_row
         for r in range(template_row, data_start_row - 1, -1):
             hit = False
@@ -810,7 +809,6 @@ with tab1:
                 merge_template_row = r
                 break
 
-        # ── 快照样式（从 template_row）和合并结构（从 merge_template_row）──
         template_styles = {
             c: _style_snapshot(ws.cell(template_row, c))
             for c in range(1, max_col + 1)
@@ -822,7 +820,6 @@ with tab1:
             if mr.min_row == merge_template_row and mr.max_row == merge_template_row:
                 template_merges.append((mr.min_col, mr.max_col))
 
-        # ── 保存 end_row 及以下所有行的行高 ──
         max_row = ws.max_row
         saved_heights = {}
         for r in range(end_row, max_row + 1):
@@ -830,7 +827,6 @@ with tab1:
             if h is not None:
                 saved_heights[r] = h
 
-        # ── 只处理受影响的合并区（end_row 之后的 + 跨越 end_row 的）──
         affected = []
         for mr in list(ws.merged_cells.ranges):
             if mr.min_row >= end_row or mr.min_row < end_row <= mr.max_row:
@@ -842,10 +838,8 @@ with tab1:
 
         ws.insert_rows(end_row, extra)
 
-        # ★ 图片整体下移
         _shift_images_down(ws, end_row, extra)
 
-        # ── 恢复受影响的合并 ──
         for min_r, min_c, max_r, max_c in affected:
             if min_r >= end_row:
                 new_min_r, new_max_r = min_r + extra, max_r + extra
@@ -858,7 +852,6 @@ with tab1:
             except Exception:
                 pass
 
-        # ── 恢复 end_row 及以下的行高（整体下移 extra 行）──
         for r in list(ws.row_dimensions.keys()):
             if r >= end_row:
                 try:
@@ -868,7 +861,6 @@ with tab1:
         for old_r, h in saved_heights.items():
             ws.row_dimensions[old_r + extra].height = h
 
-        # ── 给新插入的每一行套样式、行高、合并 ──
         for i in range(extra):
             new_row = end_row + i
             for c, snap in template_styles.items():
@@ -993,6 +985,17 @@ with tab1:
         output = BytesIO()
         wb.save(output); output.seek(0)
         return output
+
+    # ---------- ★ 缓存：避免每次 rerun 都重跑一遍生成 ----------
+    @st.cache_data(show_spinner=False, max_entries=16)
+    def _cached_fill_template(template_bytes, data_json, crew_json, pax_json, route_display):
+        """把 fill_template 结果缓存。只有内容/输入变化才会重新生成。"""
+        _data = _json.loads(data_json)
+        _crew = _json.loads(crew_json)
+        _pax = _json.loads(pax_json)
+        buf = fill_template(template_bytes, _data, _crew, _pax, route_display)
+        return buf.getvalue()
+    # ---------- ★ 缓存结束 ----------
 
     st.subheader("📂 上传文件")
     st.info("⚠️ 注意：模板文件必须是 **.xlsx** 格式（非 .xls）。联系方式、执照号码及证件号码已内置，机型已内置，无需额外上传。")
@@ -1193,7 +1196,20 @@ with tab1:
                 safe_file_name = "备案表"
             download_file_name = f"{safe_file_name}.xlsx"
 
-            result_bytes = fill_template(template_file, data, crew_for_template, passenger_list, route_display)
+            # ★ 用缓存版本；内容不变时秒出，不再重复跑 fill_template
+            try:
+                result_bytes = _cached_fill_template(
+                    template_file.getvalue(),
+                    _json.dumps(data, ensure_ascii=False, default=str),
+                    _json.dumps(crew_for_template, ensure_ascii=False, default=str),
+                    _json.dumps(passenger_list, ensure_ascii=False, default=str),
+                    route_display,
+                )
+            except Exception:
+                # 缓存失败 fallback 到直调
+                result_bytes = fill_template(
+                    template_file, data, crew_for_template, passenger_list, route_display
+                ).getvalue()
 
             st.download_button(
                 label="⬇️ 下载填充后的备案表",
