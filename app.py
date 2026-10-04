@@ -732,7 +732,9 @@ with tab1:
     def _ensure_passenger_rows(ws, data_start_row, needed_count):
         """确保乘客数据区至少有 needed_count 行；不够则在承诺行之前插入。
 
-        复制最后一行空乘客行的样式/行高/合并单元格到新行。
+        - 复制某一行（优先选有合并结构的行）的样式 + 行高 + 合并到新行
+        - 保存并恢复 end_row 及以下所有行的行高（openpyxl 的 insert_rows 不会下移 row_dimensions）
+        - 只处理受影响的合并单元格，其余不动
         """
         if needed_count <= 0:
             return data_start_row
@@ -751,30 +753,57 @@ with tab1:
         template_row = end_row - 1  # 最后一个空乘客行
 
         max_col = ws.max_column or 10
+
+        # ── 找一个"有单行内合并结构"的乘客行作为合并模板 ──
+        merge_template_row = template_row
+        for r in range(template_row, data_start_row - 1, -1):
+            hit = False
+            for mr in ws.merged_cells.ranges:
+                if mr.min_row == r and mr.max_row == r:
+                    hit = True
+                    break
+            if hit:
+                merge_template_row = r
+                break
+
+        # ── 快照样式（从 template_row）和合并结构（从 merge_template_row）──
         template_styles = {
             c: _style_snapshot(ws.cell(template_row, c))
             for c in range(1, max_col + 1)
         }
         template_height = ws.row_dimensions[template_row].height
 
-        merged_ranges = [
-            (mr.min_row, mr.min_col, mr.max_row, mr.max_col)
-            for mr in list(ws.merged_cells.ranges)
-        ]
-
+        template_merges = []
         for mr in list(ws.merged_cells.ranges):
-            try:
-                ws.unmerge_cells(str(mr))
-            except Exception:
-                pass
+            if mr.min_row == merge_template_row and mr.max_row == merge_template_row:
+                template_merges.append((mr.min_col, mr.max_col))
+
+        # ── 保存 end_row 及以下所有行的行高 ──
+        max_row = ws.max_row
+        saved_heights = {}
+        for r in range(end_row, max_row + 1):
+            h = ws.row_dimensions[r].height
+            if h is not None:
+                saved_heights[r] = h
+
+        # ── 只处理受影响的合并区（end_row 之后的 + 跨越 end_row 的）──
+        affected = []
+        for mr in list(ws.merged_cells.ranges):
+            if mr.min_row >= end_row or mr.min_row < end_row <= mr.max_row:
+                affected.append((mr.min_row, mr.min_col, mr.max_row, mr.max_col))
+                try:
+                    ws.unmerge_cells(str(mr))
+                except Exception:
+                    pass
 
         ws.insert_rows(end_row, extra)
 
-        for min_r, min_c, max_r, max_c in merged_ranges:
+        # ── 恢复受影响的合并 ──
+        for min_r, min_c, max_r, max_c in affected:
             if min_r >= end_row:
                 new_min_r, new_max_r = min_r + extra, max_r + extra
             else:
-                new_min_r, new_max_r = min_r, max_r
+                new_min_r, new_max_r = min_r, max_r + extra
             rng = (f"{get_column_letter(min_c)}{new_min_r}:"
                    f"{get_column_letter(max_c)}{new_max_r}")
             try:
@@ -782,12 +811,30 @@ with tab1:
             except Exception:
                 pass
 
+        # ── 恢复 end_row 及以下的行高（整体下移 extra 行）──
+        for r in list(ws.row_dimensions.keys()):
+            if r >= end_row:
+                try:
+                    del ws.row_dimensions[r]
+                except Exception:
+                    pass
+        for old_r, h in saved_heights.items():
+            ws.row_dimensions[old_r + extra].height = h
+
+        # ── 给新插入的每一行套样式、行高、合并 ──
         for i in range(extra):
             new_row = end_row + i
             for c, snap in template_styles.items():
                 _style_apply(ws.cell(new_row, c), snap)
             if template_height:
                 ws.row_dimensions[new_row].height = template_height
+            for min_c, max_c in template_merges:
+                rng = (f"{get_column_letter(min_c)}{new_row}:"
+                       f"{get_column_letter(max_c)}{new_row}")
+                try:
+                    ws.merge_cells(rng)
+                except Exception:
+                    pass
 
         return data_start_row
     # ---------- ★ 新增结束 ----------
