@@ -1566,7 +1566,7 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
         return pilots
 
     def pc_crew_all_chinese(crew_codes, pilots):
-        """True=全中国籍；False=含外籍；None=无法判断（无 P/W 飞行员代码或代码不在名单）"""
+        """True=全中国籍；False=含外籍；None=无法判断"""
         pilot_codes = [c.strip() for c in crew_codes if c.strip().startswith(("P", "W"))]
         if not pilot_codes:
             return None
@@ -2052,7 +2052,6 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
             pos += r_len
 
     def _pc_append_styled_text(paragraph, text, color_hex):
-        """通用的段落尾追加：复制最后一个 run 的样式，改为指定颜色 + 黄色高亮。"""
         runs = list(paragraph.runs)
         p_elem = paragraph._element
         if runs:
@@ -2145,89 +2144,119 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
         p_elem.append(r_elem)
         return p_elem
 
+    # ★★★ 核心修改：不再重排，只把"真正新增"的 pending 插到对应日期组末尾 ★★★
     def pc_reorder_cell_with_pending(cell, pending_items, global_template_p):
-        template_p = None
-        existing_pending_sigs = set()
-        has_unparseable = False
-
-        parsed_existing = []
+        """保留 cell 内原有段落顺序；只把「真正新增」的 pending 行按日期插到
+        对应日期组的末尾。如果所有 pending 都已被手写行覆盖 → 直接返回，不动任何东西。
+        """
+        # 1. 收集 cell 内所有非空段落
+        existing_sigs = set()
+        existing_paras = []  # [(paragraph, date_or_None)]
         for p in cell.paragraphs:
             raw = p.text.strip()
             if not raw:
                 continue
 
+            dt = None
             ap = pc_parse_approval_line(raw)
             if ap:
-                if template_p is None:
-                    template_p = p
-                parsed_existing.append((ap["dep_dt_bj"], p._element))
-                continue
+                dt = ap["dep_dt_bj"].date()
 
             sig = pc_parse_pending_signature(raw)
             if sig:
                 dep, arr, month, day = sig
                 try:
-                    dt = _pcdt.datetime(2026, month, day, 0, 0)
+                    dt = _pcdt.date(2026, month, day)
                 except Exception:
-                    has_unparseable = True
-                    continue
-                existing_pending_sigs.add(sig)
-                parsed_existing.append((dt, p._element))
-                if template_p is None:
-                    template_p = p
-                continue
+                    dt = None
+                existing_sigs.add(sig)
 
-            has_unparseable = True
+            existing_paras.append((p, dt))
 
-        if template_p is None:
-            template_p = global_template_p
-        if template_p is None:
+        if not existing_paras:
             return
 
-        tc = cell._tc
-
-        if has_unparseable:
-            new_texts = []
-            for item in pending_items:
-                row = item["row"]
-                if row["dep_date"] is None:
-                    continue
-                sig = (row["dep"], row["arr"],
-                       row["dep_date"].month, row["dep_date"].day)
-                if sig in existing_pending_sigs:
-                    continue
-                existing_pending_sigs.add(sig)
-                new_texts.append(item["text"])
-            for text in new_texts:
-                new_p = pc_make_red_paragraph_element(text, template_p)
-                tc.append(new_p)
-            return
-
-        combined = []
-        for dt, elem in parsed_existing:
-            combined.append({"dt": dt, "elem": elem, "text": None})
-
+        # 2. 筛选出"真正需要新增"的 pending
+        to_insert = []
         for item in pending_items:
             row = item["row"]
             if row["dep_date"] is None:
                 continue
             sig = (row["dep"], row["arr"],
                    row["dep_date"].month, row["dep_date"].day)
-            if sig in existing_pending_sigs:
+            if sig in existing_sigs:
                 continue
-            existing_pending_sigs.add(sig)
-            combined.append({"dt": item["dt"], "elem": None, "text": item["text"]})
+            existing_sigs.add(sig)
+            to_insert.append({
+                "date": row["dep_date"],
+                "dt": item["dt"],
+                "text": item["text"],
+            })
 
-        combined.sort(key=lambda x: x["dt"])
+        if not to_insert:
+            # ★ 所有 pending 都已存在（手写或系统生成） → 一个字都不动
+            return
 
+        # 3. 找到模板段落（用于新段落的样式）
+        template_p = None
+        for p, _ in existing_paras:
+            if pc_parse_approval_line(p.text.strip()):
+                template_p = p
+                break
+        if template_p is None:
+            template_p = global_template_p
+        if template_p is None:
+            return
+
+        to_insert.sort(key=lambda x: x["dt"])
+
+        # 4. 构建新顺序：原有段落保持原序，只在每个日期组末尾插入对应 pending
+        pending_by_date = {}
+        for item in to_insert:
+            pending_by_date.setdefault(item["date"], []).append(item)
+
+        # 如果 pending 日期早于 cell 内所有日期 → 插到最前
+        result_seq = []
+        if existing_paras:
+            known_dates = [d for _, d in existing_paras if d is not None]
+            if known_dates:
+                min_date = min(known_dates)
+                for d in sorted(k for k in pending_by_date if k < min_date):
+                    for item in pending_by_date[d]:
+                        result_seq.append(("pending", item))
+                    del pending_by_date[d]
+
+        for i, (p, date) in enumerate(existing_paras):
+            result_seq.append(("original", p._element))
+
+            # 判断是否是当前日期组的最后一行
+            is_last_of_date = True
+            if date is not None:
+                for j in range(i + 1, len(existing_paras)):
+                    if existing_paras[j][1] == date:
+                        is_last_of_date = False
+                        break
+
+            if is_last_of_date and date is not None and date in pending_by_date:
+                for item in pending_by_date[date]:
+                    result_seq.append(("pending", item))
+                del pending_by_date[date]
+
+        # 剩余的 pending（日期晚于所有已有行）追加到末尾
+        for d in sorted(pending_by_date.keys()):
+            for item in pending_by_date[d]:
+                result_seq.append(("pending", item))
+
+        # 5. 清空并重建
+        tc = cell._tc
         for p_elem in list(tc.findall(qn('w:p'))):
             tc.remove(p_elem)
 
-        for entry in combined:
-            if entry["elem"] is not None:
-                tc.append(entry["elem"])
+        for kind, item in result_seq:
+            if kind == "original":
+                tc.append(item)
             else:
-                new_p = pc_make_red_paragraph_element(entry["text"], template_p)
+                new_p = pc_make_red_paragraph_element(item["text"], template_p)
                 tc.append(new_p)
 
     def pc_build_approval_text(excel_row, is_domestic, note_kind=""):
@@ -2523,7 +2552,6 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
             has_nation = "机组国籍待确认" in raw_text
 
             if raw_text in cancel_paragraphs:
-                # 用户已经手写"待取消"或"待变更"就不再追加
                 if not (has_cancel or has_change):
                     pc_append_red_text(p, "  待取消")
             elif raw_text in change_paragraphs:
