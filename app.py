@@ -701,23 +701,24 @@ with tab1:
         return False
 
     # ---------- ★ 新增：乘客区自动扩展 ----------
-    def _style_snapshot(cell):
-        return {
-            'font': copy(cell.font),
-            'border': copy(cell.border),
-            'fill': copy(cell.fill),
-            'number_format': cell.number_format,
-            'protection': copy(cell.protection),
-            'alignment': copy(cell.alignment),
-        }
+def _style_snapshot(cell):
+    return {
+        'font': _copy_style(cell.font),
+        'border': _copy_style(cell.border),
+        'fill': _copy_style(cell.fill),
+        'number_format': cell.number_format,
+        'protection': _copy_style(cell.protection),
+        'alignment': _copy_style(cell.alignment),
+    }
 
-    def _style_apply(cell, snap):
-        cell.font = copy(snap['font'])
-        cell.border = copy(snap['border'])
-        cell.fill = copy(snap['fill'])
-        cell.number_format = snap['number_format']
-        cell.protection = copy(snap['protection'])
-        cell.alignment = copy(snap['alignment'])
+
+def _style_apply(cell, snap):
+    cell.font = _copy_style(snap['font'])
+    cell.border = _copy_style(snap['border'])
+    cell.fill = _copy_style(snap['fill'])
+    cell.number_format = snap['number_format']
+    cell.protection = _copy_style(snap['protection'])
+    cell.alignment = _copy_style(snap['alignment'])
 
     def _find_first_content_row(ws, start_row, max_scan=300):
         """从 start_row 向下找第一个有内容的行（返回行号，找不到返回 None）。"""
