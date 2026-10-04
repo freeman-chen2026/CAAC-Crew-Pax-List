@@ -700,6 +700,105 @@ with tab1:
                     return True
         return False
 
+    # ---------- ★ 新增：乘客区自动扩展 ----------
+    def _style_snapshot(cell):
+        return {
+            'font': copy(cell.font),
+            'border': copy(cell.border),
+            'fill': copy(cell.fill),
+            'number_format': cell.number_format,
+            'protection': copy(cell.protection),
+            'alignment': copy(cell.alignment),
+        }
+
+    def _style_apply(cell, snap):
+        cell.font = copy(snap['font'])
+        cell.border = copy(snap['border'])
+        cell.fill = copy(snap['fill'])
+        cell.number_format = snap['number_format']
+        cell.protection = copy(snap['protection'])
+        cell.alignment = copy(snap['alignment'])
+
+    def _find_first_content_row(ws, start_row, max_scan=300):
+        """从 start_row 向下找第一个有内容的行（返回行号，找不到返回 None）。"""
+        max_col = ws.max_column or 10
+        for r in range(start_row, start_row + max_scan):
+            for c in range(1, max_col + 1):
+                v = ws.cell(r, c).value
+                if v is not None and str(v).strip():
+                    return r
+        return None
+
+    def _ensure_passenger_rows(ws, data_start_row, needed_count):
+        """确保乘客数据区至少有 needed_count 行；不够则在承诺行之前插入。
+
+        复制最后一行空乘客行的样式/行高/合并单元格到新行。
+        返回 data_start_row（保持不变，因为在末尾之后插入）。
+        """
+        if needed_count <= 0:
+            return data_start_row
+
+        from openpyxl.utils import get_column_letter
+
+        end_row = _find_first_content_row(ws, data_start_row)
+        if end_row is None:
+            return data_start_row
+
+        existing_rows = end_row - data_start_row
+        if needed_count <= existing_rows:
+            return data_start_row
+
+        extra = needed_count - existing_rows
+        template_row = end_row - 1  # 最后一个空乘客行
+
+        # 1. 快照模板行的样式
+        max_col = ws.max_column or 10
+        template_styles = {
+            c: _style_snapshot(ws.cell(template_row, c))
+            for c in range(1, max_col + 1)
+        }
+        template_height = ws.row_dimensions[template_row].height
+
+        # 2. 快照所有合并单元格（记录原始坐标）
+        merged_ranges = [
+            (mr.min_row, mr.min_col, mr.max_row, mr.max_col)
+            for mr in list(ws.merged_cells.ranges)
+        ]
+
+        # 3. 全部取消合并（openpyxl 的 insert_rows 不会自动调整合并区）
+        for mr in list(ws.merged_cells.ranges):
+            try:
+                ws.unmerge_cells(str(mr))
+            except Exception:
+                pass
+
+        # 4. 插入行
+        ws.insert_rows(end_row, extra)
+
+        # 5. 重新合并，按需下移
+        for min_r, min_c, max_r, max_c in merged_ranges:
+            if min_r >= end_row:
+                new_min_r, new_max_r = min_r + extra, max_r + extra
+            else:
+                new_min_r, new_max_r = min_r, max_r
+            rng = (f"{get_column_letter(min_c)}{new_min_r}:"
+                   f"{get_column_letter(max_c)}{new_max_r}")
+            try:
+                ws.merge_cells(rng)
+            except Exception:
+                pass
+
+        # 6. 给新行套上样式
+        for i in range(extra):
+            new_row = end_row + i
+            for c, snap in template_styles.items():
+                _style_apply(ws.cell(new_row, c), snap)
+            if template_height:
+                ws.row_dimensions[new_row].height = template_height
+
+        return data_start_row
+    # ---------- ★ 新增结束 ----------
+
     def fill_template(template_bytes, data, crew_rows, passenger_list, route_display):
         try:
             wb = load_workbook(template_bytes)
@@ -782,6 +881,12 @@ with tab1:
                     if cell.value and isinstance(cell.value, str) and "乘客信息" in cell.value:
                         passenger_start_row = cell.row + 2; break
                 if passenger_start_row: break
+
+        # ★ 新增：按需插入乘客行（不足时自动扩展）
+        if passenger_start_row and passenger_list:
+            passenger_start_row = _ensure_passenger_rows(
+                ws, passenger_start_row, len(passenger_list)
+            )
 
         if passenger_start_row:
             for i, pax in enumerate(passenger_list):
@@ -929,33 +1034,9 @@ with tab1:
                 if not edited_crew_df.empty else []
             )
 
-            MAX_PAX_ROWS = 14
-            if len(passenger_list) > MAX_PAX_ROWS:
-                extra = len(passenger_list) - MAX_PAX_ROWS
-                st.warning(
-                    f"⚠️ **本次乘客共 {len(passenger_list)} 人**，而模板乘客区只有 **{MAX_PAX_ROWS} 行**。\n\n"
-                    f"以下 **{extra} 位乘客不会自动写入模板**，请在下载后手动插入行并复制下方内容："
-                )
-
-                lines = ["姓名\t性别\t出生日期\t国籍\t证件种类\t证件号码"]
-                for pax in passenger_list[MAX_PAX_ROWS:]:
-                    pax_name = extract_chinese_name(pax["name"])
-                    doc_type = pax.get("doc_type", "")
-                    doc_type_clean = parse_document_type("", doc_type) if (pd.notna(doc_type) and str(doc_type).strip()) else parse_document_type(pax.get("passport_no", ""), "")
-                    lines.append(
-                        "\t".join([
-                            pax_name,
-                            str(pax.get("gender", "") or ""),
-                            str(pax.get("dob", "") or ""),
-                            get_nation_name(pax.get("nationality", "")),
-                            doc_type_clean,
-                            str(pax.get("passport_no", "") or ""),
-                        ])
-                    )
-                copy_text = "\n".join(lines)
-
-                st.markdown("**📋 超出部分乘客信息（点击右上角复制按钮，直接粘贴到 Excel）**")
-                st.code(copy_text, language="text")
+            # ★ 修改：不再警告"超出 14 人"，改为一句说明
+            if passenger_list:
+                st.caption(f"👥 本次乘客共 **{len(passenger_list)}** 人，模板行数不足时会自动插入行。")
 
             st.markdown("---")
 
