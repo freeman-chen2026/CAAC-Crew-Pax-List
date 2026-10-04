@@ -1654,19 +1654,11 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
 
     # ---------- 待申请行签名 ----------
     def pc_parse_pending_signature(text):
-        """识别'待申请行'（手写或系统生成），返回 (dep, arr, month, day) 或 None。
-
-        支持两类格式：
-          1. REG DEP-ARR DDMON ...   如 B652S ZSSS-RJTT 03OCT 中国籍 待申请
-          2. MM.DD DEP-ARR ...       如 10.08 LKPR-ZBAA 待申请 / 10.14 ZBAA-ZBTJ待申请
-
-        签名不含 reg（cell 内所有行都是同一注册号）。
-        """
+        """识别'待申请行'（手写或系统生成），返回 (dep, arr, month, day) 或 None。"""
         text = str(text).strip()
         if not text:
             return None
 
-        # 格式1：REG DEP-ARR DDMON
         m = re.match(
             r'^[A-Z0-9\-]+\s+'
             r'(?P<dep>[A-Z]{4})-(?P<arr>[A-Z]{4})\s+'
@@ -1681,7 +1673,6 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
             except Exception:
                 pass
 
-        # 格式2：MM.DD DEP-ARR（注意 ZBAA-ZBTJ待申请 这种没空格的也要能吃）
         m = re.match(
             r'^(?P<month>\d{1,2})[.\-/](?P<day>\d{1,2})\s+'
             r'(?P<dep>[A-Z]{4})-(?P<arr>[A-Z]{4})',
@@ -2085,7 +2076,6 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
         _pc_append_styled_text(paragraph, text, PC_RED)
 
     def pc_append_warn_text(paragraph, text):
-        """机组国籍待确认：红字 + 黄底"""
         _pc_append_styled_text(paragraph, text, PC_RED)
 
     def pc_find_target_cell(doc, reg):
@@ -2156,16 +2146,11 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
         return p_elem
 
     def pc_reorder_cell_with_pending(cell, pending_items, global_template_p):
-        """重排 cell：
-        - 批复行（可解析）和手写待申请行（能识别签名）都提取时间，合并按时间排序
-        - 有完全无法解析的段落 → 保护性策略，原顺序不动，pending 追加末尾
-        - 签名去重：手写行和系统 pending 语义相同时，保留手写行
-        """
         template_p = None
         existing_pending_sigs = set()
         has_unparseable = False
 
-        parsed_existing = []  # [(dt, element)]
+        parsed_existing = []
         for p in cell.paragraphs:
             raw = p.text.strip()
             if not raw:
@@ -2192,7 +2177,6 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
                     template_p = p
                 continue
 
-            # 完全无法解析的段落 → 保护性
             has_unparseable = True
 
         if template_p is None:
@@ -2202,7 +2186,6 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
 
         tc = cell._tc
 
-        # ── 保护性策略：有无法解析内容 → 原顺序不动，pending 追加末尾 ──
         if has_unparseable:
             new_texts = []
             for item in pending_items:
@@ -2220,7 +2203,6 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
                 tc.append(new_p)
             return
 
-        # ── 正常策略：合并排序 ──
         combined = []
         for dt, elem in parsed_existing:
             combined.append({"dt": dt, "elem": elem, "text": None})
@@ -2236,10 +2218,8 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
             existing_pending_sigs.add(sig)
             combined.append({"dt": item["dt"], "elem": None, "text": item["text"]})
 
-        # 稳定排序，同一时间保持原有顺序
         combined.sort(key=lambda x: x["dt"])
 
-        # 清空并重建
         for p_elem in list(tc.findall(qn('w:p'))):
             tc.remove(p_elem)
 
@@ -2535,14 +2515,24 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
                     [(PC_GREEN, green), (PC_RED, red)]
                 )
 
+        # ★ 追加标记：段落里已有相同标记就跳过，避免重复
         for p in pc_iter_doc_paragraphs(doc):
             raw_text = p.text.strip()
+            has_cancel = "待取消" in raw_text
+            has_change = "待变更" in raw_text
+            has_nation = "机组国籍待确认" in raw_text
+
             if raw_text in cancel_paragraphs:
-                pc_append_red_text(p, "  待取消")
+                # 用户已经手写"待取消"或"待变更"就不再追加
+                if not (has_cancel or has_change):
+                    pc_append_red_text(p, "  待取消")
             elif raw_text in change_paragraphs:
-                pc_append_red_text(p, "  待变更")
+                if not (has_cancel or has_change):
+                    pc_append_red_text(p, "  待变更")
+
             if raw_text in nationality_pending_paragraphs:
-                pc_append_warn_text(p, "  机组国籍待确认")
+                if not has_nation:
+                    pc_append_warn_text(p, "  机组国籍待确认")
 
         pending_by_reg = {}
         for row in excel_rows:
