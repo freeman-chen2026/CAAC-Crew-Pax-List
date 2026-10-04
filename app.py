@@ -77,7 +77,8 @@ with tab1:
         ("张帆 / Fan ZHANG", "138 0135 1294", "2552356", "211002197306050057"),
         ("魏思远 / Siyuan WEI", "133 2110 4588", "230102198911054315", "230102198911054315"),
         ("王晟磊 / Shenglei WANG", "150 2689 7493", "310109198409264012", "310109198409264012"),
-        ("Keith Robert, SHERREN / Keith Robert SHERREN", "137 3540 9744", "12262", ""),
+        ("Nathon Andrew G, NORBERG / Nathon Andrew G NORBERG", "", "3050802", "A04700868"),
+        ("Keith Robert, SHERREN / Keith Robert SHERREN", "137 3540 9744", "2755204", "P024165FF"),
         ("Rodolfo, BONETTI / Rodolfo BONETTI", "132 6284 1083", "12660", ""),
         ("危慧 / Hui WEI", "152 1349 1328", "10137", "43072119941115468X"),
         ("李辛欣 / Xinxin LI", "135 5008 8666", "4209424", "510105198605023015"),
@@ -729,12 +730,45 @@ with tab1:
                     return r
         return None
 
+    def _shift_images_down(ws, end_row, extra):
+        """insert_rows 之后调整图片/形状 anchor，让它们跟着内容下移。
+
+        openpyxl 的 insert_rows 只会搬单元格数据，不会动图片 anchor，
+        所以需要手动把 from.row / to.row（0-based）里 ≥ end_row-1 的部分 +extra。
+        """
+        if extra <= 0:
+            return
+        end_row_0 = end_row - 1  # openpyxl 内部 0-based
+        for img in getattr(ws, '_images', []) or []:
+            anchor = getattr(img, 'anchor', None)
+            if anchor is None:
+                continue
+
+            frm = getattr(anchor, '_from', None)
+            if frm is not None:
+                try:
+                    r = getattr(frm, 'row', None)
+                    if r is not None and r >= end_row_0:
+                        frm.row = r + extra
+                except Exception:
+                    pass
+
+            to = getattr(anchor, 'to', None)
+            if to is not None:
+                try:
+                    r = getattr(to, 'row', None)
+                    if r is not None and r >= end_row_0:
+                        to.row = r + extra
+                except Exception:
+                    pass
+
     def _ensure_passenger_rows(ws, data_start_row, needed_count):
         """确保乘客数据区至少有 needed_count 行；不够则在承诺行之前插入。
 
         - 复制某一行（优先选有合并结构的行）的样式 + 行高 + 合并到新行
         - 保存并恢复 end_row 及以下所有行的行高（openpyxl 的 insert_rows 不会下移 row_dimensions）
         - 只处理受影响的合并单元格，其余不动
+        - 手动下移图片 anchor，避免盖章被拉伸
         """
         if needed_count <= 0:
             return data_start_row
@@ -797,6 +831,9 @@ with tab1:
                     pass
 
         ws.insert_rows(end_row, extra)
+
+        # ★ 图片 anchor 下移（openpyxl 不会自动搬）
+        _shift_images_down(ws, end_row, extra)
 
         # ── 恢复受影响的合并 ──
         for min_r, min_c, max_r, max_c in affected:
