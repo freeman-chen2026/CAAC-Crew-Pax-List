@@ -1577,6 +1577,13 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
                 return False
         return True
 
+    def pc_actual_nation_label(crew_codes, pilots):
+        """返回实际国籍标注文案：'中国籍' / '外籍' / '机组未定'"""
+        all_cn = pc_crew_all_chinese(crew_codes, pilots)
+        if all_cn is None:
+            return "机组未定"
+        return "中国籍" if all_cn else "外籍"
+
     def pc_is_ferry_use(use_text):
         return any(k in use_text for k in PC_FERRY_KEYWORDS)
 
@@ -1970,7 +1977,6 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
         hl = rPr.makeelement(PC_W_HIGHLIGHT, {qn('w:val'): color_name})
         rPr.append(hl)
 
-    # ★ 新增：给 run 加删除线
     def pc_set_run_strike(run_element):
         rPr = run_element.find(PC_W_RPR)
         if rPr is None:
@@ -1996,6 +2002,7 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
             pc_set_run_highlight(new_r, highlight)
         return new_r
 
+    # ★★★ 核心修改：红色字一律叠加蓝底，绿色不加 ★★★
     def pc_set_paragraph_runs(paragraph, text, color_overrides):
         if not color_overrides:
             return
@@ -2007,7 +2014,10 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
             return
 
         char_color = [None] * len(full_text)
+        char_high = [None] * len(full_text)
         for color_hex, parts in color_overrides:
+            # ★ 红字附带蓝底；其它颜色（如绿色）不加高亮
+            hl = PC_HIGHLIGHT_ADDED if color_hex == PC_RED else None
             for part in parts:
                 if not part:
                     continue
@@ -2018,6 +2028,7 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
                         break
                     for i in range(idx, idx + len(part)):
                         char_color[i] = color_hex
+                        char_high[i] = hl
                     start = idx + len(part)
 
         if not any(c is not None for c in char_color):
@@ -2031,14 +2042,17 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
             r_start = pos
             r_len = len(r_text)
             run_colors = [char_color[r_start + i] for i in range(r_len)]
+            run_highs = [char_high[r_start + i] for i in range(r_len)]
 
-            unique_colors = set(run_colors)
-            if len(unique_colors) == 1:
-                color = run_colors[0]
-                if color is None:
+            unique = set(zip(run_colors, run_highs))
+            if len(unique) == 1:
+                c, h = run_colors[0], run_highs[0]
+                if c is None:
                     pos += r_len
                     continue
-                pc_set_run_color(run._element, color)
+                pc_set_run_color(run._element, c)
+                if h:
+                    pc_set_run_highlight(run._element, h)
                 pos += r_len
                 continue
 
@@ -2050,15 +2064,88 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
             i = 0
             while i < r_len:
                 c = run_colors[i]
+                h = run_highs[i]
                 j = i + 1
-                while j < r_len and run_colors[j] == c:
+                while j < r_len and run_colors[j] == c and run_highs[j] == h:
                     j += 1
-                pieces.append((r_text[i:j], c))
+                pieces.append((r_text[i:j], c, h))
                 i = j
 
             parent.remove(run_elem)
-            for k, (seg, color) in enumerate(pieces):
-                new_r = pc_make_run_like(run_elem, seg, color)
+            for k, (seg, c, h) in enumerate(pieces):
+                new_r = pc_make_run_like(run_elem, seg, c, h)
+                parent.insert(idx_in_parent + k, new_r)
+
+            pos += r_len
+
+    def pc_highlight_text(paragraph, target_text, color_hex=PC_RED, highlight=PC_HIGHLIGHT_ADDED):
+        """把段落里 target_text 那部分标成指定颜色和背景。"""
+        if not target_text:
+            return
+        runs = list(paragraph.runs)
+        if not runs:
+            return
+        full_text = "".join(r.text for r in runs)
+        if not full_text:
+            return
+
+        positions = []
+        start = 0
+        while True:
+            idx = full_text.find(target_text, start)
+            if idx == -1:
+                break
+            positions.append((idx, idx + len(target_text)))
+            start = idx + len(target_text)
+
+        if not positions:
+            return
+
+        char_color = [None] * len(full_text)
+        char_high = [None] * len(full_text)
+        for s, e in positions:
+            for i in range(s, e):
+                char_color[i] = color_hex
+                char_high[i] = highlight
+
+        pos = 0
+        for run in runs:
+            r_text = run.text
+            if not r_text:
+                continue
+            r_start = pos
+            r_len = len(r_text)
+            colors = [char_color[r_start + i] for i in range(r_len)]
+            highs = [char_high[r_start + i] for i in range(r_len)]
+
+            unique = set(zip(colors, highs))
+            if len(unique) == 1:
+                c, h = colors[0], highs[0]
+                if c is not None:
+                    pc_set_run_color(run._element, c)
+                if h is not None:
+                    pc_set_run_highlight(run._element, h)
+                pos += r_len
+                continue
+
+            run_elem = run._element
+            parent = run_elem.getparent()
+            idx_in_parent = list(parent).index(run_elem)
+
+            pieces = []
+            i = 0
+            while i < r_len:
+                c = colors[i]
+                h = highs[i]
+                j = i + 1
+                while j < r_len and colors[j] == c and highs[j] == h:
+                    j += 1
+                pieces.append((r_text[i:j], c, h))
+                i = j
+
+            parent.remove(run_elem)
+            for k, (seg, c, h) in enumerate(pieces):
+                new_r = pc_make_run_like(run_elem, seg, color_hex=c, highlight=h)
                 parent.insert(idx_in_parent + k, new_r)
 
             pos += r_len
@@ -2562,9 +2649,7 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
                 if not has_nation:
                     pc_append_warn_text(p, "  机组国籍待确认")
 
-        # ★★★ 新增：给"已被取消（Excel 里不存在）"的手写待申请行加删除线 ★★★
-        # 判断依据：段落能被 pc_parse_pending_signature 识别为待申请行，
-        # 且其 (dep, arr, 月, 日) 在 Excel 航段里找不到 → 加删除线
+        # ★ 手写待申请行，若已不在 Excel 里 → 加删除线
         excel_route_keys = set()
         for r in excel_rows:
             if r["dep_date"] and r["dep"] and r["arr"]:
@@ -2582,7 +2667,46 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
             if (dep, arr, month, day) not in excel_route_keys:
                 for run in p.runs:
                     pc_set_run_strike(run._element)
-        # ★★★ 新增结束 ★★★
+
+        # ★ 手写待申请行的国籍核对：核对 written_nation vs actual_nation
+        tf_by_route = {}
+        for tf in text_flights:
+            dep_icao = city_to_icao.get(tf["dep_city"])
+            arr_icao = city_to_icao.get(tf["arr_city"])
+            if dep_icao and arr_icao:
+                tf_by_route.setdefault((dep_icao, arr_icao), []).append(tf)
+
+        for p in pc_iter_doc_paragraphs(doc):
+            raw_text = p.text.strip()
+            if not raw_text:
+                continue
+            sig = pc_parse_pending_signature(raw_text)
+            if not sig:
+                continue
+            dep, arr, month, day = sig
+
+            written_nation = ""
+            if "中国籍" in raw_text:
+                written_nation = "中国籍"
+            elif "外籍" in raw_text:
+                written_nation = "外籍"
+            elif "机组未定" in raw_text:
+                written_nation = "机组未定"
+
+            if not written_nation:
+                continue
+
+            candidates = tf_by_route.get((dep, arr), [])
+            if not candidates:
+                continue
+
+            matched_tf = candidates[0]
+            actual_nation = pc_actual_nation_label(matched_tf["crew"], pilots)
+
+            if written_nation != actual_nation:
+                pc_highlight_text(p, written_nation,
+                                  color_hex=PC_RED,
+                                  highlight=PC_HIGHLIGHT_ADDED)
 
         pending_by_reg = {}
         for row in excel_rows:
