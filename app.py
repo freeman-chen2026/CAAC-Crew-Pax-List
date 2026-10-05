@@ -1375,7 +1375,6 @@ with tab4:
 
     PC_RED = "FF0000"
     PC_GREEN = "00B050"
-    # ★ 新增文字背景色：蓝色（原为黄色）
     PC_HIGHLIGHT_ADDED = "blue"
 
     PC_MAX_CROSS_DAY_GAP_MIN = 600
@@ -1971,6 +1970,18 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
         hl = rPr.makeelement(PC_W_HIGHLIGHT, {qn('w:val'): color_name})
         rPr.append(hl)
 
+    # ★ 新增：给 run 加删除线
+    def pc_set_run_strike(run_element):
+        rPr = run_element.find(PC_W_RPR)
+        if rPr is None:
+            rPr = run_element.makeelement(PC_W_RPR, {})
+            run_element.insert(0, rPr)
+        for tag in ('w:strike', 'w:dstrike'):
+            for e in rPr.findall(qn(tag)):
+                rPr.remove(e)
+        strike = rPr.makeelement(qn('w:strike'), {})
+        rPr.append(strike)
+
     def pc_make_run_like(src_run_elem, text, color_hex=None, highlight=None):
         new_r = copy.deepcopy(src_run_elem)
         for t in new_r.findall(PC_W_T):
@@ -2550,6 +2561,28 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
             if raw_text in nationality_pending_paragraphs:
                 if not has_nation:
                     pc_append_warn_text(p, "  机组国籍待确认")
+
+        # ★★★ 新增：给"已被取消（Excel 里不存在）"的手写待申请行加删除线 ★★★
+        # 判断依据：段落能被 pc_parse_pending_signature 识别为待申请行，
+        # 且其 (dep, arr, 月, 日) 在 Excel 航段里找不到 → 加删除线
+        excel_route_keys = set()
+        for r in excel_rows:
+            if r["dep_date"] and r["dep"] and r["arr"]:
+                excel_route_keys.add((r["dep"], r["arr"],
+                                      r["dep_date"].month, r["dep_date"].day))
+
+        for p in pc_iter_doc_paragraphs(doc):
+            raw_text = p.text.strip()
+            if not raw_text:
+                continue
+            sig = pc_parse_pending_signature(raw_text)
+            if not sig:
+                continue
+            dep, arr, month, day = sig
+            if (dep, arr, month, day) not in excel_route_keys:
+                for run in p.runs:
+                    pc_set_run_strike(run._element)
+        # ★★★ 新增结束 ★★★
 
         pending_by_reg = {}
         for row in excel_rows:
