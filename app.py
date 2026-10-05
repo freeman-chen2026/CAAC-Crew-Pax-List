@@ -1375,7 +1375,8 @@ with tab4:
 
     PC_RED = "FF0000"
     PC_GREEN = "00B050"
-    PC_HIGHLIGHT_YELLOW = "yellow"
+    # ★ 新增文字背景色：蓝色（原为黄色）
+    PC_HIGHLIGHT_ADDED = "blue"
 
     PC_MAX_CROSS_DAY_GAP_MIN = 600
     PC_EARLY_GREEN_THRESHOLD_MIN = 600
@@ -1960,7 +1961,7 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
         color = rPr.makeelement(PC_W_COLOR, {qn('w:val'): color_hex})
         rPr.append(color)
 
-    def pc_set_run_highlight(run_element, color_name=PC_HIGHLIGHT_YELLOW):
+    def pc_set_run_highlight(run_element, color_name=PC_HIGHLIGHT_ADDED):
         rPr = run_element.find(PC_W_RPR)
         if rPr is None:
             rPr = run_element.makeelement(PC_W_RPR, {})
@@ -2056,14 +2057,14 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
         p_elem = paragraph._element
         if runs:
             src = runs[-1]._element
-            new_r = pc_make_run_like(src, text, color_hex=color_hex, highlight=PC_HIGHLIGHT_YELLOW)
+            new_r = pc_make_run_like(src, text, color_hex=color_hex, highlight=PC_HIGHLIGHT_ADDED)
         else:
             new_r = p_elem.makeelement(PC_W_R, {})
             rPr = new_r.makeelement(PC_W_RPR, {})
             new_r.insert(0, rPr)
             color = rPr.makeelement(PC_W_COLOR, {qn('w:val'): color_hex})
             rPr.append(color)
-            hl = rPr.makeelement(PC_W_HIGHLIGHT, {qn('w:val'): PC_HIGHLIGHT_YELLOW})
+            hl = rPr.makeelement(PC_W_HIGHLIGHT, {qn('w:val'): PC_HIGHLIGHT_ADDED})
             rPr.append(hl)
             t = new_r.makeelement(PC_W_T, {})
             t.text = text
@@ -2131,7 +2132,7 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
         rPr.append(color)
 
         hl = OxmlElement('w:highlight')
-        hl.set(qn('w:val'), PC_HIGHLIGHT_YELLOW)
+        hl.set(qn('w:val'), PC_HIGHLIGHT_ADDED)
         rPr.append(hl)
 
         r_elem.append(rPr)
@@ -2144,14 +2145,12 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
         p_elem.append(r_elem)
         return p_elem
 
-    # ★★★ 核心修改：不再重排，只把"真正新增"的 pending 插到对应日期组末尾 ★★★
     def pc_reorder_cell_with_pending(cell, pending_items, global_template_p):
         """保留 cell 内原有段落顺序；只把「真正新增」的 pending 行按日期插到
         对应日期组的末尾。如果所有 pending 都已被手写行覆盖 → 直接返回，不动任何东西。
         """
-        # 1. 收集 cell 内所有非空段落
         existing_sigs = set()
-        existing_paras = []  # [(paragraph, date_or_None)]
+        existing_paras = []
         for p in cell.paragraphs:
             raw = p.text.strip()
             if not raw:
@@ -2176,7 +2175,6 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
         if not existing_paras:
             return
 
-        # 2. 筛选出"真正需要新增"的 pending
         to_insert = []
         for item in pending_items:
             row = item["row"]
@@ -2194,10 +2192,8 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
             })
 
         if not to_insert:
-            # ★ 所有 pending 都已存在（手写或系统生成） → 一个字都不动
             return
 
-        # 3. 找到模板段落（用于新段落的样式）
         template_p = None
         for p, _ in existing_paras:
             if pc_parse_approval_line(p.text.strip()):
@@ -2210,12 +2206,10 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
 
         to_insert.sort(key=lambda x: x["dt"])
 
-        # 4. 构建新顺序：原有段落保持原序，只在每个日期组末尾插入对应 pending
         pending_by_date = {}
         for item in to_insert:
             pending_by_date.setdefault(item["date"], []).append(item)
 
-        # 如果 pending 日期早于 cell 内所有日期 → 插到最前
         result_seq = []
         if existing_paras:
             known_dates = [d for _, d in existing_paras if d is not None]
@@ -2229,7 +2223,6 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
         for i, (p, date) in enumerate(existing_paras):
             result_seq.append(("original", p._element))
 
-            # 判断是否是当前日期组的最后一行
             is_last_of_date = True
             if date is not None:
                 for j in range(i + 1, len(existing_paras)):
@@ -2242,12 +2235,10 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
                     result_seq.append(("pending", item))
                 del pending_by_date[date]
 
-        # 剩余的 pending（日期晚于所有已有行）追加到末尾
         for d in sorted(pending_by_date.keys()):
             for item in pending_by_date[d]:
                 result_seq.append(("pending", item))
 
-        # 5. 清空并重建
         tc = cell._tc
         for p_elem in list(tc.findall(qn('w:p'))):
             tc.remove(p_elem)
@@ -2465,7 +2456,6 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
                     if approval["service"] not in red_parts:
                         red_parts.append(approval["service"])
 
-            # ========== 机组国籍核对 ==========
             if approval["is_domestic"]:
                 if text_flight:
                     all_cn = pc_crew_all_chinese(text_flight["crew"], pilots)
@@ -2544,7 +2534,6 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
                     [(PC_GREEN, green), (PC_RED, red)]
                 )
 
-        # ★ 追加标记：段落里已有相同标记就跳过，避免重复
         for p in pc_iter_doc_paragraphs(doc):
             raw_text = p.text.strip()
             has_cancel = "待取消" in raw_text
