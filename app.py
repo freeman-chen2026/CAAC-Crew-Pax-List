@@ -1360,7 +1360,6 @@ window.addEventListener('DOMContentLoaded',()=>{const s=loadInput();if(s)ie.valu
 """
     components.html(G_HTML, height=900, scrolling=True)
 
-
 # ================================================================
 # 功能4：批复核对
 # ================================================================
@@ -1694,6 +1693,15 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
 
         return None
 
+    def pc_parse_pending_reg(text):
+        text = str(text).strip()
+        if not text:
+            return ""
+        m = re.match(r'^([A-Z0-9\-]+)\s+', text)
+        if not m:
+            return ""
+        return m.group(1).upper().replace("-", "")
+
     def pc_iter_doc_paragraphs(doc):
         for p in doc.paragraphs:
             yield p
@@ -1826,7 +1834,7 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
 
             m = PC_FLIGHT_HEADER_RE.match(line)
             if m:
-                reg = m.group(1).upper()
+                reg = m.group(1).upper().replace("-", "")
                 dep_time, arr_time = m.group(2), m.group(3)
                 if i + 1 < len(lines):
                     cm = re.match(r"^(.+?)\s+-\s+(.+)$", lines[i + 1])
@@ -2002,9 +2010,8 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
             pc_set_run_highlight(new_r, highlight)
         return new_r
 
-    # ★★★ 核心修改：红色字一律叠加蓝底，绿色不加 ★★★
-    def pc_set_paragraph_runs(paragraph, text, color_overrides):
-        if not color_overrides:
+    def pc_set_paragraph_runs(paragraph, text, color_overrides, highlight_overrides=None):
+        if not color_overrides and not highlight_overrides:
             return
         runs = list(paragraph.runs)
         if not runs:
@@ -2015,9 +2022,8 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
 
         char_color = [None] * len(full_text)
         char_high = [None] * len(full_text)
-        for color_hex, parts in color_overrides:
-            # ★ 红字附带蓝底；其它颜色（如绿色）不加高亮
-            hl = PC_HIGHLIGHT_ADDED if color_hex == PC_RED else None
+
+        for color_hex, parts in (color_overrides or []):
             for part in parts:
                 if not part:
                     continue
@@ -2028,10 +2034,22 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
                         break
                     for i in range(idx, idx + len(part)):
                         char_color[i] = color_hex
-                        char_high[i] = hl
                     start = idx + len(part)
 
-        if not any(c is not None for c in char_color):
+        for hl_color, parts in (highlight_overrides or []):
+            for part in parts:
+                if not part:
+                    continue
+                start = 0
+                while True:
+                    idx = full_text.find(part, start)
+                    if idx == -1:
+                        break
+                    for i in range(idx, idx + len(part)):
+                        char_high[i] = hl_color
+                    start = idx + len(part)
+
+        if not any(c is not None for c in char_color) and not any(h is not None for h in char_high):
             return
 
         pos = 0
@@ -2047,11 +2065,12 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
             unique = set(zip(run_colors, run_highs))
             if len(unique) == 1:
                 c, h = run_colors[0], run_highs[0]
-                if c is None:
+                if c is None and h is None:
                     pos += r_len
                     continue
-                pc_set_run_color(run._element, c)
-                if h:
+                if c is not None:
+                    pc_set_run_color(run._element, c)
+                if h is not None:
                     pc_set_run_highlight(run._element, h)
                 pos += r_len
                 continue
@@ -2073,13 +2092,12 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
 
             parent.remove(run_elem)
             for k, (seg, c, h) in enumerate(pieces):
-                new_r = pc_make_run_like(run_elem, seg, c, h)
+                new_r = pc_make_run_like(run_elem, seg, color_hex=c, highlight=h)
                 parent.insert(idx_in_parent + k, new_r)
 
             pos += r_len
 
     def pc_highlight_text(paragraph, target_text, color_hex=PC_RED, highlight=PC_HIGHLIGHT_ADDED):
-        """把段落里 target_text 那部分标成指定颜色和背景。"""
         if not target_text:
             return
         runs = list(paragraph.runs)
@@ -2244,9 +2262,6 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
         return p_elem
 
     def pc_reorder_cell_with_pending(cell, pending_items, global_template_p):
-        """保留 cell 内原有段落顺序；只把「真正新增」的 pending 行按日期插到
-        对应日期组的末尾。如果所有 pending 都已被手写行覆盖 → 直接返回，不动任何东西。
-        """
         existing_sigs = set()
         existing_paras = []
         for p in cell.paragraphs:
@@ -2386,6 +2401,7 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
         result_rows = []
         approval_red_map = {}
         approval_green_map = {}
+        approval_highlight_map = {}
         cancel_paragraphs = set()
         change_paragraphs = set()
         nationality_pending_paragraphs = set()
@@ -2430,6 +2446,7 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
 
             red_parts = []
             green_parts = []
+            highlight_parts = []
             diffs = []
             note_parts = []
             info_note = ""
@@ -2477,9 +2494,11 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
                 if expected_type is None:
                     diffs.append(f"机型：注册号 {approval['reg']} 不在机型对照表中")
                     red_parts.append(approval["type"])
+                    highlight_parts.append(approval["type"])
                 elif approval["type"] != expected_type:
                     diffs.append(f"机型：批复 {approval['type']} vs 对照表 {expected_type}")
                     red_parts.append(approval["type"])
+                    highlight_parts.append(approval["type"])
 
             ap_dur = pc_flight_duration_minutes(approval_dep_time, approval_arr_time)
             xl_dur = pc_flight_duration_minutes(excel_row["dep_time"], excel_row["arr_time"])
@@ -2492,6 +2511,7 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
                         f"（差 {dur_diff:+d} 分钟）"
                     )
                     red_parts.append(approval["arr_time_raw"])
+                    highlight_parts.append(approval["arr_time_raw"])
 
             real_dep_diff = pc_compute_real_minute_diff(
                 approval["dep_dt_bj"].date(), approval_dep_time,
@@ -2511,6 +2531,7 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
                     f"起飞时间：批复 {approval_dep_time} 晚于计划 {excel_row['dep_time']}，需重新申请"
                 )
                 red_parts.append(approval["dep_time_raw"])
+                highlight_parts.append(approval["dep_time_raw"])
                 change_paragraphs.add(raw_text)
             else:
                 dep_ok = False
@@ -2519,6 +2540,7 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
                     f"（相差 {real_dep_diff} 分钟）"
                 )
                 red_parts.append(approval["dep_time_raw"])
+                highlight_parts.append(approval["dep_time_raw"])
 
             xl_arr_date = excel_row["arr_date"] or excel_row["dep_date"]
             real_arr_diff = pc_compute_real_minute_diff(
@@ -2538,6 +2560,7 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
                     f"（应为 {expected_service}）"
                 )
                 red_parts.append(approval["service"])
+                highlight_parts.append(approval["service"])
 
             if text_flight is not None:
                 text_ferry = text_flight.get("is_ferry", False)
@@ -2547,12 +2570,14 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
                     )
                     if approval["service"] not in red_parts:
                         red_parts.append(approval["service"])
+                        highlight_parts.append(approval["service"])
                 elif not excel_ferry and text_ferry:
                     diffs.append(
                         f"⚠ 文本多标 F 标记（Excel 为 {excel_row['use']}，非调机）"
                     )
                     if approval["service"] not in red_parts:
                         red_parts.append(approval["service"])
+                        highlight_parts.append(approval["service"])
 
             if approval["is_domestic"]:
                 if text_flight:
@@ -2566,12 +2591,14 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
                             if has_foreign:
                                 diffs.append("国籍标注错误（应为中国籍）")
                                 red_parts.append("外籍")
+                                highlight_parts.append("外籍")
                             elif not has_cn:
                                 diffs.append("国籍未标注（应为中国籍）")
                         else:
                             if has_cn:
                                 diffs.append("国籍标注错误（应为外籍）")
                                 red_parts.append("中国籍")
+                                highlight_parts.append("中国籍")
                             elif not has_foreign:
                                 diffs.append("国籍未标注（应为外籍）")
                 else:
@@ -2619,6 +2646,8 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
                 approval_red_map[raw_text] = red_parts
             if green_parts:
                 approval_green_map[raw_text] = green_parts
+            if highlight_parts:
+                approval_highlight_map[raw_text] = highlight_parts
             if info_note:
                 nationality_pending_paragraphs.add(raw_text)
 
@@ -2626,10 +2655,12 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
             raw_text = p.text.strip()
             red = approval_red_map.get(raw_text, [])
             green = approval_green_map.get(raw_text, [])
-            if red or green:
+            highlight = approval_highlight_map.get(raw_text, [])
+            if red or green or highlight:
                 pc_set_paragraph_runs(
                     p, raw_text,
-                    [(PC_GREEN, green), (PC_RED, red)]
+                    color_overrides=[(PC_GREEN, green), (PC_RED, red)],
+                    highlight_overrides=[(PC_HIGHLIGHT_ADDED, highlight)] if highlight else None,
                 )
 
         for p in pc_iter_doc_paragraphs(doc):
@@ -2649,7 +2680,7 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
                 if not has_nation:
                     pc_append_warn_text(p, "  机组国籍待确认")
 
-        # ★ 手写待申请行，若已不在 Excel 里 → 加删除线
+        # 手写待申请行，若已不在 Excel 里 → 加删除线
         excel_route_keys = set()
         for r in excel_rows:
             if r["dep_date"] and r["dep"] and r["arr"]:
@@ -2668,13 +2699,13 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
                 for run in p.runs:
                     pc_set_run_strike(run._element)
 
-        # ★ 手写待申请行的国籍核对：核对 written_nation vs actual_nation
-        tf_by_route = {}
+        # ★ 手写待申请行的国籍核对：只对国内飞机（B 打头）做，且严格按 (reg, dep, arr) 匹配
+        tf_by_reg_route = {}
         for tf in text_flights:
             dep_icao = city_to_icao.get(tf["dep_city"])
             arr_icao = city_to_icao.get(tf["arr_city"])
             if dep_icao and arr_icao:
-                tf_by_route.setdefault((dep_icao, arr_icao), []).append(tf)
+                tf_by_reg_route.setdefault((tf["reg"], dep_icao, arr_icao), []).append(tf)
 
         for p in pc_iter_doc_paragraphs(doc):
             raw_text = p.text.strip()
@@ -2684,6 +2715,11 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
             if not sig:
                 continue
             dep, arr, month, day = sig
+            reg_written = pc_parse_pending_reg(raw_text)
+
+            # ★ 只对国内飞机做国籍核对；外机（非 B 打头）跳过
+            if not pc_is_b_reg(reg_written):
+                continue
 
             written_nation = ""
             if "中国籍" in raw_text:
@@ -2696,7 +2732,7 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
             if not written_nation:
                 continue
 
-            candidates = tf_by_route.get((dep, arr), [])
+            candidates = tf_by_reg_route.get((reg_written, dep, arr), [])
             if not candidates:
                 continue
 
