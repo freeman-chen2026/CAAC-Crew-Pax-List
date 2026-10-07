@@ -1360,6 +1360,7 @@ window.addEventListener('DOMContentLoaded',()=>{const s=loadInput();if(s)ie.valu
 """
     components.html(G_HTML, height=900, scrolling=True)
 
+
 # ================================================================
 # 功能4：批复核对
 # ================================================================
@@ -1776,7 +1777,6 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
                 new_p.append(child)
             parent.insert(idx_in_parent + i, new_p)
 
-    # ★ 合并软换行拆散的批复行，并保证 ON 和日期之间有空格
     def pc_merge_split_approvals(doc):
         def _process_parent(parent_elem):
             changed = True
@@ -1791,7 +1791,6 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
                     t2 = "".join(t.text or "" for t in p2.iter(qn('w:t'))).strip()
                     if re.search(r'\bON\s*$', t1, re.IGNORECASE) and \
                        re.match(r'^\d{2}[A-Za-z]{3}\d{2,4}', t2):
-                        # ★ 给 p1 最后一个 w:t 结尾加空格（若没有）
                         if not t1.endswith(' '):
                             last_t = None
                             for t_elem in p1.iter(qn('w:t')):
@@ -2215,10 +2214,10 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
 
             pos += r_len
 
-    # ★ 新增：在段落里 "ON <date>" 之后插入一段带样式的文字
-    def pc_insert_after_on_date(paragraph, date_raw, insert_text,
-                                color_hex=PC_RED, highlight=PC_HIGHLIGHT_ADDED):
-        """在段落的 'ON <date>' 之后插入带样式的文字。返回 True 表示成功。"""
+    # ★ 在段落里 "ON <date>" 之后插入 service（标准化空格）
+    #   结果格式保证：ON <date> <service> [<remark>]
+    def pc_insert_service_after_date(paragraph, date_raw, service,
+                                       color_hex=PC_RED, highlight=PC_HIGHLIGHT_ADDED):
         runs = list(paragraph.runs)
         if not runs:
             return False
@@ -2227,53 +2226,106 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
         if not full_text:
             return False
 
-        # 找 "ON <date>"
+        # 找 "ON <date>" 结束位置
         m = re.search(r'ON\s+' + re.escape(date_raw), full_text, re.IGNORECASE)
         if not m:
             return False
-        insert_pos = m.end()
+        on_end = m.end()
 
-        # 判断插入点后是否紧跟空格
-        next_char = full_text[insert_pos] if insert_pos < len(full_text) else ""
-        if next_char == " ":
-            actual_insert = f"{insert_text} "
+        # 跳过紧跟的空格，找到 remark 起始位置
+        remark_start = on_end
+        while remark_start < len(full_text) and full_text[remark_start] == ' ':
+            remark_start += 1
+
+        has_remark = remark_start < len(full_text)
+
+        # 如果 <date> 后面紧跟的不是空格也不是 remark 首字（异常情况），退回
+        # 构造插入字符串
+        # 期望最终格式：<... ON <date>> <service> <remark>
+        # 所以插入内容为 " <service> "（若后面有 remark），或 " <service>"（若无 remark）
+        if has_remark:
+            insert_str = f" {service} "
         else:
-            actual_insert = f" {insert_text} "
+            insert_str = f" {service}"
 
-        # 找 insert_pos 属于哪个 run
+        # 定位 insert_point：on_end 和 remark_start 之间的空格全部丢弃
+        # 我们希望在 on_end 之后插入 <insert_str>，并删除原 on_end 到 remark_start 之间的空格
+        # 找到包含 on_end 的 run
         pos = 0
+        target_run = None
+        local_on_end = None
         for run in runs:
             r_text = run.text
             r_len = len(r_text)
             r_start = pos
             r_end = pos + r_len
-
-            if insert_pos <= r_end and insert_pos > r_start:
-                local = insert_pos - r_start
-                before = r_text[:local]
-                after = r_text[local:]
-
-                run.text = before
-
-                parent = run._element.getparent()
-                idx_in_parent = list(parent).index(run._element)
-
-                # 插入带样式的新 run
-                new_r = pc_make_run_like(run._element, actual_insert,
-                                          color_hex=color_hex, highlight=highlight)
-                parent.insert(idx_in_parent + 1, new_r)
-
-                # 保留后面的文本
-                if after:
-                    after_r = pc_make_run_like(run._element, after)
-                    pc_clear_run_strike(after_r)
-                    parent.insert(idx_in_parent + 2, after_r)
-
-                return True
-
+            # on_end 在此 run 内或恰好在边界
+            if r_start <= on_end <= r_end:
+                target_run = run
+                local_on_end = on_end - r_start
+                break
             pos += r_len
 
-        return False
+        if target_run is None:
+            return False
+
+        # 找到 remark_start 所在的 run（可能跨多个 run）
+        pos = 0
+        remark_run = None
+        local_remark = None
+        for run in runs:
+            r_text = run.text
+            r_len = len(r_text)
+            r_start = pos
+            r_end = pos + r_len
+            if r_start <= remark_start <= r_end:
+                remark_run = run
+                local_remark = remark_start - r_start
+                break
+            pos += r_len
+
+        if target_run is remark_run:
+            # 同一个 run
+            r_text = target_run.text
+            before = r_text[:local_on_end]
+            after = r_text[local_remark:] if has_remark else ""
+
+            target_run.text = before
+
+            parent = target_run._element.getparent()
+            idx_in_parent = list(parent).index(target_run._element)
+
+            new_r = pc_make_run_like(target_run._element, insert_str,
+                                      color_hex=color_hex, highlight=highlight)
+            parent.insert(idx_in_parent + 1, new_r)
+
+            if after:
+                after_r = pc_make_run_like(target_run._element, after)
+                pc_clear_run_strike(after_r)
+                parent.insert(idx_in_parent + 2, after_r)
+            return True
+
+        # 跨 run 情况：target_run 结尾截断，中间的空格 run 全清掉，remark_run 开头截断
+        # 简化：直接改 target_run 结尾
+        r_text = target_run.text
+        target_run.text = r_text[:local_on_end]
+
+        parent = target_run._element.getparent()
+        idx_in_parent = list(parent).index(target_run._element)
+
+        new_r = pc_make_run_like(target_run._element, insert_str,
+                                  color_hex=color_hex, highlight=highlight)
+        parent.insert(idx_in_parent + 1, new_r)
+
+        # 处理 remark_run 前面的空格
+        # 中间 run 里的内容原样保留（可能包含原空格，视觉上问题不大）
+        # 这里简单处理：如果 remark_run 有前置空格（比如它前面是空格 run），
+        # 就把 remark_run 开头的前导空格去掉
+        if has_remark and remark_run is not None and local_remark is not None:
+            rr_text = remark_run.text
+            remark_run.text = rr_text[local_remark:]
+
+        return True
 
     def _pc_append_styled_text(paragraph, text, color_hex):
         runs = list(paragraph.runs)
@@ -2516,7 +2568,6 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
         cancel_paragraphs = set()
         change_paragraphs = set()
         nationality_pending_paragraphs = set()
-        # ★ 新增：记录"需要补 U/H 或 N/M"的段落 [(paragraph, date_raw, service)]
         service_to_insert = []
 
         used_excel = set()
@@ -2566,7 +2617,7 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
 
             excel_row = pc_find_excel_match(approval, excel_rows, used_excel)
 
-            # ★ 新增：service 为空 → 记录需要补的内容
+            # service 为空 → 记录需要补的内容
             if approval["service"] == "" and excel_row is not None:
                 _ferry = pc_is_ferry_use(excel_row["use"])
                 _expected_svc = "N/M" if _ferry else "U/H"
@@ -2772,9 +2823,9 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
 
         # ★ 先补 U/H 或 N/M（在应用其它样式之前）
         for _para, _date_raw, _svc in service_to_insert:
-            pc_insert_after_on_date(_para, _date_raw, _svc,
-                                     color_hex=PC_RED,
-                                     highlight=PC_HIGHLIGHT_ADDED)
+            pc_insert_service_after_date(_para, _date_raw, _svc,
+                                          color_hex=PC_RED,
+                                          highlight=PC_HIGHLIGHT_ADDED)
 
         for p in pc_iter_doc_paragraphs(doc):
             raw_text = p.text.strip()
