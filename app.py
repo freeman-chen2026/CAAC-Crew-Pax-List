@@ -1964,6 +1964,8 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
     PC_W_COLOR = qn('w:color')
     PC_W_T = qn('w:t')
     PC_W_HIGHLIGHT = qn('w:highlight')
+    PC_W_STRIKE = qn('w:strike')
+    PC_W_DSTRIKE = qn('w:dstrike')
 
     def pc_set_run_color(run_element, color_hex):
         rPr = run_element.find(PC_W_RPR)
@@ -1990,11 +1992,19 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
         if rPr is None:
             rPr = run_element.makeelement(PC_W_RPR, {})
             run_element.insert(0, rPr)
-        for tag in ('w:strike', 'w:dstrike'):
-            for e in rPr.findall(qn(tag)):
+        for tag in (PC_W_STRIKE, PC_W_DSTRIKE):
+            for e in rPr.findall(tag):
                 rPr.remove(e)
-        strike = rPr.makeelement(qn('w:strike'), {})
+        strike = rPr.makeelement(PC_W_STRIKE, {})
         rPr.append(strike)
+
+    def pc_clear_run_strike(run_element):
+        rPr = run_element.find(PC_W_RPR)
+        if rPr is None:
+            return
+        for tag in (PC_W_STRIKE, PC_W_DSTRIKE):
+            for e in rPr.findall(tag):
+                rPr.remove(e)
 
     def pc_make_run_like(src_run_elem, text, color_hex=None, highlight=None):
         new_r = copy.deepcopy(src_run_elem)
@@ -2009,6 +2019,48 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
         if highlight:
             pc_set_run_highlight(new_r, highlight)
         return new_r
+
+    def pc_replace_text_in_paragraph(paragraph, old_text, new_text):
+        """在段落中替换文字，尽量保持格式。返回 True 表示替换成功。"""
+        if not old_text:
+            return False
+        runs = list(paragraph.runs)
+        if not runs:
+            return False
+        full_text = "".join(r.text for r in runs)
+        if old_text not in full_text:
+            return False
+
+        start = full_text.find(old_text)
+        end = start + len(old_text)
+
+        pos = 0
+        for run in runs:
+            r_text = run.text
+            r_len = len(r_text)
+            r_start = pos
+            r_end = pos + r_len
+
+            if r_end <= start or r_start >= end:
+                pos += r_len
+                continue
+
+            if r_start <= start and r_end >= end:
+                local_start = start - r_start
+                local_end = end - r_start
+                run.text = r_text[:local_start] + new_text + r_text[local_end:]
+            elif r_start <= start:
+                local_start = start - r_start
+                run.text = r_text[:local_start] + new_text
+            elif r_end >= end:
+                local_end = end - r_start
+                run.text = r_text[local_end:]
+            else:
+                run.text = ""
+
+            pos += r_len
+
+        return True
 
     def pc_set_paragraph_runs(paragraph, text, color_overrides, highlight_overrides=None):
         if not color_overrides and not highlight_overrides:
@@ -2169,11 +2221,13 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
             pos += r_len
 
     def _pc_append_styled_text(paragraph, text, color_hex):
+        """追加一段带样式的文字。不继承原 run 的删除线，避免"待取消"文字被划掉。"""
         runs = list(paragraph.runs)
         p_elem = paragraph._element
         if runs:
             src = runs[-1]._element
             new_r = pc_make_run_like(src, text, color_hex=color_hex, highlight=PC_HIGHLIGHT_ADDED)
+            pc_clear_run_strike(new_r)
         else:
             new_r = p_elem.makeelement(PC_W_R, {})
             rPr = new_r.makeelement(PC_W_RPR, {})
@@ -2242,6 +2296,9 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
             rPr.remove(c)
         for h in rPr.findall(PC_W_HIGHLIGHT):
             rPr.remove(h)
+        for tag in (PC_W_STRIKE, PC_W_DSTRIKE):
+            for e in rPr.findall(tag):
+                rPr.remove(e)
 
         color = OxmlElement('w:color')
         color.set(qn('w:val'), PC_RED)
@@ -2410,6 +2467,9 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
         used_text = set()
         unapproved_keys = set()
 
+        # ★ 记录所有"匹配成功"的批复行的 (dep, arr, 月, 日)
+        approval_done_sigs = set()
+
         for p in pc_iter_doc_paragraphs(doc):
             raw_text = p.text.strip()
             if not raw_text:
@@ -2481,6 +2541,13 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
                 approval_red_map[raw_text] = red_parts
                 cancel_paragraphs.add(raw_text)
                 continue
+
+            # ★ 匹配成功 → 记录签名
+            _ap_dt = approval["dep_dt_bj"]
+            if approval["dep"] and approval["arr"]:
+                approval_done_sigs.add(
+                    (approval["dep"], approval["arr"], _ap_dt.month, _ap_dt.day)
+                )
 
             text_flight = pc_find_text_match(
                 approval, text_flights, city_to_icao, used_text
@@ -2663,6 +2730,7 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
                     highlight_overrides=[(PC_HIGHLIGHT_ADDED, highlight)] if highlight else None,
                 )
 
+        # 待取消/待变更/机组国籍标记处理
         for p in pc_iter_doc_paragraphs(doc):
             raw_text = p.text.strip()
             has_cancel = "待取消" in raw_text
@@ -2670,6 +2738,8 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
             has_nation = "机组国籍待确认" in raw_text
 
             if raw_text in cancel_paragraphs:
+                for run in p.runs:
+                    pc_set_run_strike(run._element)
                 if not (has_cancel or has_change):
                     pc_append_red_text(p, "  待取消")
             elif raw_text in change_paragraphs:
@@ -2680,7 +2750,10 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
                 if not has_nation:
                     pc_append_warn_text(p, "  机组国籍待确认")
 
-        # ★ 手写待申请行：只对"Excel 里已经没有该航段"的情况加删除线（=已取消）
+        # ★ 手写待申请行：
+        #   1. Excel 里没有该航段（已取消） → 加删除线
+        #   2. docx 里已有对应批复（已申请） → 把"待申请"改成"待使用"
+        #   3. 其余真·待申请 → 做国籍核对
         excel_route_keys = set()
         for r in excel_rows:
             if r["dep_date"] and r["dep"] and r["arr"]:
@@ -2704,13 +2777,21 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
             dep, arr, month, day = sig
             key = (dep, arr, month, day)
 
-            # 只有 Excel 里没有该航段时才加删除线（=已取消）
-            if key not in excel_route_keys:
+            excel_has = key in excel_route_keys
+            approval_done = key in approval_done_sigs
+
+            # 1. Excel 里没有 → 已取消 → 加删除线
+            if not excel_has:
                 for run in p.runs:
                     pc_set_run_strike(run._element)
                 continue
 
-            # 国籍核对：只对 B 打头手写行，严格按 (reg, dep, arr) 匹配
+            # 2. docx 里已有对应批复 → 已申请 → 把"待申请"改成"待使用"
+            if approval_done:
+                pc_replace_text_in_paragraph(p, "待申请", "待使用")
+                continue
+
+            # 3. 真·待申请 → 国籍核对（只对 B 打头手写行，严格按 reg 匹配）
             reg_written = pc_parse_pending_reg(raw_text)
             if not pc_is_b_reg(reg_written):
                 continue
