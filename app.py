@@ -1565,7 +1565,6 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
         return pilots
 
     def pc_crew_all_chinese(crew_codes, pilots):
-        """True=全中国籍；False=含外籍；None=无法判断"""
         pilot_codes = [c.strip() for c in crew_codes if c.strip().startswith(("P", "W"))]
         if not pilot_codes:
             return None
@@ -1577,7 +1576,6 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
         return True
 
     def pc_actual_nation_label(crew_codes, pilots):
-        """返回实际国籍标注文案：'中国籍' / '外籍' / '机组未定'"""
         all_cn = pc_crew_all_chinese(crew_codes, pilots)
         if all_cn is None:
             return "机组未定"
@@ -1587,13 +1585,14 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
         return any(k in use_text for k in PC_FERRY_KEYWORDS)
 
     # ---------- 解析批复 ----------
+    # ★ 关键修复1：date 后 `\s+` → `\s*`（兼容 "ON 07OCT2026中国籍" 无空格）
     PC_APPROVAL_RE = re.compile(
         r"^(?P<reg>[A-Z0-9\-]+)\s+"
         r"(?P<second>[A-Z0-9]+)\s+"
         r"(?P<dep>[A-Z]{4})\s*(?P<dep_time>\d{4})\s+"
         r"(?P<arr_time>\d{4})\s*(?P<arr>[A-Z]{4})\s+"
-        r"ON\s+(?P<date>\d{2}[A-Z]{3}\d{2,4})\s+"
-        r"(?P<rest>.+)$",
+        r"ON\s+(?P<date>\d{2}[A-Z]{3}\d{2,4})\s*"
+        r"(?P<rest>.*)$",
         re.IGNORECASE,
     )
 
@@ -1636,9 +1635,9 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
                 service = "U/H"
                 remark = rest[8:].strip(" -–—\t")
             else:
-                parts = rest.split(None, 1)
-                service = parts[0].upper() if parts else ""
-                remark = parts[1].strip() if len(parts) > 1 else ""
+                # ★ 关键修复2：没有明确 U/H / N/M 标注 → service 留空，整个 rest 是 remark
+                service = ""
+                remark = rest.strip()
 
         date_obj = pc_parse_date_token(date_raw)
         return {
@@ -1660,7 +1659,6 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
 
     # ---------- 待申请行签名 ----------
     def pc_parse_pending_signature(text):
-        """识别'待申请行'（手写或系统生成），返回 (dep, arr, month, day) 或 None。"""
         text = str(text).strip()
         if not text:
             return None
@@ -1780,9 +1778,39 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
                 new_p.append(child)
             parent.insert(idx_in_parent + i, new_p)
 
+    # ★ 关键修复3：合并被软换行拆散的批复行（前一段以 ON 结尾 + 后一段以 DDMON 开头）
+    def pc_merge_split_approvals(doc):
+        def _process_parent(parent_elem):
+            changed = True
+            while changed:
+                changed = False
+                ps = parent_elem.findall(qn('w:p'))
+                i = 0
+                while i < len(ps) - 1:
+                    p1 = ps[i]
+                    p2 = ps[i + 1]
+                    t1 = "".join(t.text or "" for t in p1.iter(qn('w:t'))).strip()
+                    t2 = "".join(t.text or "" for t in p2.iter(qn('w:t'))).strip()
+                    if re.search(r'\bON\s*$', t1, re.IGNORECASE) and \
+                       re.match(r'^\d{2}[A-Za-z]{3}\d{2,4}', t2):
+                        for child in list(p2):
+                            if child.tag == qn('w:pPr'):
+                                continue
+                            p1.append(copy.deepcopy(child))
+                        parent_elem.remove(p2)
+                        changed = True
+                        break
+                    i += 1
+
+        body = doc.element.body
+        _process_parent(body)
+        for tc in body.iter(qn('w:tc')):
+            _process_parent(tc)
+
     def pc_normalize_soft_breaks(doc):
         for p in pc_collect_all_paragraphs(doc):
             pc_split_paragraph_by_br(p._element)
+        pc_merge_split_approvals(doc)
 
     # ---------- Excel ----------
     def pc_load_excel_rows_from_bytes(data: bytes):
@@ -2020,48 +2048,6 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
             pc_set_run_highlight(new_r, highlight)
         return new_r
 
-    def pc_replace_text_in_paragraph(paragraph, old_text, new_text):
-        """在段落中替换文字，尽量保持格式。返回 True 表示替换成功。"""
-        if not old_text:
-            return False
-        runs = list(paragraph.runs)
-        if not runs:
-            return False
-        full_text = "".join(r.text for r in runs)
-        if old_text not in full_text:
-            return False
-
-        start = full_text.find(old_text)
-        end = start + len(old_text)
-
-        pos = 0
-        for run in runs:
-            r_text = run.text
-            r_len = len(r_text)
-            r_start = pos
-            r_end = pos + r_len
-
-            if r_end <= start or r_start >= end:
-                pos += r_len
-                continue
-
-            if r_start <= start and r_end >= end:
-                local_start = start - r_start
-                local_end = end - r_start
-                run.text = r_text[:local_start] + new_text + r_text[local_end:]
-            elif r_start <= start:
-                local_start = start - r_start
-                run.text = r_text[:local_start] + new_text
-            elif r_end >= end:
-                local_end = end - r_start
-                run.text = r_text[local_end:]
-            else:
-                run.text = ""
-
-            pos += r_len
-
-        return True
-
     def pc_set_paragraph_runs(paragraph, text, color_overrides, highlight_overrides=None):
         if not color_overrides and not highlight_overrides:
             return
@@ -2221,7 +2207,6 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
             pos += r_len
 
     def _pc_append_styled_text(paragraph, text, color_hex):
-        """追加一段带样式的文字。不继承原 run 的删除线，避免"待取消"文字被划掉。"""
         runs = list(paragraph.runs)
         p_elem = paragraph._element
         if runs:
@@ -2467,9 +2452,6 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
         used_text = set()
         unapproved_keys = set()
 
-        # ★ 记录所有"匹配成功"的批复行的 (dep, arr, 月, 日)
-        approval_done_sigs = set()
-
         for p in pc_iter_doc_paragraphs(doc):
             raw_text = p.text.strip()
             if not raw_text:
@@ -2541,13 +2523,6 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
                 approval_red_map[raw_text] = red_parts
                 cancel_paragraphs.add(raw_text)
                 continue
-
-            # ★ 匹配成功 → 记录签名
-            _ap_dt = approval["dep_dt_bj"]
-            if approval["dep"] and approval["arr"]:
-                approval_done_sigs.add(
-                    (approval["dep"], approval["arr"], _ap_dt.month, _ap_dt.day)
-                )
 
             text_flight = pc_find_text_match(
                 approval, text_flights, city_to_icao, used_text
@@ -2621,7 +2596,8 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
             excel_ferry = pc_is_ferry_use(excel_row["use"])
             expected_service = "N/M" if excel_ferry else "U/H"
 
-            if approval["service"] != expected_service:
+            # ★ 关键修复4：只有 service 非空才比对
+            if approval["service"] and approval["service"] != expected_service:
                 diffs.append(
                     f"用途：批复 {approval['service']} vs 计划 {excel_row['use']}"
                     f"（应为 {expected_service}）"
@@ -2635,14 +2611,14 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
                     diffs.append(
                         f"⚠ 文本漏 F 标记（Excel 为调机：{excel_row['use']}）"
                     )
-                    if approval["service"] not in red_parts:
+                    if approval["service"] and approval["service"] not in red_parts:
                         red_parts.append(approval["service"])
                         highlight_parts.append(approval["service"])
                 elif not excel_ferry and text_ferry:
                     diffs.append(
                         f"⚠ 文本多标 F 标记（Excel 为 {excel_row['use']}，非调机）"
                     )
-                    if approval["service"] not in red_parts:
+                    if approval["service"] and approval["service"] not in red_parts:
                         red_parts.append(approval["service"])
                         highlight_parts.append(approval["service"])
 
@@ -2730,7 +2706,6 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
                     highlight_overrides=[(PC_HIGHLIGHT_ADDED, highlight)] if highlight else None,
                 )
 
-        # 待取消/待变更/机组国籍标记处理
         for p in pc_iter_doc_paragraphs(doc):
             raw_text = p.text.strip()
             has_cancel = "待取消" in raw_text
@@ -2750,10 +2725,7 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
                 if not has_nation:
                     pc_append_warn_text(p, "  机组国籍待确认")
 
-        # ★ 手写待申请行：
-        #   1. Excel 里没有该航段（已取消） → 加删除线
-        #   2. docx 里已有对应批复（已申请） → 把"待申请"改成"待使用"
-        #   3. 其余真·待申请 → 做国籍核对
+        # ★ 手写待申请行：只对"Excel 里没有该航段"的情况加删除线（=已取消）
         excel_route_keys = set()
         for r in excel_rows:
             if r["dep_date"] and r["dep"] and r["arr"]:
@@ -2775,23 +2747,12 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
             if not sig:
                 continue
             dep, arr, month, day = sig
-            key = (dep, arr, month, day)
 
-            excel_has = key in excel_route_keys
-            approval_done = key in approval_done_sigs
-
-            # 1. Excel 里没有 → 已取消 → 加删除线
-            if not excel_has:
+            if (dep, arr, month, day) not in excel_route_keys:
                 for run in p.runs:
                     pc_set_run_strike(run._element)
                 continue
 
-            # 2. docx 里已有对应批复 → 已申请 → 把"待申请"改成"待使用"
-            if approval_done:
-                pc_replace_text_in_paragraph(p, "待申请", "待使用")
-                continue
-
-            # 3. 真·待申请 → 国籍核对（只对 B 打头手写行，严格按 reg 匹配）
             reg_written = pc_parse_pending_reg(raw_text)
             if not pc_is_b_reg(reg_written):
                 continue
