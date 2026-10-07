@@ -1585,7 +1585,6 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
         return any(k in use_text for k in PC_FERRY_KEYWORDS)
 
     # ---------- 解析批复 ----------
-    # ★ 关键修复1：date 后 `\s+` → `\s*`（兼容 "ON 07OCT2026中国籍" 无空格）
     PC_APPROVAL_RE = re.compile(
         r"^(?P<reg>[A-Z0-9\-]+)\s+"
         r"(?P<second>[A-Z0-9]+)\s+"
@@ -1635,7 +1634,6 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
                 service = "U/H"
                 remark = rest[8:].strip(" -–—\t")
             else:
-                # ★ 关键修复2：没有明确 U/H / N/M 标注 → service 留空，整个 rest 是 remark
                 service = ""
                 remark = rest.strip()
 
@@ -1778,7 +1776,6 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
                 new_p.append(child)
             parent.insert(idx_in_parent + i, new_p)
 
-    # ★ 关键修复3：合并被软换行拆散的批复行（前一段以 ON 结尾 + 后一段以 DDMON 开头）
     def pc_merge_split_approvals(doc):
         def _process_parent(parent_elem):
             changed = True
@@ -2447,6 +2444,8 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
         cancel_paragraphs = set()
         change_paragraphs = set()
         nationality_pending_paragraphs = set()
+        # ★ 新增：记录"未标注航班性质"的段落
+        missing_service_paragraphs = set()
 
         used_excel = set()
         used_text = set()
@@ -2485,6 +2484,10 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
                     "备注": "未批",
                 })
                 continue
+
+            # ★ 新增：没写 U/H 或 N/M 的批复行 → 记录，稍后追加提示
+            if approval["service"] == "":
+                missing_service_paragraphs.add(raw_text)
 
             red_parts = []
             green_parts = []
@@ -2596,7 +2599,6 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
             excel_ferry = pc_is_ferry_use(excel_row["use"])
             expected_service = "N/M" if excel_ferry else "U/H"
 
-            # ★ 关键修复4：只有 service 非空才比对
             if approval["service"] and approval["service"] != expected_service:
                 diffs.append(
                     f"用途：批复 {approval['service']} vs 计划 {excel_row['use']}"
@@ -2711,6 +2713,8 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
             has_cancel = "待取消" in raw_text
             has_change = "待变更" in raw_text
             has_nation = "机组国籍待确认" in raw_text
+            # ★ 新增：是否已有航班性质提示
+            has_service_note = "未标注航班性质" in raw_text
 
             if raw_text in cancel_paragraphs:
                 for run in p.runs:
@@ -2725,7 +2729,12 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
                 if not has_nation:
                     pc_append_warn_text(p, "  机组国籍待确认")
 
-        # ★ 手写待申请行：只对"Excel 里没有该航段"的情况加删除线（=已取消）
+            # ★ 新增：没写 U/H 或 N/M 的批复行 → 追加红字+蓝底提示
+            if raw_text in missing_service_paragraphs:
+                if not has_service_note:
+                    pc_append_warn_text(p, "  ⚠ 未标注航班性质")
+
+        # 手写待申请行：只对"Excel 里没有该航段"的情况加删除线（=已取消）
         excel_route_keys = set()
         for r in excel_rows:
             if r["dep_date"] and r["dep"] and r["arr"]:
