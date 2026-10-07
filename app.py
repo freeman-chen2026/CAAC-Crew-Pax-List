@@ -1776,6 +1776,7 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
                 new_p.append(child)
             parent.insert(idx_in_parent + i, new_p)
 
+    # ★ 合并软换行拆散的批复行，并保证 ON 和日期之间有空格
     def pc_merge_split_approvals(doc):
         def _process_parent(parent_elem):
             changed = True
@@ -1790,6 +1791,17 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
                     t2 = "".join(t.text or "" for t in p2.iter(qn('w:t'))).strip()
                     if re.search(r'\bON\s*$', t1, re.IGNORECASE) and \
                        re.match(r'^\d{2}[A-Za-z]{3}\d{2,4}', t2):
+                        # ★ 给 p1 最后一个 w:t 结尾加空格（若没有）
+                        if not t1.endswith(' '):
+                            last_t = None
+                            for t_elem in p1.iter(qn('w:t')):
+                                last_t = t_elem
+                            if last_t is not None:
+                                txt = last_t.text or ''
+                                if not txt.endswith(' '):
+                                    last_t.text = txt + ' '
+                                    last_t.set(qn('xml:space'), 'preserve')
+
                         for child in list(p2):
                             if child.tag == qn('w:pPr'):
                                 continue
@@ -2203,6 +2215,66 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
 
             pos += r_len
 
+    # ★ 新增：在段落里 "ON <date>" 之后插入一段带样式的文字
+    def pc_insert_after_on_date(paragraph, date_raw, insert_text,
+                                color_hex=PC_RED, highlight=PC_HIGHLIGHT_ADDED):
+        """在段落的 'ON <date>' 之后插入带样式的文字。返回 True 表示成功。"""
+        runs = list(paragraph.runs)
+        if not runs:
+            return False
+
+        full_text = "".join(r.text for r in runs)
+        if not full_text:
+            return False
+
+        # 找 "ON <date>"
+        m = re.search(r'ON\s+' + re.escape(date_raw), full_text, re.IGNORECASE)
+        if not m:
+            return False
+        insert_pos = m.end()
+
+        # 判断插入点后是否紧跟空格
+        next_char = full_text[insert_pos] if insert_pos < len(full_text) else ""
+        if next_char == " ":
+            actual_insert = f"{insert_text} "
+        else:
+            actual_insert = f" {insert_text} "
+
+        # 找 insert_pos 属于哪个 run
+        pos = 0
+        for run in runs:
+            r_text = run.text
+            r_len = len(r_text)
+            r_start = pos
+            r_end = pos + r_len
+
+            if insert_pos <= r_end and insert_pos > r_start:
+                local = insert_pos - r_start
+                before = r_text[:local]
+                after = r_text[local:]
+
+                run.text = before
+
+                parent = run._element.getparent()
+                idx_in_parent = list(parent).index(run._element)
+
+                # 插入带样式的新 run
+                new_r = pc_make_run_like(run._element, actual_insert,
+                                          color_hex=color_hex, highlight=highlight)
+                parent.insert(idx_in_parent + 1, new_r)
+
+                # 保留后面的文本
+                if after:
+                    after_r = pc_make_run_like(run._element, after)
+                    pc_clear_run_strike(after_r)
+                    parent.insert(idx_in_parent + 2, after_r)
+
+                return True
+
+            pos += r_len
+
+        return False
+
     def _pc_append_styled_text(paragraph, text, color_hex):
         runs = list(paragraph.runs)
         p_elem = paragraph._element
@@ -2444,8 +2516,8 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
         cancel_paragraphs = set()
         change_paragraphs = set()
         nationality_pending_paragraphs = set()
-        # ★ 新增：记录"未标注航班性质"的段落
-        missing_service_paragraphs = set()
+        # ★ 新增：记录"需要补 U/H 或 N/M"的段落 [(paragraph, date_raw, service)]
+        service_to_insert = []
 
         used_excel = set()
         used_text = set()
@@ -2485,10 +2557,6 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
                 })
                 continue
 
-            # ★ 新增：没写 U/H 或 N/M 的批复行 → 记录，稍后追加提示
-            if approval["service"] == "":
-                missing_service_paragraphs.add(raw_text)
-
             red_parts = []
             green_parts = []
             highlight_parts = []
@@ -2497,6 +2565,12 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
             info_note = ""
 
             excel_row = pc_find_excel_match(approval, excel_rows, used_excel)
+
+            # ★ 新增：service 为空 → 记录需要补的内容
+            if approval["service"] == "" and excel_row is not None:
+                _ferry = pc_is_ferry_use(excel_row["use"])
+                _expected_svc = "N/M" if _ferry else "U/H"
+                service_to_insert.append((p, approval["date_raw"], _expected_svc))
 
             if excel_row is None:
                 note_parts.append("待取消")
@@ -2696,6 +2770,12 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
             if info_note:
                 nationality_pending_paragraphs.add(raw_text)
 
+        # ★ 先补 U/H 或 N/M（在应用其它样式之前）
+        for _para, _date_raw, _svc in service_to_insert:
+            pc_insert_after_on_date(_para, _date_raw, _svc,
+                                     color_hex=PC_RED,
+                                     highlight=PC_HIGHLIGHT_ADDED)
+
         for p in pc_iter_doc_paragraphs(doc):
             raw_text = p.text.strip()
             red = approval_red_map.get(raw_text, [])
@@ -2713,8 +2793,6 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
             has_cancel = "待取消" in raw_text
             has_change = "待变更" in raw_text
             has_nation = "机组国籍待确认" in raw_text
-            # ★ 新增：是否已有航班性质提示
-            has_service_note = "未标注航班性质" in raw_text
 
             if raw_text in cancel_paragraphs:
                 for run in p.runs:
@@ -2728,11 +2806,6 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
             if raw_text in nationality_pending_paragraphs:
                 if not has_nation:
                     pc_append_warn_text(p, "  机组国籍待确认")
-
-            # ★ 新增：没写 U/H 或 N/M 的批复行 → 追加红字+蓝底提示
-            if raw_text in missing_service_paragraphs:
-                if not has_service_note:
-                    pc_append_warn_text(p, "  ⚠ 未标注航班性质")
 
         # 手写待申请行：只对"Excel 里没有该航段"的情况加删除线（=已取消）
         excel_route_keys = set()
