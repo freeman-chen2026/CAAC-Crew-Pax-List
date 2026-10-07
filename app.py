@@ -2680,26 +2680,13 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
                 if not has_nation:
                     pc_append_warn_text(p, "  机组国籍待确认")
 
-        # 手写待申请行，若已不在 Excel 里 → 加删除线
+        # ★ 手写待申请行：只对"Excel 里已经没有该航段"的情况加删除线（=已取消）
         excel_route_keys = set()
         for r in excel_rows:
             if r["dep_date"] and r["dep"] and r["arr"]:
                 excel_route_keys.add((r["dep"], r["arr"],
                                       r["dep_date"].month, r["dep_date"].day))
 
-        for p in pc_iter_doc_paragraphs(doc):
-            raw_text = p.text.strip()
-            if not raw_text:
-                continue
-            sig = pc_parse_pending_signature(raw_text)
-            if not sig:
-                continue
-            dep, arr, month, day = sig
-            if (dep, arr, month, day) not in excel_route_keys:
-                for run in p.runs:
-                    pc_set_run_strike(run._element)
-
-        # ★ 手写待申请行的国籍核对：只对国内飞机（B 打头）做，且严格按 (reg, dep, arr) 匹配
         tf_by_reg_route = {}
         for tf in text_flights:
             dep_icao = city_to_icao.get(tf["dep_city"])
@@ -2715,9 +2702,16 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
             if not sig:
                 continue
             dep, arr, month, day = sig
-            reg_written = pc_parse_pending_reg(raw_text)
+            key = (dep, arr, month, day)
 
-            # ★ 只对国内飞机做国籍核对；外机（非 B 打头）跳过
+            # 只有 Excel 里没有该航段时才加删除线（=已取消）
+            if key not in excel_route_keys:
+                for run in p.runs:
+                    pc_set_run_strike(run._element)
+                continue
+
+            # 国籍核对：只对 B 打头手写行，严格按 (reg, dep, arr) 匹配
+            reg_written = pc_parse_pending_reg(raw_text)
             if not pc_is_b_reg(reg_written):
                 continue
 
