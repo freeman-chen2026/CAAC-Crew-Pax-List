@@ -1584,6 +1584,7 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
     def pc_is_ferry_use(use_text):
         return any(k in use_text for k in PC_FERRY_KEYWORDS)
 
+    # ---------- 解析批复 ----------
     PC_APPROVAL_RE = re.compile(
         r"^(?P<reg>[A-Z0-9\-]+)\s+"
         r"(?P<second>[A-Z0-9]+)\s+"
@@ -1594,8 +1595,21 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
         re.IGNORECASE,
     )
 
+    # ★ 新增：容忍重复 reg 前缀（如 "B652R B652R GLF4 ..."）
     def pc_parse_approval_line(text):
-        m = PC_APPROVAL_RE.match(text.strip())
+        text = text.strip()
+        dup_prefix = None
+
+        # 检测首两个 token 是否相同
+        m_dup = re.match(r'^([A-Z0-9\-]+)\s+([A-Z0-9\-]+)\s+(\S.*)$', text)
+        if m_dup:
+            first = m_dup.group(1).upper()
+            second = m_dup.group(2).upper()
+            if first == second:
+                dup_prefix = m_dup.group(2)
+                text = f"{m_dup.group(1)} {m_dup.group(3)}"
+
+        m = PC_APPROVAL_RE.match(text)
         if not m:
             return None
 
@@ -1637,8 +1651,8 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
                 remark = rest.strip()
 
         date_obj = pc_parse_date_token(date_raw)
-        return {
-            "raw": text.strip(),
+        result = {
+            "raw": text,
             "reg": reg,
             "type": ac_type,
             "flight_no": flight_no,
@@ -1653,6 +1667,9 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
             "service": service,
             "remark": remark,
         }
+        if dup_prefix:
+            result["dup_prefix"] = dup_prefix
+        return result
 
     def pc_parse_pending_signature(text):
         text = str(text).strip()
@@ -2206,6 +2223,56 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
 
             pos += r_len
 
+    # ★ 新增：对段落 [start, end) 字符范围应用样式（重建 runs）
+    def pc_apply_style_to_range(paragraph, start, end,
+                                 color_hex=None, highlight=None, strike=False):
+        runs = list(paragraph.runs)
+        if not runs:
+            return
+        full_text = "".join(r.text for r in runs)
+        if not full_text:
+            return
+        n = len(full_text)
+        if start < 0 or end > n or start >= end:
+            return
+
+        segments = []  # (text, src_run_elem, is_target)
+        pos = 0
+        for run in runs:
+            r_text = run.text
+            r_len = len(r_text)
+            r_start = pos
+            r_end = pos + r_len
+
+            if r_end <= start or r_start >= end:
+                segments.append((r_text, run._element, False))
+            else:
+                local_start = max(0, start - r_start)
+                local_end = min(r_len, end - r_start)
+                if local_start > 0:
+                    segments.append((r_text[:local_start], run._element, False))
+                segments.append((r_text[local_start:local_end], run._element, True))
+                if local_end < r_len:
+                    segments.append((r_text[local_end:], run._element, False))
+
+            pos += r_len
+
+        p_elem = paragraph._element
+        for r in runs:
+            p_elem.remove(r._element)
+
+        for text, src_elem, is_target in segments:
+            if not text:
+                continue
+            if is_target:
+                new_r = pc_make_run_like(src_elem, text,
+                                          color_hex=color_hex, highlight=highlight)
+                if strike:
+                    pc_set_run_strike(new_r)
+            else:
+                new_r = pc_make_run_like(src_elem, text)
+            p_elem.append(new_r)
+
     def pc_insert_service_after_date(paragraph, date_raw, service,
                                        color_hex=PC_RED, highlight=PC_HIGHLIGHT_ADDED):
         runs = list(paragraph.runs)
@@ -2396,9 +2463,7 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
         p_elem.append(r_elem)
         return p_elem
 
-    # ★★★ 关键修改：支持空 cell 写入 pending ★★★
     def pc_reorder_cell_with_pending(cell, pending_items, global_template_p):
-        # ── 步骤 1：扫描 cell 内非空段落，收集签名 ──
         existing_sigs = set()
         existing_paras = []
         for p in cell.paragraphs:
@@ -2422,7 +2487,6 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
 
             existing_paras.append((p, dt))
 
-        # ── 步骤 2：先算 to_insert（不管空 cell 还是非空 cell）──
         to_insert = []
         for item in pending_items:
             row = item["row"]
@@ -2439,11 +2503,9 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
                 "text": item["text"],
             })
 
-        # 没有需要新增的 → 什么都不做（空 cell 也保持原样）
         if not to_insert:
             return
 
-        # ── 步骤 3：找模板段落（用于新建段落的样式）──
         template_p = None
         for p, _ in existing_paras:
             if pc_parse_approval_line(p.text.strip()):
@@ -2452,12 +2514,10 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
         if template_p is None:
             template_p = global_template_p
         if template_p is None and existing_paras:
-            # 连全局模板都没有：退化为"用 cell 里第一个非空段落"
             template_p = existing_paras[0][0]
 
         to_insert.sort(key=lambda x: x["dt"])
 
-        # ── 步骤 4a：空 cell 分支 → 清空，全部按日期插入 pending ──
         if not existing_paras:
             tc = cell._tc
             for p_elem in list(tc.findall(qn('w:p'))):
@@ -2467,7 +2527,6 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
                 tc.append(new_p)
             return
 
-        # ── 步骤 4b：非空 cell 分支 → 保留原顺序 + 按日期插 pending ──
         pending_by_date = {}
         for item in to_insert:
             pending_by_date.setdefault(item["date"], []).append(item)
@@ -2510,7 +2569,6 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
             else:
                 new_p = pc_make_red_paragraph_element(item["text"], template_p)
                 tc.append(new_p)
-    # ★★★ 修改结束 ★★★
 
     def pc_build_approval_text(excel_row, is_domestic, note_kind=""):
         reg = excel_row["reg"]
@@ -2554,6 +2612,8 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
         change_paragraphs = set()
         nationality_pending_paragraphs = set()
         service_to_insert = []
+        # ★ 新增：记录重复前缀的段落 [(paragraph, dup_token), ...]
+        dup_prefix_paras = []
 
         used_excel = set()
         used_text = set()
@@ -2567,6 +2627,10 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
             approval = pc_parse_approval_line(raw_text)
             if not approval:
                 continue
+
+            # ★ 记录重复前缀
+            if approval.get("dup_prefix"):
+                dup_prefix_paras.append((p, approval["dup_prefix"]))
 
             if not approval["is_domestic"] and approval["flight_no"]:
                 unapproved_keys.add(
@@ -2840,6 +2904,25 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
             if raw_text in nationality_pending_paragraphs:
                 if not has_nation:
                     pc_append_warn_text(p, "  机组国籍待确认")
+
+        # ★ 处理重复前缀：把第二个重复的 reg 加删除线+红字+蓝底
+        for p, dup_token in dup_prefix_paras:
+            runs = list(p.runs)
+            full_text = "".join(r.text for r in runs)
+            if not full_text:
+                continue
+            first_idx = full_text.find(dup_token)
+            if first_idx == -1:
+                continue
+            second_idx = full_text.find(dup_token, first_idx + len(dup_token))
+            if second_idx == -1:
+                continue
+            pc_apply_style_to_range(
+                p, second_idx, second_idx + len(dup_token),
+                color_hex=PC_RED,
+                highlight=PC_HIGHLIGHT_ADDED,
+                strike=True,
+            )
 
         excel_route_keys = set()
         for r in excel_rows:
