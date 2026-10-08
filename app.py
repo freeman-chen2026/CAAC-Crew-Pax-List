@@ -1584,6 +1584,38 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
     def pc_is_ferry_use(use_text):
         return any(k in use_text for k in PC_FERRY_KEYWORDS)
 
+    # ★ 新增：按 Excel + 文本，生成"预期标准行"
+    def pc_build_expected_line(excel_row, nation_label=""):
+        if excel_row is None:
+            return ""
+        reg = str(excel_row.get("reg") or "").strip().upper()
+        if not reg:
+            return ""
+        ac_type = PC_AIRCRAFT_TYPE_MAP.get(reg, "")
+        dep = str(excel_row.get("dep") or "").strip().upper()
+        arr = str(excel_row.get("arr") or "").strip().upper()
+        dep_time = (excel_row.get("dep_time") or "").replace(":", "")
+        arr_time = (excel_row.get("arr_time") or "").replace(":", "")
+        dep_date = excel_row.get("dep_date")
+        if not (ac_type and dep and arr and dep_time and arr_time and dep_date):
+            return ""
+
+        # 日期 DDMONYYYY（用 dep_date 的年份）
+        try:
+            date_str = dep_date.strftime("%d%b%Y").upper()
+        except Exception:
+            date_str = ""
+
+        is_domestic = pc_is_b_reg(reg)
+        ferry = pc_is_ferry_use(excel_row.get("use") or "")
+        service = "N/M" if ferry else "U/H"
+
+        parts = [reg, ac_type, f"{dep}{dep_time}", f"{arr_time}{arr}",
+                 "ON", date_str, service]
+        if is_domestic and nation_label:
+            parts.append(nation_label)
+        return " ".join(parts)
+
     PC_APPROVAL_RE = re.compile(
         r"^(?P<reg>[A-Z0-9\-]+)\s+"
         r"(?P<second>[A-Z0-9]+)\s+"
@@ -2269,7 +2301,6 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
                 new_r = pc_make_run_like(src_elem, text)
             p_elem.append(new_r)
 
-    # ★ 统一处理：在 ON <date> 后补 service / nationality（红字+蓝底）
     def pc_fill_after_on_date(paragraph, date_raw, service, nation,
                                need_service, need_nation,
                                color_hex=PC_RED, highlight=PC_HIGHLIGHT_ADDED):
@@ -2287,11 +2318,9 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
             return False
         on_end = m.end()
 
-        # 定位 insert_pos
         if need_service:
             insert_pos = on_end
         else:
-            # 已有 service，定位到 service 之后
             p = on_end
             while p < len(full_text) and full_text[p] == ' ':
                 p += 1
@@ -2300,12 +2329,10 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
                 return False
             insert_pos = p + m_svc.end()
 
-        # skip_end：从 insert_pos 开始到第一个非空格字符前
         skip_end = insert_pos
         while skip_end < len(full_text) and full_text[skip_end] == ' ':
             skip_end += 1
 
-        # 构造插入文本
         parts = []
         if need_service and service:
             parts.append(service)
@@ -2318,7 +2345,6 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
         if skip_end < len(full_text):
             insert_str += " "
 
-        # 找 insert_pos 和 skip_end 所在的 run
         pos = 0
         target_run = None
         local_insert = None
@@ -2353,7 +2379,6 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
         if skip_run is None:
             return False
 
-        # Case A: 同一个 run
         if target_run is skip_run:
             r_text = target_run.text
             before = r_text[:local_insert]
@@ -2373,7 +2398,6 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
                 parent.insert(idx_in_parent + 2, after_r)
             return True
 
-        # Case B: 跨 run
         target_run.text = target_run.text[:local_insert]
         skip_run.text = skip_run.text[local_skip:]
 
@@ -2384,14 +2408,11 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
                                   color_hex=color_hex, highlight=highlight)
         parent.insert(target_idx + 1, new_r)
 
-        # 清理中间的空 run
         to_remove = []
-        found_new = False
         for i, child in enumerate(parent):
             if i <= target_idx:
                 continue
             if child is new_r:
-                found_new = True
                 continue
             if child is skip_run._element:
                 break
@@ -2640,7 +2661,6 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
             if row["arr_city"]:
                 city_to_icao[row["arr_city"]] = row["arr"]
 
-        # ★ 提前构建 tf_by_reg_route（不消耗 used_text）
         tf_by_reg_route = {}
         for tf in text_flights:
             dep_icao = city_to_icao.get(tf["dep_city"])
@@ -2658,7 +2678,6 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
         cancel_paragraphs = set()
         change_paragraphs = set()
         nationality_pending_paragraphs = set()
-        # ★ [(段落, date_raw, service, nation, need_service, need_nation)]
         service_to_insert = []
         dup_prefix_paras = []
 
@@ -2683,7 +2702,8 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
                     (approval["reg"], approval["dep"], approval["arr"])
                 )
                 result_rows.append({
-                    "批复": raw_text,
+                    "Word 原文": raw_text,
+                    "预期": "",
                     "飞机号": approval["reg"],
                     "航班号": approval["flight_no"],
                     "机型": PC_AIRCRAFT_TYPE_MAP.get(approval["reg"], ""),
@@ -2712,7 +2732,20 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
 
             excel_row = pc_find_excel_match(approval, excel_rows, used_excel)
 
-            # ★ 判断是否需要补 service / nationality
+            # 生成"预期行"
+            expected_line = ""
+            nation_for_expected = ""
+            if excel_row is not None and approval["is_domestic"]:
+                tfl = tf_by_reg_route.get(
+                    (approval["reg"], approval["dep"], approval["arr"]), []
+                )
+                if tfl:
+                    nat = pc_actual_nation_label(tfl[0]["crew"], pilots)
+                    if nat in ("中国籍", "外籍"):
+                        nation_for_expected = nat
+            if excel_row is not None:
+                expected_line = pc_build_expected_line(excel_row, nation_for_expected)
+
             if excel_row is not None and approval["is_domestic"]:
                 has_service = bool(approval["service"])
                 remark = approval["remark"] or ""
@@ -2727,13 +2760,8 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
 
                     _nation = ""
                     if need_nation:
-                        tfl = tf_by_reg_route.get(
-                            (approval["reg"], approval["dep"], approval["arr"]), []
-                        )
-                        if tfl:
-                            _nat_label = pc_actual_nation_label(tfl[0]["crew"], pilots)
-                            if _nat_label in ("中国籍", "外籍"):
-                                _nation = _nat_label
+                        if nation_for_expected:
+                            _nation = nation_for_expected
 
                     if (need_service) or (need_nation and _nation):
                         service_to_insert.append({
@@ -2752,7 +2780,8 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
                 red_parts.append(approval["date_raw"])
 
                 result_rows.append({
-                    "批复": raw_text,
+                    "Word 原文": raw_text,
+                    "预期": "（Excel 中无此航段）",
                     "飞机号": approval["reg"],
                     "航班号": approval["flight_no"] if not approval["is_domestic"] else "",
                     "机型": approval["type"] if approval["is_domestic"] else "",
@@ -2915,7 +2944,8 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
                 text_ferry_label = "调机(F)" if text_flight.get("is_ferry", False) else "载客(无F)"
 
             result_rows.append({
-                "批复": raw_text,
+                "Word 原文": raw_text,
+                "预期": expected_line,
                 "飞机号": approval["reg"],
                 "航班号": approval["flight_no"] if not approval["is_domestic"] else "",
                 "机型": approval["type"] if approval["is_domestic"] else "",
@@ -2943,7 +2973,6 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
             if info_note:
                 nationality_pending_paragraphs.add(raw_text)
 
-        # ★ 补 service + nationality
         for rec in service_to_insert:
             pc_fill_after_on_date(
                 rec["para"], rec["date_raw"],
@@ -2983,7 +3012,6 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
                 if not has_nation:
                     pc_append_warn_text(p, "  机组国籍待确认")
 
-        # 重复 reg 前缀 → 第二个加删除线 + 红字 + 蓝底
         for p, dup_token in dup_prefix_paras:
             runs = list(p.runs)
             full_text = "".join(r.text for r in runs)
@@ -3141,8 +3169,11 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
                     remark = "待申请"
                     diff_text = "Excel 有计划，批复汇总表缺失"
 
+                exp_line = pc_build_expected_line(row, item["note_kind"] if item["note_kind"] in ("中国籍", "外籍") else "")
+
                 pending_rows.append({
-                    "批复": item["text"],
+                    "Word 原文": "（docx 中无此批复，需补申请）",
+                    "预期": exp_line,
                     "飞机号": reg,
                     "航班号": reg if not is_domestic else "",
                     "机型": PC_AIRCRAFT_TYPE_MAP.get(reg, "") if is_domestic else "",
@@ -3284,9 +3315,13 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
         if total_rows == 0:
             st.warning("未在 docx 中识别到任何批复行。")
         else:
-            def highlight(row):
+            # ★ 只显示关键列：Word 原文、预期、是否一致、备注
+            display_cols = ["Word 原文", "预期", "是否一致", "备注"]
+            df_display = df[display_cols].copy()
+
+            def highlight_row(row):
                 if row["是否一致"] == "待确认":
-                    return ["background-color: #ffe082; font-weight: bold"] * len(row)
+                    return ["background-color: #ffe082"] * len(row)
                 if row["是否一致"] == "否":
                     if "待变更" in str(row["备注"]):
                         return ["background-color: #e5f0ff"] * len(row)
@@ -3294,17 +3329,27 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
                 return [""] * len(row)
 
             st.dataframe(
-                df.style.apply(highlight, axis=1),
+                df_display.style.apply(highlight_row, axis=1),
                 use_container_width=True,
                 hide_index=True,
             )
 
             st.subheader("🚨 差异明细")
-            diffs_df = df[df["是否一致"] != "是"][["批复", "差异", "备注", "是否一致"]]
+            diffs_df = df[df["是否一致"] != "是"][["Word 原文", "预期", "差异", "备注", "是否一致"]]
             if diffs_df.empty:
                 st.success("✅ 所有批复与计划一致，未发现差异。")
             else:
                 for _, r in diffs_df.iterrows():
+                    # ★ 上下对比：Word 原文 / 预期
+                    st.markdown("---")
+                    st.markdown(f"**📄 Word 原文：** `{r['Word 原文']}`")
+                    if r["预期"] and r["预期"] != "（Excel 中无此航段）":
+                        st.markdown(f"**✅ 预期（Excel+文本）：** `{r['预期']}`")
+                    elif r["预期"] == "（Excel 中无此航段）":
+                        st.markdown("**✅ 预期：** ❌ Excel 中无此航段 → **待取消**")
+                    else:
+                        st.markdown("**✅ 预期：** （无法生成，缺少 Excel 匹配）")
+
                     if r["是否一致"] == "待确认":
                         note_html = (
                             " <span style='color:#cc0000;font-weight:bold;"
@@ -3322,8 +3367,11 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
                         )
                     else:
                         note_html = ""
-                    st.markdown(f"**`{r['批复']}`**{note_html}", unsafe_allow_html=True)
+                    if note_html:
+                        st.markdown(f"**📌 状态：**{note_html}", unsafe_allow_html=True)
+
                     if r["差异"] != "无":
+                        st.markdown("**⚠️ 差异：**")
                         for line in r["差异"].split("；"):
                             st.markdown(f"- {line}")
 
