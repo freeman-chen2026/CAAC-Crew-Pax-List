@@ -1584,7 +1584,6 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
     def pc_is_ferry_use(use_text):
         return any(k in use_text for k in PC_FERRY_KEYWORDS)
 
-    # ---------- 解析批复 ----------
     PC_APPROVAL_RE = re.compile(
         r"^(?P<reg>[A-Z0-9\-]+)\s+"
         r"(?P<second>[A-Z0-9]+)\s+"
@@ -1595,12 +1594,10 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
         re.IGNORECASE,
     )
 
-    # ★ 新增：容忍重复 reg 前缀（如 "B652R B652R GLF4 ..."）
     def pc_parse_approval_line(text):
         text = text.strip()
         dup_prefix = None
 
-        # 检测首两个 token 是否相同
         m_dup = re.match(r'^([A-Z0-9\-]+)\s+([A-Z0-9\-]+)\s+(\S.*)$', text)
         if m_dup:
             first = m_dup.group(1).upper()
@@ -2223,7 +2220,6 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
 
             pos += r_len
 
-    # ★ 新增：对段落 [start, end) 字符范围应用样式（重建 runs）
     def pc_apply_style_to_range(paragraph, start, end,
                                  color_hex=None, highlight=None, strike=False):
         runs = list(paragraph.runs)
@@ -2236,7 +2232,7 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
         if start < 0 or end > n or start >= end:
             return
 
-        segments = []  # (text, src_run_elem, is_target)
+        segments = []
         pos = 0
         for run in runs:
             r_text = run.text
@@ -2273,12 +2269,15 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
                 new_r = pc_make_run_like(src_elem, text)
             p_elem.append(new_r)
 
-    def pc_insert_service_after_date(paragraph, date_raw, service,
-                                       color_hex=PC_RED, highlight=PC_HIGHLIGHT_ADDED):
+    # ★ 统一处理：在 ON <date> 后补 service / nationality（红字+蓝底）
+    def pc_fill_after_on_date(paragraph, date_raw, service, nation,
+                               need_service, need_nation,
+                               color_hex=PC_RED, highlight=PC_HIGHLIGHT_ADDED):
+        if not (need_service or need_nation):
+            return False
         runs = list(paragraph.runs)
         if not runs:
             return False
-
         full_text = "".join(r.text for r in runs)
         if not full_text:
             return False
@@ -2288,28 +2287,49 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
             return False
         on_end = m.end()
 
-        remark_start = on_end
-        while remark_start < len(full_text) and full_text[remark_start] == ' ':
-            remark_start += 1
-
-        has_remark = remark_start < len(full_text)
-
-        if has_remark:
-            insert_str = f" {service} "
+        # 定位 insert_pos
+        if need_service:
+            insert_pos = on_end
         else:
-            insert_str = f" {service}"
+            # 已有 service，定位到 service 之后
+            p = on_end
+            while p < len(full_text) and full_text[p] == ' ':
+                p += 1
+            m_svc = re.match(r'^(U/H|N/M)', full_text[p:])
+            if not m_svc:
+                return False
+            insert_pos = p + m_svc.end()
 
+        # skip_end：从 insert_pos 开始到第一个非空格字符前
+        skip_end = insert_pos
+        while skip_end < len(full_text) and full_text[skip_end] == ' ':
+            skip_end += 1
+
+        # 构造插入文本
+        parts = []
+        if need_service and service:
+            parts.append(service)
+        if need_nation and nation:
+            parts.append(nation)
+        if not parts:
+            return False
+
+        insert_str = " " + " ".join(parts)
+        if skip_end < len(full_text):
+            insert_str += " "
+
+        # 找 insert_pos 和 skip_end 所在的 run
         pos = 0
         target_run = None
-        local_on_end = None
+        local_insert = None
         for run in runs:
             r_text = run.text
             r_len = len(r_text)
             r_start = pos
             r_end = pos + r_len
-            if r_start <= on_end <= r_end:
+            if r_start <= insert_pos <= r_end:
                 target_run = run
-                local_on_end = on_end - r_start
+                local_insert = insert_pos - r_start
                 break
             pos += r_len
 
@@ -2317,24 +2337,27 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
             return False
 
         pos = 0
-        remark_run = None
-        local_remark = None
+        skip_run = None
+        local_skip = None
         for run in runs:
             r_text = run.text
             r_len = len(r_text)
             r_start = pos
             r_end = pos + r_len
-            if r_start <= remark_start <= r_end:
-                remark_run = run
-                local_remark = remark_start - r_start
+            if r_start <= skip_end <= r_end:
+                skip_run = run
+                local_skip = skip_end - r_start
                 break
             pos += r_len
 
-        if target_run is remark_run:
-            r_text = target_run.text
-            before = r_text[:local_on_end]
-            after = r_text[local_remark:] if has_remark else ""
+        if skip_run is None:
+            return False
 
+        # Case A: 同一个 run
+        if target_run is skip_run:
+            r_text = target_run.text
+            before = r_text[:local_insert]
+            after = r_text[local_skip:]
             target_run.text = before
 
             parent = target_run._element.getparent()
@@ -2350,19 +2373,35 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
                 parent.insert(idx_in_parent + 2, after_r)
             return True
 
-        r_text = target_run.text
-        target_run.text = r_text[:local_on_end]
+        # Case B: 跨 run
+        target_run.text = target_run.text[:local_insert]
+        skip_run.text = skip_run.text[local_skip:]
 
         parent = target_run._element.getparent()
-        idx_in_parent = list(parent).index(target_run._element)
+        target_idx = list(parent).index(target_run._element)
 
         new_r = pc_make_run_like(target_run._element, insert_str,
                                   color_hex=color_hex, highlight=highlight)
-        parent.insert(idx_in_parent + 1, new_r)
+        parent.insert(target_idx + 1, new_r)
 
-        if has_remark and remark_run is not None and local_remark is not None:
-            rr_text = remark_run.text
-            remark_run.text = rr_text[local_remark:]
+        # 清理中间的空 run
+        to_remove = []
+        found_new = False
+        for i, child in enumerate(parent):
+            if i <= target_idx:
+                continue
+            if child is new_r:
+                found_new = True
+                continue
+            if child is skip_run._element:
+                break
+            if child.tag == qn('w:r'):
+                t = "".join(x.text or "" for x in child.iter(qn('w:t')))
+                if t.strip() == "":
+                    to_remove.append(child)
+
+        for child in to_remove:
+            parent.remove(child)
 
         return True
 
@@ -2601,6 +2640,14 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
             if row["arr_city"]:
                 city_to_icao[row["arr_city"]] = row["arr"]
 
+        # ★ 提前构建 tf_by_reg_route（不消耗 used_text）
+        tf_by_reg_route = {}
+        for tf in text_flights:
+            dep_icao = city_to_icao.get(tf["dep_city"])
+            arr_icao = city_to_icao.get(tf["arr_city"])
+            if dep_icao and arr_icao:
+                tf_by_reg_route.setdefault((tf["reg"], dep_icao, arr_icao), []).append(tf)
+
         doc = Document(io.BytesIO(docx_bytes))
         pc_normalize_soft_breaks(doc)
 
@@ -2611,8 +2658,8 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
         cancel_paragraphs = set()
         change_paragraphs = set()
         nationality_pending_paragraphs = set()
+        # ★ [(段落, date_raw, service, nation, need_service, need_nation)]
         service_to_insert = []
-        # ★ 新增：记录重复前缀的段落 [(paragraph, dup_token), ...]
         dup_prefix_paras = []
 
         used_excel = set()
@@ -2628,7 +2675,6 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
             if not approval:
                 continue
 
-            # ★ 记录重复前缀
             if approval.get("dup_prefix"):
                 dup_prefix_paras.append((p, approval["dup_prefix"]))
 
@@ -2666,10 +2712,38 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
 
             excel_row = pc_find_excel_match(approval, excel_rows, used_excel)
 
-            if approval["service"] == "" and excel_row is not None:
-                _ferry = pc_is_ferry_use(excel_row["use"])
-                _expected_svc = "N/M" if _ferry else "U/H"
-                service_to_insert.append((p, approval["date_raw"], _expected_svc))
+            # ★ 判断是否需要补 service / nationality
+            if excel_row is not None and approval["is_domestic"]:
+                has_service = bool(approval["service"])
+                remark = approval["remark"] or ""
+                has_nation = ("中国籍" in remark) or ("外籍" in remark)
+
+                need_service = not has_service
+                need_nation = not has_nation
+
+                if need_service or need_nation:
+                    _ferry = pc_is_ferry_use(excel_row["use"])
+                    _svc = "N/M" if _ferry else "U/H"
+
+                    _nation = ""
+                    if need_nation:
+                        tfl = tf_by_reg_route.get(
+                            (approval["reg"], approval["dep"], approval["arr"]), []
+                        )
+                        if tfl:
+                            _nat_label = pc_actual_nation_label(tfl[0]["crew"], pilots)
+                            if _nat_label in ("中国籍", "外籍"):
+                                _nation = _nat_label
+
+                    if (need_service) or (need_nation and _nation):
+                        service_to_insert.append({
+                            "para": p,
+                            "date_raw": approval["date_raw"],
+                            "service": _svc,
+                            "nation": _nation,
+                            "need_service": need_service,
+                            "need_nation": need_nation and bool(_nation),
+                        })
 
             if excel_row is None:
                 note_parts.append("待取消")
@@ -2869,10 +2943,14 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
             if info_note:
                 nationality_pending_paragraphs.add(raw_text)
 
-        for _para, _date_raw, _svc in service_to_insert:
-            pc_insert_service_after_date(_para, _date_raw, _svc,
-                                          color_hex=PC_RED,
-                                          highlight=PC_HIGHLIGHT_ADDED)
+        # ★ 补 service + nationality
+        for rec in service_to_insert:
+            pc_fill_after_on_date(
+                rec["para"], rec["date_raw"],
+                rec["service"], rec["nation"],
+                rec["need_service"], rec["need_nation"],
+                color_hex=PC_RED, highlight=PC_HIGHLIGHT_ADDED,
+            )
 
         for p in pc_iter_doc_paragraphs(doc):
             raw_text = p.text.strip()
@@ -2905,7 +2983,7 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
                 if not has_nation:
                     pc_append_warn_text(p, "  机组国籍待确认")
 
-        # ★ 处理重复前缀：把第二个重复的 reg 加删除线+红字+蓝底
+        # 重复 reg 前缀 → 第二个加删除线 + 红字 + 蓝底
         for p, dup_token in dup_prefix_paras:
             runs = list(p.runs)
             full_text = "".join(r.text for r in runs)
@@ -2929,13 +3007,6 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
             if r["dep_date"] and r["dep"] and r["arr"]:
                 excel_route_keys.add((r["dep"], r["arr"],
                                       r["dep_date"].month, r["dep_date"].day))
-
-        tf_by_reg_route = {}
-        for tf in text_flights:
-            dep_icao = city_to_icao.get(tf["dep_city"])
-            arr_icao = city_to_icao.get(tf["arr_city"])
-            if dep_icao and arr_icao:
-                tf_by_reg_route.setdefault((tf["reg"], dep_icao, arr_icao), []).append(tf)
 
         for p in pc_iter_doc_paragraphs(doc):
             raw_text = p.text.strip()
