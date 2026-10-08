@@ -1449,7 +1449,6 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
 
     PC_FERRY_KEYWORDS = ("调机", "维修")
 
-    # ---------- 工具 ----------
     def pc_parse_date_token(token):
         token = token.strip().upper()
         day = int(token[:2])
@@ -1585,7 +1584,6 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
     def pc_is_ferry_use(use_text):
         return any(k in use_text for k in PC_FERRY_KEYWORDS)
 
-    # ---------- 解析批复 ----------
     PC_APPROVAL_RE = re.compile(
         r"^(?P<reg>[A-Z0-9\-]+)\s+"
         r"(?P<second>[A-Z0-9]+)\s+"
@@ -1656,7 +1654,6 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
             "remark": remark,
         }
 
-    # ---------- 待申请行签名 ----------
     def pc_parse_pending_signature(text):
         text = str(text).strip()
         if not text:
@@ -1820,7 +1817,6 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
             pc_split_paragraph_by_br(p._element)
         pc_merge_split_approvals(doc)
 
-    # ---------- Excel ----------
     def pc_load_excel_rows_from_bytes(data: bytes):
         wb = load_workbook(io.BytesIO(data), data_only=True)
         ws = wb["航段(北京时)"] if "航段(北京时)" in wb.sheetnames else wb.active
@@ -1845,7 +1841,6 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
             })
         return rows
 
-    # ---------- 文本航班 ----------
     PC_FLIGHT_HEADER_RE = re.compile(
         r"^([A-Z0-9]+)\s+(\d{1,2}:\d{2})\s*-\s*(\d{1,2}:\d{2})(?:\s*\+1)?$"
     )
@@ -1899,7 +1894,6 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
             i += 1
         return flights
 
-    # ---------- 覆盖率 ----------
     def pc_check_text_coverage(excel_rows, text_flights, city_to_icao):
         domestic_rows = [
             r for r in excel_rows
@@ -1930,7 +1924,6 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
 
         return len(domestic_rows), covered, missing
 
-    # ---------- 匹配 ----------
     def pc_find_excel_match(approval, excel_rows, used_excel):
         base_candidates = [
             r for r in excel_rows
@@ -1994,7 +1987,6 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
         used_text.add(idx)
         return matched
 
-    # ---------- docx 样式 ----------
     PC_W_R = qn('w:r')
     PC_W_RPR = qn('w:rPr')
     PC_W_COLOR = qn('w:color')
@@ -2214,8 +2206,6 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
 
             pos += r_len
 
-    # ★ 在段落里 "ON <date>" 之后插入 service（标准化空格）
-    #   结果格式保证：ON <date> <service> [<remark>]
     def pc_insert_service_after_date(paragraph, date_raw, service,
                                        color_hex=PC_RED, highlight=PC_HIGHLIGHT_ADDED):
         runs = list(paragraph.runs)
@@ -2226,31 +2216,22 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
         if not full_text:
             return False
 
-        # 找 "ON <date>" 结束位置
         m = re.search(r'ON\s+' + re.escape(date_raw), full_text, re.IGNORECASE)
         if not m:
             return False
         on_end = m.end()
 
-        # 跳过紧跟的空格，找到 remark 起始位置
         remark_start = on_end
         while remark_start < len(full_text) and full_text[remark_start] == ' ':
             remark_start += 1
 
         has_remark = remark_start < len(full_text)
 
-        # 如果 <date> 后面紧跟的不是空格也不是 remark 首字（异常情况），退回
-        # 构造插入字符串
-        # 期望最终格式：<... ON <date>> <service> <remark>
-        # 所以插入内容为 " <service> "（若后面有 remark），或 " <service>"（若无 remark）
         if has_remark:
             insert_str = f" {service} "
         else:
             insert_str = f" {service}"
 
-        # 定位 insert_point：on_end 和 remark_start 之间的空格全部丢弃
-        # 我们希望在 on_end 之后插入 <insert_str>，并删除原 on_end 到 remark_start 之间的空格
-        # 找到包含 on_end 的 run
         pos = 0
         target_run = None
         local_on_end = None
@@ -2259,7 +2240,6 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
             r_len = len(r_text)
             r_start = pos
             r_end = pos + r_len
-            # on_end 在此 run 内或恰好在边界
             if r_start <= on_end <= r_end:
                 target_run = run
                 local_on_end = on_end - r_start
@@ -2269,7 +2249,6 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
         if target_run is None:
             return False
 
-        # 找到 remark_start 所在的 run（可能跨多个 run）
         pos = 0
         remark_run = None
         local_remark = None
@@ -2285,7 +2264,6 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
             pos += r_len
 
         if target_run is remark_run:
-            # 同一个 run
             r_text = target_run.text
             before = r_text[:local_on_end]
             after = r_text[local_remark:] if has_remark else ""
@@ -2305,8 +2283,6 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
                 parent.insert(idx_in_parent + 2, after_r)
             return True
 
-        # 跨 run 情况：target_run 结尾截断，中间的空格 run 全清掉，remark_run 开头截断
-        # 简化：直接改 target_run 结尾
         r_text = target_run.text
         target_run.text = r_text[:local_on_end]
 
@@ -2317,10 +2293,6 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
                                   color_hex=color_hex, highlight=highlight)
         parent.insert(idx_in_parent + 1, new_r)
 
-        # 处理 remark_run 前面的空格
-        # 中间 run 里的内容原样保留（可能包含原空格，视觉上问题不大）
-        # 这里简单处理：如果 remark_run 有前置空格（比如它前面是空格 run），
-        # 就把 remark_run 开头的前导空格去掉
         if has_remark and remark_run is not None and local_remark is not None:
             rr_text = remark_run.text
             remark_run.text = rr_text[local_remark:]
@@ -2424,7 +2396,9 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
         p_elem.append(r_elem)
         return p_elem
 
+    # ★★★ 关键修改：支持空 cell 写入 pending ★★★
     def pc_reorder_cell_with_pending(cell, pending_items, global_template_p):
+        # ── 步骤 1：扫描 cell 内非空段落，收集签名 ──
         existing_sigs = set()
         existing_paras = []
         for p in cell.paragraphs:
@@ -2448,9 +2422,7 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
 
             existing_paras.append((p, dt))
 
-        if not existing_paras:
-            return
-
+        # ── 步骤 2：先算 to_insert（不管空 cell 还是非空 cell）──
         to_insert = []
         for item in pending_items:
             row = item["row"]
@@ -2467,9 +2439,11 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
                 "text": item["text"],
             })
 
+        # 没有需要新增的 → 什么都不做（空 cell 也保持原样）
         if not to_insert:
             return
 
+        # ── 步骤 3：找模板段落（用于新建段落的样式）──
         template_p = None
         for p, _ in existing_paras:
             if pc_parse_approval_line(p.text.strip()):
@@ -2477,24 +2451,35 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
                 break
         if template_p is None:
             template_p = global_template_p
-        if template_p is None:
-            return
+        if template_p is None and existing_paras:
+            # 连全局模板都没有：退化为"用 cell 里第一个非空段落"
+            template_p = existing_paras[0][0]
 
         to_insert.sort(key=lambda x: x["dt"])
 
+        # ── 步骤 4a：空 cell 分支 → 清空，全部按日期插入 pending ──
+        if not existing_paras:
+            tc = cell._tc
+            for p_elem in list(tc.findall(qn('w:p'))):
+                tc.remove(p_elem)
+            for item in to_insert:
+                new_p = pc_make_red_paragraph_element(item["text"], template_p)
+                tc.append(new_p)
+            return
+
+        # ── 步骤 4b：非空 cell 分支 → 保留原顺序 + 按日期插 pending ──
         pending_by_date = {}
         for item in to_insert:
             pending_by_date.setdefault(item["date"], []).append(item)
 
         result_seq = []
-        if existing_paras:
-            known_dates = [d for _, d in existing_paras if d is not None]
-            if known_dates:
-                min_date = min(known_dates)
-                for d in sorted(k for k in pending_by_date if k < min_date):
-                    for item in pending_by_date[d]:
-                        result_seq.append(("pending", item))
-                    del pending_by_date[d]
+        known_dates = [d for _, d in existing_paras if d is not None]
+        if known_dates:
+            min_date = min(known_dates)
+            for d in sorted(k for k in pending_by_date if k < min_date):
+                for item in pending_by_date[d]:
+                    result_seq.append(("pending", item))
+                del pending_by_date[d]
 
         for i, (p, date) in enumerate(existing_paras):
             result_seq.append(("original", p._element))
@@ -2525,6 +2510,7 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
             else:
                 new_p = pc_make_red_paragraph_element(item["text"], template_p)
                 tc.append(new_p)
+    # ★★★ 修改结束 ★★★
 
     def pc_build_approval_text(excel_row, is_domestic, note_kind=""):
         reg = excel_row["reg"]
@@ -2546,7 +2532,6 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
         parts.append("待申请")
         return " ".join(parts)
 
-    # ---------- 主核对 ----------
     def pc_run_check(docx_bytes, excel_bytes, text_content, pilots):
         excel_rows = pc_load_excel_rows_from_bytes(excel_bytes)
         text_flights = pc_load_text_flights(text_content)
@@ -2617,7 +2602,6 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
 
             excel_row = pc_find_excel_match(approval, excel_rows, used_excel)
 
-            # service 为空 → 记录需要补的内容
             if approval["service"] == "" and excel_row is not None:
                 _ferry = pc_is_ferry_use(excel_row["use"])
                 _expected_svc = "N/M" if _ferry else "U/H"
@@ -2821,7 +2805,6 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
             if info_note:
                 nationality_pending_paragraphs.add(raw_text)
 
-        # ★ 先补 U/H 或 N/M（在应用其它样式之前）
         for _para, _date_raw, _svc in service_to_insert:
             pc_insert_service_after_date(_para, _date_raw, _svc,
                                           color_hex=PC_RED,
@@ -2858,7 +2841,6 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
                 if not has_nation:
                     pc_append_warn_text(p, "  机组国籍待确认")
 
-        # 手写待申请行：只对"Excel 里没有该航段"的情况加删除线（=已取消）
         excel_route_keys = set()
         for r in excel_rows:
             if r["dep_date"] and r["dep"] and r["arr"]:
@@ -3032,7 +3014,6 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
         out_buf.seek(0)
         return result_rows, out_buf
 
-    # ---------- 功能4 UI ----------
     pc_col1, pc_col2 = st.columns([1, 1])
     with pc_col1:
         pc_docx_file = st.file_uploader(
