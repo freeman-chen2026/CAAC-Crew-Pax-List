@@ -1584,7 +1584,6 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
     def pc_is_ferry_use(use_text):
         return any(k in use_text for k in PC_FERRY_KEYWORDS)
 
-    # ★ 新增：按 Excel + 文本，生成"预期标准行"
     def pc_build_expected_line(excel_row, nation_label=""):
         if excel_row is None:
             return ""
@@ -1600,7 +1599,6 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
         if not (ac_type and dep and arr and dep_time and arr_time and dep_date):
             return ""
 
-        # 日期 DDMONYYYY（用 dep_date 的年份）
         try:
             date_str = dep_date.strftime("%d%b%Y").upper()
         except Exception:
@@ -1610,8 +1608,7 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
         ferry = pc_is_ferry_use(excel_row.get("use") or "")
         service = "N/M" if ferry else "U/H"
 
-        parts = [reg, ac_type, f"{dep}{dep_time}", f"{arr_time}{arr}",
-                 "ON", date_str, service]
+        parts = [reg, ac_type, f"{dep}{dep_time}", f"{arr_time}{arr}", "ON", date_str, service]
         if is_domestic and nation_label:
             parts.append(nation_label)
         return " ".join(parts)
@@ -2702,24 +2699,15 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
                     (approval["reg"], approval["dep"], approval["arr"])
                 )
                 result_rows.append({
+                    "飞机号": approval["reg"],
+                    "内/外机": "外机",
                     "Word 原文": raw_text,
                     "预期": "",
-                    "飞机号": approval["reg"],
-                    "航班号": approval["flight_no"],
-                    "机型": PC_AIRCRAFT_TYPE_MAP.get(approval["reg"], ""),
-                    "内/外机": "外机",
-                    "批复起飞(北京时)": approval["dep_dt_bj"].strftime("%H:%M"),
-                    "批复落地(北京时)": approval["arr_dt_bj"].strftime("%H:%M"),
-                    "批复日期": approval["dep_dt_bj"].date().isoformat(),
-                    "Excel 用途": "",
-                    "文本标记": "",
-                    "Excel 计划起飞": "",
-                    "Excel 计划落地": "",
-                    "Excel 出发地": "",
-                    "Excel 到达地": "",
                     "差异": "外机未批（已申请）",
-                    "是否一致": "待确认",
+                    "状态": "待确认",
                     "备注": "未批",
+                    "用途": "",
+                    "文本标记": "",
                 })
                 continue
 
@@ -2732,7 +2720,6 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
 
             excel_row = pc_find_excel_match(approval, excel_rows, used_excel)
 
-            # 生成"预期行"
             expected_line = ""
             nation_for_expected = ""
             if excel_row is not None and approval["is_domestic"]:
@@ -2759,9 +2746,8 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
                     _svc = "N/M" if _ferry else "U/H"
 
                     _nation = ""
-                    if need_nation:
-                        if nation_for_expected:
-                            _nation = nation_for_expected
+                    if need_nation and nation_for_expected:
+                        _nation = nation_for_expected
 
                     if (need_service) or (need_nation and _nation):
                         service_to_insert.append({
@@ -2780,24 +2766,15 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
                 red_parts.append(approval["date_raw"])
 
                 result_rows.append({
+                    "飞机号": approval["reg"],
+                    "内/外机": "内机" if approval["is_domestic"] else "外机",
                     "Word 原文": raw_text,
                     "预期": "（Excel 中无此航段）",
-                    "飞机号": approval["reg"],
-                    "航班号": approval["flight_no"] if not approval["is_domestic"] else "",
-                    "机型": approval["type"] if approval["is_domestic"] else "",
-                    "内/外机": "内机" if approval["is_domestic"] else "外机",
-                    "批复起飞(北京时)": approval["dep_dt_bj"].strftime("%H:%M"),
-                    "批复落地(北京时)": approval["arr_dt_bj"].strftime("%H:%M"),
-                    "批复日期": approval["dep_dt_bj"].date().isoformat(),
-                    "Excel 用途": "",
-                    "文本标记": "",
-                    "Excel 计划起飞": "",
-                    "Excel 计划落地": "",
-                    "Excel 出发地": "",
-                    "Excel 到达地": "",
                     "差异": f"Excel 中无 {approval['dep']}→{approval['arr']}（±1 天）匹配",
-                    "是否一致": "否",
+                    "状态": "否",
                     "备注": "待取消",
+                    "用途": "",
+                    "文本标记": "",
                 })
                 approval_red_map[raw_text] = red_parts
                 cancel_paragraphs.add(raw_text)
@@ -2817,7 +2794,7 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
                     red_parts.append(approval["type"])
                     highlight_parts.append(approval["type"])
                 elif approval["type"] != expected_type:
-                    diffs.append(f"机型：批复 {approval['type']} vs 对照表 {expected_type}")
+                    diffs.append(f"机型：批复 {approval['type']} ≠ 对照表 {expected_type}")
                     red_parts.append(approval["type"])
                     highlight_parts.append(approval["type"])
 
@@ -2828,7 +2805,7 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
                 dur_diff = ap_dur - xl_dur
                 if abs(dur_diff) > 30:
                     diffs.append(
-                        f"飞行时长：批复 {pc_fmt_duration(ap_dur)} vs 计划 {pc_fmt_duration(xl_dur)}"
+                        f"飞行时长 {pc_fmt_duration(ap_dur)} vs {pc_fmt_duration(xl_dur)}"
                         f"（差 {dur_diff:+d} 分钟）"
                     )
                     red_parts.append(approval["arr_time_raw"])
@@ -2849,7 +2826,8 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
             elif real_dep_diff > 0:
                 dep_ok = False
                 diffs.append(
-                    f"起飞时间：批复 {approval_dep_time} 晚于计划 {excel_row['dep_time']}，需重新申请"
+                    f"起飞时间 {approval_dep_time} 晚于计划 {excel_row['dep_time']}"
+                    f"（差 {real_dep_diff} 分钟，需重申请）"
                 )
                 red_parts.append(approval["dep_time_raw"])
                 highlight_parts.append(approval["dep_time_raw"])
@@ -2857,8 +2835,8 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
             else:
                 dep_ok = False
                 diffs.append(
-                    f"起飞时间：批复 {approval_dep_time} vs 计划 {excel_row['dep_time']}"
-                    f"（相差 {real_dep_diff} 分钟）"
+                    f"起飞时间 {approval_dep_time} vs {excel_row['dep_time']}"
+                    f"（差 {real_dep_diff} 分钟）"
                 )
                 red_parts.append(approval["dep_time_raw"])
                 highlight_parts.append(approval["dep_time_raw"])
@@ -2877,7 +2855,7 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
 
             if approval["service"] and approval["service"] != expected_service:
                 diffs.append(
-                    f"用途：批复 {approval['service']} vs 计划 {excel_row['use']}"
+                    f"用途 批复 {approval['service']} vs 计划 {excel_row['use']}"
                     f"（应为 {expected_service}）"
                 )
                 red_parts.append(approval["service"])
@@ -2886,16 +2864,12 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
             if text_flight is not None:
                 text_ferry = text_flight.get("is_ferry", False)
                 if excel_ferry and not text_ferry:
-                    diffs.append(
-                        f"⚠ 文本漏 F 标记（Excel 为调机：{excel_row['use']}）"
-                    )
+                    diffs.append(f"文本漏 F 标记")
                     if approval["service"] and approval["service"] not in red_parts:
                         red_parts.append(approval["service"])
                         highlight_parts.append(approval["service"])
                 elif not excel_ferry and text_ferry:
-                    diffs.append(
-                        f"⚠ 文本多标 F 标记（Excel 为 {excel_row['use']}，非调机）"
-                    )
+                    diffs.append(f"文本多标 F 标记")
                     if approval["service"] and approval["service"] not in red_parts:
                         red_parts.append(approval["service"])
                         highlight_parts.append(approval["service"])
@@ -2910,18 +2884,18 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
                         has_foreign = "外籍" in approval["remark"]
                         if all_cn:
                             if has_foreign:
-                                diffs.append("国籍标注错误（应为中国籍）")
+                                diffs.append("国籍标错（应中国籍）")
                                 red_parts.append("外籍")
                                 highlight_parts.append("外籍")
                             elif not has_cn:
-                                diffs.append("国籍未标注（应为中国籍）")
+                                diffs.append("国籍未标注（应中国籍）")
                         else:
                             if has_cn:
-                                diffs.append("国籍标注错误（应为外籍）")
+                                diffs.append("国籍标错（应外籍）")
                                 red_parts.append("中国籍")
                                 highlight_parts.append("中国籍")
                             elif not has_foreign:
-                                diffs.append("国籍未标注（应为外籍）")
+                                diffs.append("国籍未标注（应外籍）")
                 else:
                     info_note = "机组国籍待确认"
 
@@ -2944,24 +2918,15 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
                 text_ferry_label = "调机(F)" if text_flight.get("is_ferry", False) else "载客(无F)"
 
             result_rows.append({
+                "飞机号": approval["reg"],
+                "内/外机": "内机" if approval["is_domestic"] else "外机",
                 "Word 原文": raw_text,
                 "预期": expected_line,
-                "飞机号": approval["reg"],
-                "航班号": approval["flight_no"] if not approval["is_domestic"] else "",
-                "机型": approval["type"] if approval["is_domestic"] else "",
-                "内/外机": "内机" if approval["is_domestic"] else "外机",
-                "批复起飞(北京时)": approval_dep_time,
-                "批复落地(北京时)": approval_arr_time,
-                "批复日期": approval["dep_dt_bj"].date().isoformat(),
-                "Excel 用途": excel_row["use"] if excel_row else "",
-                "文本标记": text_ferry_label,
-                "Excel 计划起飞": excel_row["dep_time"] if excel_row else "",
-                "Excel 计划落地": excel_row["arr_time"] if excel_row else "",
-                "Excel 出发地": excel_row["dep"] if excel_row else "",
-                "Excel 到达地": excel_row["arr"] if excel_row else "",
                 "差异": "；".join(diffs) if diffs else "无",
-                "是否一致": consistency,
+                "状态": consistency,
                 "备注": "；".join(final_notes),
+                "用途": excel_row["use"] if excel_row else "",
+                "文本标记": text_ferry_label,
             })
 
             if red_parts:
@@ -3145,51 +3110,20 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
 
             for item in items:
                 row = item["row"]
-                if is_domestic:
-                    bj_dep = row["dep_time"]
-                    bj_arr = row["arr_time"]
-                else:
-                    dep_t2 = pc_parse_hhmm_str(row["dep_time"])
-                    arr_t2 = pc_parse_hhmm_str(row["arr_time"])
-                    if row["dep_date"] and dep_t2:
-                        bj_dep = (_pcdt.datetime.combine(row["dep_date"], dep_t2)
-                                  + _pcdt.timedelta(hours=8)).strftime("%H:%M")
-                    else:
-                        bj_dep = ""
-                    if row["arr_date"] and arr_t2:
-                        bj_arr = (_pcdt.datetime.combine(row["arr_date"], arr_t2)
-                                  + _pcdt.timedelta(hours=8)).strftime("%H:%M")
-                    else:
-                        bj_arr = ""
-
-                if item["note_kind"] == "机组未定":
-                    remark = "待申请（机组未定，需确认）"
-                    diff_text = "Excel 有计划，批复汇总表缺失；文本未提供该航段，机组需确认"
-                else:
-                    remark = "待申请"
-                    diff_text = "Excel 有计划，批复汇总表缺失"
-
-                exp_line = pc_build_expected_line(row, item["note_kind"] if item["note_kind"] in ("中国籍", "外籍") else "")
-
+                exp_line = pc_build_expected_line(
+                    row,
+                    item["note_kind"] if item["note_kind"] in ("中国籍", "外籍") else "",
+                )
                 pending_rows.append({
+                    "飞机号": reg,
+                    "内/外机": "内机" if is_domestic else "外机",
                     "Word 原文": "（docx 中无此批复，需补申请）",
                     "预期": exp_line,
-                    "飞机号": reg,
-                    "航班号": reg if not is_domestic else "",
-                    "机型": PC_AIRCRAFT_TYPE_MAP.get(reg, "") if is_domestic else "",
-                    "内/外机": "内机" if is_domestic else "外机",
-                    "批复起飞(北京时)": bj_dep,
-                    "批复落地(北京时)": bj_arr,
-                    "批复日期": row["dep_date"].isoformat() if row["dep_date"] else "",
-                    "Excel 用途": row["use"],
+                    "差异": "Excel 有计划，批复汇总表缺失",
+                    "状态": "否",
+                    "备注": "待申请" if item["note_kind"] != "机组未定" else "待申请（机组未定）",
+                    "用途": row["use"],
                     "文本标记": "",
-                    "Excel 计划起飞": row["dep_time"],
-                    "Excel 计划落地": row["arr_time"],
-                    "Excel 出发地": row["dep"],
-                    "Excel 到达地": row["arr"],
-                    "差异": diff_text,
-                    "是否一致": "否",
-                    "备注": remark,
                 })
 
         result_rows.extend(pending_rows)
@@ -3302,78 +3236,58 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
 
         df = pd.DataFrame(rows)
         total_rows = len(df)
-        diff_count = (df["是否一致"] == "否").sum() if total_rows else 0
-        pending_count = (df["是否一致"] == "待确认").sum() if total_rows else 0
+        diff_count = (df["状态"] == "否").sum() if total_rows else 0
+        pending_count = (df["状态"] == "待确认").sum() if total_rows else 0
 
         c1, c2, c3, c4 = st.columns(4)
-        c1.metric("批复条数", total_rows)
-        c2.metric("一致", total_rows - diff_count - pending_count)
-        c3.metric("有差异", diff_count)
-        c4.metric("待确认", pending_count)
+        c1.metric("总条数", total_rows)
+        c2.metric("✅ 一致", total_rows - diff_count - pending_count)
+        c3.metric("❌ 有差异", diff_count)
+        c4.metric("⚠️ 待确认", pending_count)
 
-        st.subheader("📋 核对结果")
+        st.subheader("📋 核对结果一览（可按列筛选/排序）")
         if total_rows == 0:
             st.warning("未在 docx 中识别到任何批复行。")
         else:
-            # ★ 只显示关键列：Word 原文、预期、是否一致、备注
-            display_cols = ["Word 原文", "预期", "是否一致", "备注"]
+            # ★ 只显示关键 6 列，差异直接放表格里
+            display_cols = ["飞机号", "内/外机", "Word 原文", "预期", "差异", "状态", "备注"]
             df_display = df[display_cols].copy()
 
             def highlight_row(row):
-                if row["是否一致"] == "待确认":
-                    return ["background-color: #ffe082"] * len(row)
-                if row["是否一致"] == "否":
-                    if "待变更" in str(row["备注"]):
-                        return ["background-color: #e5f0ff"] * len(row)
-                    return ["background-color: #ffe5e5"] * len(row)
+                status = row["状态"]
+                if status == "待确认":
+                    return ["background-color: #fff2cc"] * len(row)   # 浅黄
+                if status == "否":
+                    note = str(row["备注"])
+                    if "待取消" in note:
+                        return ["background-color: #fce4ec"] * len(row)  # 浅粉
+                    if "待变更" in note:
+                        return ["background-color: #e3f2fd"] * len(row)  # 浅蓝
+                    if "待申请" in note:
+                        return ["background-color: #f3e5f5"] * len(row)  # 浅紫
+                    return ["background-color: #ffebee"] * len(row)      # 浅红
+                if status == "是":
+                    return ["background-color: #e8f5e9"] * len(row)      # 浅绿
                 return [""] * len(row)
 
             st.dataframe(
                 df_display.style.apply(highlight_row, axis=1),
                 use_container_width=True,
                 hide_index=True,
+                column_config={
+                    "飞机号": st.column_config.TextColumn(width="small"),
+                    "内/外机": st.column_config.TextColumn(width="small"),
+                    "Word 原文": st.column_config.TextColumn(width="large"),
+                    "预期": st.column_config.TextColumn(width="large"),
+                    "差异": st.column_config.TextColumn(width="large"),
+                    "状态": st.column_config.TextColumn(width="small"),
+                    "备注": st.column_config.TextColumn(width="medium"),
+                },
             )
 
-            st.subheader("🚨 差异明细")
-            diffs_df = df[df["是否一致"] != "是"][["Word 原文", "预期", "差异", "备注", "是否一致"]]
-            if diffs_df.empty:
-                st.success("✅ 所有批复与计划一致，未发现差异。")
-            else:
-                for _, r in diffs_df.iterrows():
-                    # ★ 上下对比：Word 原文 / 预期
-                    st.markdown("---")
-                    st.markdown(f"**📄 Word 原文：** `{r['Word 原文']}`")
-                    if r["预期"] and r["预期"] != "（Excel 中无此航段）":
-                        st.markdown(f"**✅ 预期（Excel+文本）：** `{r['预期']}`")
-                    elif r["预期"] == "（Excel 中无此航段）":
-                        st.markdown("**✅ 预期：** ❌ Excel 中无此航段 → **待取消**")
-                    else:
-                        st.markdown("**✅ 预期：** （无法生成，缺少 Excel 匹配）")
-
-                    if r["是否一致"] == "待确认":
-                        note_html = (
-                            " <span style='color:#cc0000;font-weight:bold;"
-                            "background-color:#ffe082;padding:1px 6px;border-radius:3px'>"
-                            f"【{r['备注']}】</span>"
-                        )
-                    elif "待变更" in str(r["备注"]):
-                        note_html = (
-                            " <span style='color:#0066cc;font-weight:bold'>"
-                            f"【{r['备注']}】</span>"
-                        )
-                    elif r["备注"]:
-                        note_html = (
-                            f" <span style='color:red;font-weight:bold'>【{r['备注']}】</span>"
-                        )
-                    else:
-                        note_html = ""
-                    if note_html:
-                        st.markdown(f"**📌 状态：**{note_html}", unsafe_allow_html=True)
-
-                    if r["差异"] != "无":
-                        st.markdown("**⚠️ 差异：**")
-                        for line in r["差异"].split("；"):
-                            st.markdown(f"- {line}")
+            st.caption(
+                "🟢 一致 ｜ 🔴 有差异 ｜ 🟡 待确认 ｜ 浅蓝=待变更 ｜ 浅紫=待申请 ｜ 浅粉=待取消"
+            )
 
         st.subheader("📥 下载标红后的批复汇总表")
         st.download_button(
