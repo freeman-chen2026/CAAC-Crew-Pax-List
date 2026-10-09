@@ -2678,7 +2678,6 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
         used_text = set()
         unapproved_keys = set()
 
-        # ★ 按 Word 文档从上到下的顺序遍历
         for p in pc_iter_doc_paragraphs(doc):
             raw_text = p.text.strip()
             if not raw_text:
@@ -2699,7 +2698,6 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
                     "Word 原文": raw_text,
                     "预期": "",
                     "差异": "外机未批（已申请）",
-                    # 内部字段，不显示
                     "飞机号": approval["reg"],
                     "内/外机": "外机",
                     "状态": "待确认",
@@ -2726,8 +2724,11 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
                     nat = pc_actual_nation_label(tfl[0]["crew"], pilots)
                     if nat in ("中国籍", "外籍"):
                         nation_for_expected = nat
+
             if excel_row is not None:
-                expected_line = pc_build_expected_line(excel_row, nation_for_expected)
+                # 预期行：即使国籍未知，也用"机组未定"占位，让用户注意
+                _exp_nation = nation_for_expected if nation_for_expected else "机组未定"
+                expected_line = pc_build_expected_line(excel_row, _exp_nation)
 
             if excel_row is not None and approval["is_domestic"]:
                 has_service = bool(approval["service"])
@@ -2741,11 +2742,15 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
                     _ferry = pc_is_ferry_use(excel_row["use"])
                     _svc = "N/M" if _ferry else "U/H"
 
+                    # ★ 国籍：判定不出时用"机组未定"提示，让用户去检查
                     _nation = ""
-                    if need_nation and nation_for_expected:
-                        _nation = nation_for_expected
+                    if need_nation:
+                        if nation_for_expected:
+                            _nation = nation_for_expected
+                        else:
+                            _nation = "机组未定"
 
-                    if (need_service) or (need_nation and _nation):
+                    if need_service or _nation:
                         service_to_insert.append({
                             "para": p,
                             "date_raw": approval["date_raw"],
@@ -3098,10 +3103,8 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
 
             for item in items:
                 row = item["row"]
-                exp_line = pc_build_expected_line(
-                    row,
-                    item["note_kind"] if item["note_kind"] in ("中国籍", "外籍") else "",
-                )
+                _exp_nation = item["note_kind"] if item["note_kind"] in ("中国籍", "外籍") else "机组未定"
+                exp_line = pc_build_expected_line(row, _exp_nation)
                 pending_rows.append({
                     "Word 原文": "（docx 中无此批复，需补申请）",
                     "预期": exp_line,
@@ -3235,15 +3238,14 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
         if total_rows == 0:
             st.warning("未在 docx 中识别到任何批复行。")
         else:
-            # ★ 只显示三列
             display_cols = ["Word 原文", "预期", "差异"]
             df_display = df[display_cols].copy()
 
             def highlight_row(row):
                 diff = str(row["差异"])
                 if diff == "无":
-                    return ["background-color: #e8f5e9"] * len(row)   # 浅绿（一致）
-                return ["background-color: #ffebee"] * len(row)      # 浅红（有差异）
+                    return ["background-color: #e8f5e9"] * len(row)
+                return ["background-color: #ffebee"] * len(row)
 
             st.dataframe(
                 df_display.style.apply(highlight_row, axis=1),
