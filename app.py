@@ -1226,73 +1226,1067 @@ with tab1:
         st.info("👆 请同时上传 GD单 和 模板文件。")
 
 # ================================================================
-# 功能2：世界时行程
+# 功能2：世界时行程 + 飞越&香港邮件（共用一次上传）
 # ================================================================
 with tab2:
     F_HTML = r"""<!DOCTYPE html>
 <html>
 <head>
-<meta charset="UTF-8"><title>世界时行程转换</title>
+<meta charset="UTF-8"><title>世界时行程 + 飞越&香港邮件</title>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
 <style>
-body{font-family:-apple-system,"Segoe UI","Microsoft YaHei",sans-serif;margin:12px;color:#333;font-size:16px;}
-.upload-hint{font-size:15px;color:#555;margin:4px 0 6px 0;}
+body{font-family:-apple-system,"Segoe UI","Microsoft YaHei",sans-serif;margin:12px;color:#333;font-size:15px;}
+h3{font-size:16px;margin:8px 0}
+details.section{border:1px solid #ddd;border-radius:6px;margin:10px 0;background:#fafafa;}
+details.section>summary{cursor:pointer;font-weight:bold;padding:10px 14px;font-size:16px;background:#e3f2fd;border-radius:6px;user-select:none;list-style:none;outline:none;}
+details.section[open]>summary{border-radius:6px 6px 0 0;border-bottom:1px solid #ddd;}
+details.section>summary::-webkit-details-marker{display:none}
+details.section>summary::before{content:"▶ ";display:inline-block;transition:transform 0.15s;}
+details.section[open]>summary::before{content:"▼ ";}
+details.section>.inner{padding:12px 16px;}
+
 input[type=file]{padding:6px;font-size:15px;}
-button{padding:9px 16px;font-size:15px;border-radius:6px;border:1px solid #ddd;background:#fff;cursor:pointer;margin-right:6px;margin-top:6px;}
+button{padding:8px 14px;font-size:14px;border-radius:6px;border:1px solid #ddd;background:#fff;cursor:pointer;margin-right:6px;margin-top:6px;}
 button:hover{background:#f5f5f5;}
-.reg-block{margin-bottom:20px;}
-.reg-title{font-weight:bold;font-size:19px;margin-bottom:8px;}
-.new-flag{color:#d32f2f;font-size:1rem;margin-left:8px;font-weight:normal;}
-.seg-list{background:#f7f7f7;border:1px solid #ddd;border-radius:6px;padding:10px 14px;font-family:Consolas,"Courier New",monospace;font-size:16px;line-height:1.9;color:#222;}
-.seg-line{padding:3px 0;}
-.status{color:#555;font-size:15px;margin-left:8px;}
+button.primary{background:#ff4b4b;color:#fff;border-color:#ff4b4b;font-weight:bold}
+button.primary:hover{background:#e63939}
+button.hkbac{background:#1565c0;color:#fff;border-color:#1565c0;font-weight:bold}
+button.hkbac:hover{background:#0d47a1}
+button.eml{background:#2e7d32;color:#fff;border-color:#2e7d32;font-weight:bold}
+button.eml:hover{background:#1b5e20}
+button.small{padding:4px 10px;font-size:12.5px}
+button.active{background:#1976d2;color:#fff;border-color:#1976d2}
+button.active:hover{background:#1565c0}
+button.close-panel-btn{background:#fff;color:#666;border-color:#ccc;font-weight:bold}
+button.close-panel-btn:hover{background:#ffebee;color:#d32f2f;border-color:#ef9a9a}
+
+.upload-hint{font-size:14px;color:#555;margin:4px 0 6px 0;}
+.status{color:#555;font-size:14px;margin-left:8px;}
 .error{color:#d32f2f;background:#ffebee;padding:8px;border-radius:4px;margin:6px 0;}
 .success{color:#2e7d32;background:#e8f5e9;padding:8px;border-radius:4px;margin:6px 0;}
 .info{color:#1976d2;background:#e3f2fd;padding:8px;border-radius:4px;margin:6px 0;}
-details{margin:10px 0;padding:8px;border:1px solid #eee;border-radius:4px;background:#fafafa;}
-summary{cursor:pointer;font-weight:bold;padding:4px 0;font-size:16px;}
-ol{margin:6px 0 6px 20px;padding:0;} li{margin:2px 0;font-size:15px;}
-.full-text-box{background:#f5f5f5;padding:10px;border-radius:4px;font-family:Consolas,"Courier New",monospace;font-size:16px;white-space:pre;overflow-x:auto;border:1px solid #e0e0e0;max-height:400px;overflow-y:auto;}
+
+.reg-block{margin-bottom:20px;}
+.reg-title{font-weight:bold;font-size:18px;margin-bottom:8px;}
+.new-flag{color:#d32f2f;font-size:0.95rem;margin-left:8px;font-weight:normal;}
+.seg-list{background:#f7f7f7;border:1px solid #ddd;border-radius:6px;padding:10px 14px;font-family:Consolas,"Courier New",monospace;font-size:15px;line-height:1.9;color:#222;}
+.seg-line{padding:3px 0;}
+.full-text-box{background:#f5f5f5;padding:10px;border-radius:4px;font-family:Consolas,"Courier New",monospace;font-size:15px;white-space:pre;overflow-x:auto;border:1px solid #e0e0e0;max-height:400px;overflow-y:auto;}
+ol{margin:6px 0 6px 20px;padding:0;} li{margin:2px 0;font-size:14px;}
+
+.filter-bar{margin:10px 0}
+.hint{color:#888;font-size:12.5px;margin:4px 0 8px;line-height:1.7}
+table{border-collapse:collapse;width:100%;margin-top:10px;font-size:13px;table-layout:fixed}
+th,td{border:1px solid #e0e0e0;padding:6px 8px;text-align:left;vertical-align:middle;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+th{background:#f5f5f5;font-weight:bold;white-space:nowrap}
+.reg-group{margin-top:14px;border:1px solid #e0e0e0;border-radius:6px;overflow:hidden}
+.reg-group-title{background:#e3f2fd;color:#0d47a1;font-weight:bold;padding:8px 12px;font-size:14px}
+.reg-group-title .reg-count{color:#666;font-weight:normal;font-size:12.5px}
+.reg-group table{margin-top:0;border:none;table-layout:fixed}
+.reg-group th:first-child,.reg-group td:first-child{border-left:none}
+.reg-group th:last-child,.reg-group td:last-child{border-right:none}
+.col-route{width:42%}.col-time{width:26%}.col-purpose{width:14%}.col-action{width:18%}
+.mail-panel{padding:14px 18px;background:#fafafa;border-top:1px dashed #ddd}
+.mail-panel.hkbac-panel{background:#e8f0fe;border-top-color:#90caf9}
+.panel-title{font-weight:bold;margin-bottom:10px;color:#333;font-size:14px}
+.subject-row{font-weight:bold;color:#0066cc;font-size:14px;margin-bottom:8px;padding:8px;background:#fff;border-radius:4px;word-break:break-all;border:1px solid #bbdefb}
+.mail-preview-html{background:#fff;border:1px solid #ddd;border-radius:4px;padding:16px;max-height:500px;overflow-y:auto;margin:10px 0}
+.copy-ok{color:#2e7d32 !important;border-color:#a5d6a7 !important;background:#e8f5e9 !important}
+
+textarea,input[type=text],input[type=number]{width:100%;box-sizing:border-box;font-size:13.5px;padding:8px 10px;border:1px solid #ccc;border-radius:6px;font-family:inherit}
+textarea{font-family:Consolas,"Courier New",monospace;line-height:1.5;resize:vertical}
+code{background:#f0f0f0;padding:1px 5px;border-radius:3px;font-family:Consolas,monospace;font-size:12px;color:#d63384}
+.map-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:10px}
+.map-box{background:#fff;padding:10px;border-radius:6px;border:1px solid #e0e0e0}
+.map-box label{font-weight:bold;font-size:13px;display:block;margin-bottom:4px}
+.map-box textarea{height:180px;font-size:12.5px}
+.map-box .hint{font-size:12px;margin-top:4px}
+.default-row{background:#fff3e0;padding:10px;border-radius:6px;border:1px solid #ffb74d;margin-top:10px}
+.default-row label{font-weight:bold;font-size:13px;display:inline-block}
+.default-row input{margin-left:8px}
 </style>
 </head>
 <body>
-<div class="upload-hint">📤 上传未来航段（北京时间）：</div>
-<input type="file" id="fileInput" accept=".xlsx,.xls">
-<div id="status"></div>
-<div id="result" style="display:none;">
-<div id="plans"></div>
-<details><summary>📦 全部计划合并（点击展开）</summary><div class="full-text-box" id="fullTextBox"></div></details>
-<details><summary>📜 历史记录</summary><div id="historyList"></div><button id="clearHistoryBtn" style="margin-top:8px;">🗑️ 清除所有历史</button></details>
+
+<details class="section" open>
+<summary>🌐 世界时行程</summary>
+<div class="inner">
+    <div class="upload-hint">📤 上传航段数据（北京时间，Excel）：</div>
+    <input type="file" id="fileInput" accept=".xlsx,.xls">
+    <div id="status"></div>
+    <div id="result" style="display:none;">
+        <div id="plans"></div>
+        <details><summary>📦 全部计划合并（点击展开）</summary><div class="full-text-box" id="fullTextBox"></div></details>
+        <details><summary>📜 历史记录</summary><div id="historyList"></div><button id="clearHistoryBtn" style="margin-top:8px;">🗑️ 清除所有历史</button></details>
+    </div>
 </div>
+</details>
+
+<details class="section">
+<summary>✉️ 飞越&香港邮件</summary>
+<div class="inner">
+    <div class="filter-bar">
+        <button id="filterWeekBtn">📅 只看未来一周</button>
+        <span id="filterStatus" class="hint"></span>
+    </div>
+    <div id="flightList"></div>
+</div>
+</details>
+
+<details class="section">
+<summary>⚙️ 配置</summary>
+<div class="inner">
+    <div style="display:flex;gap:14px;flex-wrap:wrap;">
+        <div style="background:#fff8e1;padding:10px;border-radius:6px;border:1px solid #ffe082;flex:1;min-width:280px;">
+            <label style="font-weight:bold;font-size:13px;">⏰ 飞越邮件：Excel 北京时间 - 此值 = 邮件 UTC：</label>
+            <input type="number" id="cfgTzOffset" value="10" step="1" style="width:80px;display:inline-block;margin-left:8px;">
+            <div class="hint" style="margin-top:6px;">默认 10（HKBAC 邮件的时差固定 8，不受这里影响）。</div>
+        </div>
+        <div style="background:#f0f8ff;padding:10px;border-radius:6px;border:1px solid #b3d8ff;flex:1;min-width:280px;">
+            <label style="font-weight:bold;font-size:13px;">字体：</label>
+            <input type="text" id="cfgFont" value="Calibri" style="width:180px;display:inline-block;margin-left:8px;">
+            <label style="font-weight:bold;font-size:13px;margin-left:14px;">字号：</label>
+            <input type="text" id="cfgFontSize" value="11pt" style="width:70px;display:inline-block;margin-left:8px;">
+        </div>
+    </div>
+    <div class="default-row">
+        <div><label>🔸 默认航路（可用 $dep / $arr 占位）：</label></div>
+        <textarea id="cfgDefaultRoute" style="height:60px;margin-top:6px;">$dep…DALOL V652 SABNO A583 ZAM A461 BONDA…$arr</textarea>
+        <div style="margin-top:8px;">
+            <label>🔸 默认 OVF 付款国：</label>
+            <input type="text" id="cfgDefaultOvf" value="Philippines" style="width:200px;display:inline-block;margin-left:8px;">
+        </div>
+        <div style="margin-top:8px;">
+            <label>🔸 默认飞行用途：</label>
+            <input type="text" id="cfgDefaultPurpose" value="Private Flight" style="width:200px;display:inline-block;margin-left:8px;">
+        </div>
+        <div style="margin-top:8px;">
+            <label>🔸 深圳地址（Billing Account 不含 HK 时用）：</label>
+            <input type="text" id="cfgSzAddress" value="6/F, Block 6B, Wutong Island, Hangkong Road, Baoan District, Shenzhen, China 518126" style="width:100%;margin-top:4px;">
+        </div>
+        <div style="margin-top:8px;">
+            <label>🔸 香港地址（Billing Account 含 HK 时用）：</label>
+            <input type="text" id="cfgHkAddress" value="Room 3205, Bank of America Tower, 12 Harcourt Road, Admiralty, Hong Kong" style="width:100%;margin-top:4px;">
+        </div>
+        <div style="margin-top:8px;">
+            <label>🔸 HKBAC 收件人邮箱：</label>
+            <input type="text" id="cfgHkbacEmail" value="hkbac@hkbac.com" style="width:300px;display:inline-block;margin-left:8px;">
+        </div>
+    </div>
+
+    <div style="margin-top:14px;">
+        <label style="font-weight:bold;font-size:13px;">飞越邮件主题模板：</label>
+        <input type="text" id="subjectText" value="$reg // OVF RQST // $dep-$arr //$dateTextSp">
+        <div class="hint" style="margin-top:4px;">可用变量：<code>$reg</code>（机号无横线）、<code>$regDash</code>（带横线）、<code>$dep</code>、<code>$arr</code>、<code>$dateText</code>（10OCT）、<code>$dateTextSp</code>（10 OCT）。</div>
+    </div>
+
+    <div style="margin-top:14px;">
+        <label style="font-weight:bold;font-size:13px;">飞越邮件正文模板：</label>
+        <textarea id="templateText" style="height:400px;">Dear Colleagues,
+
+Kindly find below new overfly permit request for **$regDash $dep-$arr** schedule on **$dateText**
+
+**Operator and Aircraft Details**
+Operator: $operator
+Aircraft Type: $acType
+Registry: $regDash
+Call Sign: $reg
+Purpose of Flight: $purpose
+Billing Account: $billing
+Billing Address: $address
+
+**Schedule (in UTC)**
+$etdLine // $etaLine
+
+**Route**
+$dep-$arr:
+$route
+REQD OVF PMT: ==$ovf==
+
+**Capt. Name**
+PIC: $pic
+SIC: $sic
+
+**We kindly request below for above trip:**
+1.	Please assist to apply all required overfly permits
+•	Please assist to double check and advise if our route will be accepted by CAAs
+•	Kindly double check and correct us if there's anything wrong with our OVF analysis
+•	Kindly revert permit with operator, aircraft, and schedule details once able
+2.	Please assist to arrange payment of navigation fee on our behalf
+•	Please arrange the payment and bill to us within 1 month after the flight
+
+Should you need any further info / document, please let us know.
+
+Thank you and standby for your updates.</textarea>
+    </div>
+
+    <div style="margin-top:14px;">
+        <label style="font-weight:bold;font-size:13px;">HKBAC 邮件正文模板：</label>
+        <textarea id="templateHkbac" style="height:420px;">Dear HKBAC,
+
+Kindly find below new handling request for **$regDash VHHH** schedule during **$dateText**
+
+**Operator and Aircraft Details**
+Operator: $operator
+Aircraft Type: $acTypeICAO
+Registry: $regDash
+Call Sign: $reg
+Purpose of Flight: Private Flight
+Billing Account: $billing
+Billing Address: $address
+
+**Schedule**
+$scheduleLines
+
+**Handling Preference**
+HKBAC ramp is preferred.
+Kindly apply HKBAC ramp for pax disembark and embark for us and keep us posted if any issue.
+
+Slot and BAPS Info
+
+GCR
+/REG
+VHHH
+TB652S 05OCT 014GLF4 ZSSS0830 D / ID.VHHHAGN4554000/ 
+T B652S 05OCT 014GLF4 0930VVDN D / ID.VHHHDGN4556000/
+
+BAPS Ref. No.: 2026004454
+
+Thank you!</textarea>
+    </div>
+
+    <div style="margin-top:14px;">
+        <label style="font-weight:bold;font-size:13px;">HKBAC 邮件主题模板：</label>
+        <input type="text" id="subjectHkbac" value="$reg Ground Handling Services Request at VHHH // $dateText">
+    </div>
+
+    <div class="map-grid">
+        <div class="map-box">
+            <label>机型映射（机号=机型）</label>
+            <textarea id="cfgAircraft">N2QE=GL5T / Global 5000
+T7CJK=GLEX / Global 6000
+MLLIN=GLEX / Global 6000
+B8105=GLEX / Global 6000
+N7777U=GLEX / Global 6000
+T7178HT=GL7T / Bombardier Global 7500
+N328LM=GL7T / Bombardier Global 7500
+VPCSZ=GL8T / Bombardier Global 8000
+B3926=LJ60 / Learjet 60
+B652R=GLF4 / Gulfstream Aerospace IV
+B652Q=GLF4 / Gulfstream Aerospace IV
+B652S=GLF4 / Gulfstream Aerospace IV
+B65AP=GLF4 / Gulfstream Aerospace IV
+B8262=GLF4 / Gulfstream Aerospace IV
+N440QS=GLF4 / Gulfstream Aerospace IV
+N88AY=GLF5 / Gulfstream Aerospace V
+B8160=GLF5 / Gulfstream Aerospace V
+N550DR=GLF5 / Gulfstream Aerospace V
+B8309=GLF5 / Gulfstream Aerospace V
+B8292=GLF5 / Gulfstream Aerospace V
+VPCVA=GLF6 / Gulfstream Aerospace G650
+B658L=GLF6 / Gulfstream Aerospace G650
+N777ZH=GLF6 / Gulfstream Aerospace G650
+VPCEN=GA6C / Gulfstream Aerospace GVII-G600
+N577QT=F900 / Dassault Falcon 900LX</textarea>
+        </div>
+        <div class="map-box">
+            <label>机组映射（机号=PIC|SIC）</label>
+            <textarea id="cfgCrew">B3926=SONG, Wei|ZHANG, Yongyi
+B652Q=JIN, Shangming|SUN, Hao
+B652R=SUN, Hao|JIN, Shangming
+B652S=JIN, Shangming|SUN, Hao
+B65AP=JIN, Shangming|SUN, Hao
+B8105=WU, Peng|LIU, Huichuan
+B8160=YOU, Xin|WEI, Siyuan
+B8262=JIN, Shangming|SUN, Hao
+B8292=MA, Jian|SUN, Hao
+B8309=LI, Yamin|ZHAO, Lei
+MLLIN=HUANG, Haidong|TSAI, Kuo-Chun
+N2QE=BEEBE, Thaddeus John|HEALY, Darran William
+N328LM=STAMM, Herve Daniel|LI, Xinxin
+N550DR=WANG, Bin|XU, Zhuo
+N577QT=ZHANG, Fan|WEI, Siyuan
+N7777U=LIU, Shuang|RICHTER, Daniel
+N777ZH=LI, Xiaolong|SUN, He
+N88AY=SONG, Wei|XU, Zhuo
+T7178HT=BONETTI, Rodolfo|SHERREN, Keith Robert
+T7CJK=HUANG, Haidong|MEI, Feng
+VPCVA=PENG, Gang|WU, Kwan Leung
+VPCSZ=GENG, Fan|TSAI, Kuo-Chun</textarea>
+        </div>
+        <div class="map-box">
+            <label>Operator 映射（机号=运营人）</label>
+            <textarea id="cfgOperatorMap">B3926=Amber Aviation Limited
+B652Q=Amber Aviation Limited
+B652R=Amber Aviation Limited
+B652S=Amber Aviation Limited
+B65AP=Amber Aviation Limited
+B8105=Amber Aviation Limited
+B8160=Amber Aviation Limited
+B8262=Amber Aviation Limited
+B8292=Amber Aviation Limited
+B8309=Amber Aviation Limited
+MLLIN=Amber Aviation (Hong Kong) Limited
+N2QE=Amber Aviation (Hong Kong) Limited
+N328LM=Amber Aviation (Hong Kong) Limited
+N550DR=Amber Aviation (Hong Kong) Limited
+N577QT=Amber Aviation (Hong Kong) Limited
+N7777U=Amber Aviation (Hong Kong) Limited
+N777ZH=Amber Aviation (Hong Kong) Limited
+N88AY=Amber Aviation (Hong Kong) Limited
+T7178HT=Amber Aviation (Hong Kong) Limited
+T7CJK=Amber Aviation San Marino S.R.L.
+VPCVA=Amber Aviation (Cayman) Limited
+VPCSZ=Amber Aviation (Cayman) Limited</textarea>
+        </div>
+        <div class="map-box">
+            <label>Billing Account 映射（机号=账单）</label>
+            <div class="hint">地址自动判断：含 "Hong Kong" → 香港地址；否则 → 深圳地址。</div>
+            <textarea id="cfgBillingMap">B3926=Amber Aviation (Hong Kong) Limited / invoice@amber-aviation.com
+B652Q=Amber Aviation Limited / invoice@amber-aviation.com
+B652R=Amber Aviation Limited / invoice@amber-aviation.com
+B652S=Amber Aviation Limited / invoice@amber-aviation.com
+B65AP=Amber Aviation Limited / invoice@amber-aviation.com
+B8105=Amber Aviation Limited / invoice@amber-aviation.com
+B8160=Amber Aviation Limited / invoice@amber-aviation.com
+B8262=Amber Aviation Limited / invoice@amber-aviation.com
+B8292=Amber Aviation Limited / invoice@amber-aviation.com
+B8309=Amber Aviation Limited / invoice@amber-aviation.com
+MLLIN=Amber Aviation (Hong Kong) Limited / invoice@amber-aviation.com
+N2QE=Amber Aviation (Hong Kong) Limited / invoice@amber-aviation.com
+N328LM=Amber Aviation (Hong Kong) Limited / invoice@amber-aviation.com
+N550DR=Amber Aviation Limited / invoice@amber-aviation.com
+N577QT=Amber Aviation (Hong Kong) Limited / invoice@amber-aviation.com
+N7777U=Amber Aviation Limited / invoice@amber-aviation.com
+N777ZH=Amber Aviation (Hong Kong) Limited / invoice@amber-aviation.com
+N88AY=Amber Aviation (Hong Kong) Limited / invoice@amber-aviation.com
+T7178HT=Amber Aviation (Hong Kong) Limited / invoice@amber-aviation.com
+T7CJK=Amber Aviation Limited / invoice@amber-aviation.com
+VPCVA=Amber Aviation (Hong Kong) Limited / invoice@amber-aviation.com
+VPCSZ=Amber Aviation (Hong Kong) Limited / invoice@amber-aviation.com</textarea>
+        </div>
+    </div>
+</div>
+</details>
+
 <script>
+/* =========================================================
+   公共常量
+   ========================================================= */
 const MONTHS=['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
-const PRIORITY=['B652Q','B65AP','B652S','MLLIN','N88AY','B652R'];
-const HISTORY_KEY='worldtime_history_v2',LAST_PLANS_KEY='worldtime_last_plans_v2',LAST_FILE_KEY='worldtime_last_file_v2';
-function loadHistory(){try{const r=localStorage.getItem(HISTORY_KEY);if(!r)return{records:[]};const o=JSON.parse(r);if(!o.records)o.records=[];return o;}catch(e){return{records:[]};}}
-function saveHistory(h){try{localStorage.setItem(HISTORY_KEY,JSON.stringify(h));}catch(e){}}
+const HKBAC_TZ_OFFSET = 8;
+const WORLD_PRIORITY = ['B652Q','B65AP','B652S','MLLIN','N88AY','B652R'];
+const REG_ORDER = ['B652Q','B652S','B65AP','MLLIN','N88AY','B652R','B8105','B8160','B8292','B8309','N2QE','N328LM','N550DR','N577QT','N7777U','N777ZH','T7178HT','T7CJK','VPCSZ','VPCVA','B3926','B8262'];
+
+const HISTORY_KEY='worldtime_history_v2';
+const LAST_PLANS_KEY='worldtime_last_plans_v2';
+const LAST_FILE_KEY='worldtime_last_file_v2';
+const FLIGHT_ROWS_KEY='mailgen_flight_rows_v1';
+
+let flightRows = [];   // 共用数据源
+let showOnlyWeek = true;
+
+/* =========================================================
+   通用工具
+   ========================================================= */
+function pad2(n){return String(n).padStart(2,'0');}
+function escapeHtml(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function val(id){const el=document.getElementById(id);return el?el.value.trim():'';}
+
+/* =========================================================
+   localStorage 封装
+   ========================================================= */
 function loadJSON(k){try{const r=localStorage.getItem(k);return r?JSON.parse(r):null;}catch(e){return null;}}
 function saveJSON(k,v){try{localStorage.setItem(k,JSON.stringify(v));}catch(e){}}
-function pad2(n){return String(n).padStart(2,'0');}
-function escapeHtml(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
-function parseDate(v){if(v==null||v==='')return null;if(v instanceof Date)return new Date(v.getFullYear(),v.getMonth(),v.getDate());if(typeof v==='number'){const ms=Math.round((v-25569)*86400*1000);const d=new Date(ms);return new Date(d.getUTCFullYear(),d.getUTCMonth(),d.getUTCDate());}const s=String(v).trim();if(!s)return null;const m=s.match(/^(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})/);if(m)return new Date(parseInt(m[1]),parseInt(m[2])-1,parseInt(m[3]));const d=new Date(s);if(!isNaN(d.getTime()))return new Date(d.getFullYear(),d.getMonth(),d.getDate());return null;}
-function parseTime(v){if(v==null||v==='')return null;if(v instanceof Date)return pad2(v.getHours())+':'+pad2(v.getMinutes());if(typeof v==='number'){let f=v;if(v>1)f=v-Math.floor(v);const t=Math.round(f*24*60);return pad2(Math.floor(t/60)%24)+':'+pad2(t%60);}const s=String(v).trim();const m=s.match(/(\d{1,2}):(\d{2})/);if(m)return pad2(parseInt(m[1]))+':'+m[2];return null;}
-function toUTCLabel(dateVal,timeStr){const d=parseDate(dateVal);if(!d||!timeStr)return null;const p=timeStr.split(':');const h=parseInt(p[0]),m=parseInt(p[1]);let t=h*60+m-8*60;let off=0;while(t<0){t+=24*60;off--;}while(t>=24*60){t-=24*60;off++;}const uh=Math.floor(t/60),um=t%60;const dd=new Date(d.getFullYear(),d.getMonth(),d.getDate());dd.setDate(dd.getDate()+off);return{day:dd.getDate(),month:dd.getMonth()+1,hours:uh,minutes:um,sortKey:dd.getFullYear()*100000000+(dd.getMonth()+1)*1000000+dd.getDate()*10000+uh*100+um};}
+function loadHistory(){try{const r=localStorage.getItem(HISTORY_KEY);if(!r)return{records:[]};const o=JSON.parse(r);if(!o.records)o.records=[];return o;}catch(e){return{records:[]};}}
+function saveHistory(h){try{localStorage.setItem(HISTORY_KEY,JSON.stringify(h));}catch(e){}}
+
+/* =========================================================
+   世界时行程相关（保留原逻辑）
+   ========================================================= */
+function parseDate(v){
+    if(v==null||v==='')return null;
+    if(v instanceof Date)return new Date(v.getFullYear(),v.getMonth(),v.getDate());
+    if(typeof v==='number'){const ms=Math.round((v-25569)*86400*1000);const d=new Date(ms);return new Date(d.getUTCFullYear(),d.getUTCMonth(),d.getUTCDate());}
+    const s=String(v).trim();if(!s)return null;
+    const m=s.match(/^(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})/);
+    if(m)return new Date(parseInt(m[1]),parseInt(m[2])-1,parseInt(m[3]));
+    const d=new Date(s);
+    if(!isNaN(d.getTime()))return new Date(d.getFullYear(),d.getMonth(),d.getDate());
+    return null;
+}
+function parseTime(v){
+    if(v==null||v==='')return null;
+    if(v instanceof Date)return pad2(v.getHours())+':'+pad2(v.getMinutes());
+    if(typeof v==='number'){let f=v;if(v>1)f=v-Math.floor(v);const t=Math.round(f*24*60);return pad2(Math.floor(t/60)%24)+':'+pad2(t%60);}
+    const s=String(v).trim();const m=s.match(/(\d{1,2}):(\d{2})/);
+    if(m)return pad2(parseInt(m[1]))+':'+m[2];
+    return null;
+}
+function toUTCLabel(dateVal, timeStr){
+    const d=parseDate(dateVal);
+    if(!d||!timeStr)return null;
+    const p=timeStr.split(':');
+    const h=parseInt(p[0]),m=parseInt(p[1]);
+    let t=h*60+m-8*60;let off=0;
+    while(t<0){t+=24*60;off--;}
+    while(t>=24*60){t-=24*60;off++;}
+    const uh=Math.floor(t/60),um=t%60;
+    const dd=new Date(d.getFullYear(),d.getMonth(),d.getDate());
+    dd.setDate(dd.getDate()+off);
+    return {day:dd.getDate(),month:dd.getMonth()+1,hours:uh,minutes:um,
+        sortKey:dd.getFullYear()*100000000+(dd.getMonth()+1)*1000000+dd.getDate()*10000+uh*100+um};
+}
 function formatLabel(u){if(!u)return'';return pad2(u.day)+MONTHS[u.month-1]+' '+pad2(u.hours)+pad2(u.minutes)+'Z';}
-function processRows(rows){let h=-1;for(let i=0;i<Math.min(rows.length,10);i++){const v=rows[i].map(x=>String(x).trim());if(v.includes('飞机注册号')&&v.includes('出发地')&&v.includes('到达地')&&v.includes('计划出发')){h=i;break;}}if(h===-1)return{error:'未找到表头行'};const hs=rows[h].map(x=>String(x).trim());function fc(c){for(const n of c){const i=hs.indexOf(n);if(i!==-1)return i;}for(const n of c){for(let i=0;i<hs.length;i++){if(hs[i].includes(n))return i;}}return -1;}const colReg=fc(['飞机注册号','注册号','机号']),colDep=fc(['出发地']),colArr=fc(['到达地']),colDepDate=fc(['出发日期']),colDepTime=fc(['计划出发']),colArrDate=fc(['到达日期']),colArrTime=fc(['预计到达']),colPurpose=fc(['用途']);const req={'飞机注册号':colReg,'出发地':colDep,'到达地':colArr,'出发日期':colDepDate,'计划出发':colDepTime,'到达日期':colArrDate,'预计到达':colArrTime,'用途':colPurpose};for(const n in req){if(req[n]===-1)return{error:'缺少列：'+n};}const plans={};for(let i=h+1;i<rows.length;i++){const r=rows[i];if(!r||r.length===0)continue;const g=i=>i>=0&&i<r.length?r[i]:'';const dep=g(colDep),arr=g(colArr),depDate=g(colDepDate),depTimeRaw=g(colDepTime),arrDate=g(colArrDate),arrTimeRaw=g(colArrTime);if(dep===''||arr===''||depDate===''||depTimeRaw==='')continue;const dts=parseTime(depTimeRaw),ats=parseTime(arrTimeRaw);if(!dts||!ats)continue;const du=toUTCLabel(depDate,dts),au=toUTCLabel(arrDate,ats);if(!du||!au)continue;let reg=g(colReg);if(reg===''||reg==null)reg='N/A';else reg=String(reg).trim();const use=String(g(colPurpose)||'');const ft=use.indexOf('调机')!==-1?'FERRY':'PAX';const line='ETD '+String(dep).trim()+' '+formatLabel(du)+' // ETA '+String(arr).trim()+' '+formatLabel(au)+'  '+ft;if(!plans[reg])plans[reg]=[];plans[reg].push({sortKey:du.sortKey,line:line});}const res={};for(const reg in plans){plans[reg].sort((a,b)=>a.sortKey-b.sortKey);const ls=[reg];plans[reg].forEach(it=>ls.push(it.line));res[reg]=ls.join('\n');}return{plans:res};}
-function sortPlans(p){const ks=Object.keys(p);const pk=PRIORITY.filter(k=>ks.indexOf(k)!==-1);const rk=ks.filter(k=>PRIORITY.indexOf(k)===-1&&k!=='N/A').sort();const nk=ks.filter(k=>k==='N/A');const so=pk.concat(rk,nk);const r={};so.forEach(k=>r[k]=p[k]);return r;}
-function diffPlans(o,n){const c={};const all=new Set(Object.keys(o||{}).concat(Object.keys(n||{})));all.forEach(reg=>{const ol=new Set(((o&&o[reg])||'').split('\n'));const nl=new Set(((n&&n[reg])||'').split('\n'));ol.delete(reg);nl.delete(reg);nl.forEach(l=>{if(!ol.has(l)){c[reg+'\u0001'+l]='added';}});});return c;}
-function renderPlans(plans,changes,restored){const con=document.getElementById('plans');con.innerHTML='';let ft='';for(const reg in plans){const text=plans[reg];const lines=text.split('\n');const routes=lines.filter(l=>l!==reg);const hc=!restored&&routes.some(l=>changes[reg+'\u0001'+l]);const b=document.createElement('div');b.className='reg-block';const t=document.createElement('div');t.className='reg-title';t.innerHTML='✈️ '+escapeHtml(reg)+(hc?'<span class="new-flag">🔴 有新增或变更</span>':'');b.appendChild(t);const sl=document.createElement('div');sl.className='seg-list';routes.forEach(l=>{const d=document.createElement('div');d.className='seg-line';d.textContent=l;sl.appendChild(d);});b.appendChild(sl);const cb=document.createElement('button');cb.textContent='📋 复制该飞机';cb.onclick=()=>{const ct=reg+'\n'+routes.join('\n');navigator.clipboard.writeText(ct).then(()=>{cb.textContent='✅ 已复制';setTimeout(()=>{cb.textContent='📋 复制该飞机';},1500);}).catch(()=>{fb(ct);cb.textContent='✅ 已复制';setTimeout(()=>{cb.textContent='📋 复制该飞机';},1500);});};b.appendChild(cb);con.appendChild(b);ft+=reg+'\n'+routes.join('\n')+'\n\n';}document.getElementById('fullTextBox').textContent=ft.trim();}
-function renderHistory(h){const c=document.getElementById('historyList');if(!h.records||h.records.length===0){c.innerHTML='<div class="info">暂无历史记录</div>';return;}let html='<ol>';for(const r of h.records){html+='<li>'+escapeHtml(r.timestamp)+' - '+escapeHtml(r.filename)+'</li>';}html+='</ol>';c.innerHTML=html;}
-function fb(t){const ta=document.createElement('textarea');ta.value=t;ta.style.position='fixed';ta.style.left='-9999px';document.body.appendChild(ta);ta.select();try{document.execCommand('copy');}catch(e){}document.body.removeChild(ta);}
-function handleFile(file){const s=document.getElementById('status');s.innerHTML='<div class="info">⏳ 正在读取文件...</div>';const rd=new FileReader();rd.onload=(ev)=>{try{const data=new Uint8Array(ev.target.result);const wb=XLSX.read(data,{type:'array',cellDates:true});const ws=wb.Sheets[wb.SheetNames[0]];const rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:'',raw:true});const r=processRows(rows);if(r.error){s.innerHTML='<div class="error">❌ '+escapeHtml(r.error)+'</div>';return;}const np=r.plans;const sp=sortPlans(np);const h=loadHistory();let op={};if(h.records.length>0){op=h.records[h.records.length-1].data||{};}const ch=diffPlans(op,np);const now=new Date();const ts=now.getFullYear()+'-'+pad2(now.getMonth()+1)+'-'+pad2(now.getDate())+' '+pad2(now.getHours())+':'+pad2(now.getMinutes())+':'+pad2(now.getSeconds());h.records.push({timestamp:ts,filename:file.name,data:np});if(h.records.length>20){h.records=h.records.slice(-20);}saveHistory(h);saveJSON(LAST_PLANS_KEY,sp);saveJSON(LAST_FILE_KEY,{name:file.name,timestamp:ts});document.getElementById('result').style.display='block';s.innerHTML='<div class="success">✅ 文件读取成功：'+escapeHtml(file.name)+'（'+ts+'，历史累计 '+h.records.length+' 条）</div>';renderPlans(sp,ch,false);renderHistory(h);}catch(err){s.innerHTML='<div class="error">❌ 处理失败：'+escapeHtml(err.message)+'</div>';console.error(err);}};rd.readAsArrayBuffer(file);}
-window.addEventListener('DOMContentLoaded',()=>{const lp=loadJSON(LAST_PLANS_KEY);const lf=loadJSON(LAST_FILE_KEY);const h=loadHistory();if(lp&&Object.keys(lp).length>0){document.getElementById('result').style.display='block';const s=document.getElementById('status');const i=lf?'（上次加载：'+escapeHtml(lf.name)+'，'+escapeHtml(lf.timestamp)+'）':'';s.innerHTML='<div class="info">💾 已恢复上次解析结果 '+i+'</div>';renderPlans(lp,{},true);renderHistory(h);}});
-document.getElementById('fileInput').addEventListener('change',(e)=>{const f=e.target.files[0];if(f)handleFile(f);});
-document.getElementById('clearHistoryBtn').addEventListener('click',()=>{if(!confirm('确定清除所有历史记录吗？'))return;saveHistory({records:[]});try{localStorage.removeItem(LAST_PLANS_KEY);localStorage.removeItem(LAST_FILE_KEY);}catch(e){}location.reload();});
+
+function buildWorldPlans(){
+    const plans={};
+    for(const r of flightRows){
+        if(!r.dep||!r.arr||!r.depDate||!r.depTime)continue;
+        const du=toUTCLabel(r.depDate,r.depTime);
+        const au=toUTCLabel(r.arrDate,r.arrTime);
+        if(!du||!au)continue;
+        const reg=r.reg||'N/A';
+        const ft=(r.purpose||'').indexOf('调机')!==-1?'FERRY':'PAX';
+        const line='ETD '+r.dep+' '+formatLabel(du)+' // ETA '+r.arr+' '+formatLabel(au)+'  '+ft;
+        if(!plans[reg])plans[reg]=[];
+        plans[reg].push({sortKey:du.sortKey,line:line});
+    }
+    const res={};
+    for(const reg in plans){
+        plans[reg].sort((a,b)=>a.sortKey-b.sortKey);
+        const ls=[reg];
+        plans[reg].forEach(it=>ls.push(it.line));
+        res[reg]=ls.join('\n');
+    }
+    return res;
+}
+function sortWorldPlans(p){
+    const ks=Object.keys(p);
+    const pk=WORLD_PRIORITY.filter(k=>ks.indexOf(k)!==-1);
+    const rk=ks.filter(k=>WORLD_PRIORITY.indexOf(k)===-1&&k!=='N/A').sort();
+    const nk=ks.filter(k=>k==='N/A');
+    const so=pk.concat(rk,nk);
+    const r={};so.forEach(k=>r[k]=p[k]);return r;
+}
+function diffPlans(o,n){
+    const c={};
+    const all=new Set(Object.keys(o||{}).concat(Object.keys(n||{})));
+    all.forEach(reg=>{
+        const ol=new Set(((o&&o[reg])||'').split('\n'));
+        const nl=new Set(((n&&n[reg])||'').split('\n'));
+        ol.delete(reg);nl.delete(reg);
+        nl.forEach(l=>{if(!ol.has(l)){c[reg+'\u0001'+l]='added';}});
+    });
+    return c;
+}
+function renderWorldPlans(plans,changes,restored){
+    const con=document.getElementById('plans');
+    con.innerHTML='';
+    let ft='';
+    for(const reg in plans){
+        const text=plans[reg];const lines=text.split('\n');
+        const routes=lines.filter(l=>l!==reg);
+        const hc=!restored&&routes.some(l=>changes[reg+'\u0001'+l]);
+        const b=document.createElement('div');b.className='reg-block';
+        const t=document.createElement('div');t.className='reg-title';
+        t.innerHTML='✈️ '+escapeHtml(reg)+(hc?'<span class="new-flag">🔴 有新增或变更</span>':'');
+        b.appendChild(t);
+        const sl=document.createElement('div');sl.className='seg-list';
+        routes.forEach(l=>{const d=document.createElement('div');d.className='seg-line';d.textContent=l;sl.appendChild(d);});
+        b.appendChild(sl);
+        const cb=document.createElement('button');
+        cb.textContent='📋 复制该飞机';
+        cb.onclick=()=>{
+            const ct=reg+'\n'+routes.join('\n');
+            navigator.clipboard.writeText(ct).then(()=>{
+                cb.textContent='✅ 已复制';
+                setTimeout(()=>{cb.textContent='📋 复制该飞机';},1500);
+            }).catch(()=>{fallbackCopy(ct);cb.textContent='✅ 已复制';setTimeout(()=>{cb.textContent='📋 复制该飞机';},1500);});
+        };
+        b.appendChild(cb);
+        con.appendChild(b);
+        ft+=reg+'\n'+routes.join('\n')+'\n\n';
+    }
+    document.getElementById('fullTextBox').textContent=ft.trim();
+}
+function renderHistory(h){
+    const c=document.getElementById('historyList');
+    if(!h.records||h.records.length===0){c.innerHTML='<div class="info">暂无历史记录</div>';return;}
+    let html='<ol>';
+    for(const r of h.records){html+='<li>'+escapeHtml(r.timestamp)+' - '+escapeHtml(r.filename)+'</li>';}
+    html+='</ol>';
+    c.innerHTML=html;
+}
+function fallbackCopy(t){
+    const ta=document.createElement('textarea');
+    ta.value=t;ta.style.position='fixed';ta.style.left='-9999px';
+    document.body.appendChild(ta);ta.select();
+    try{document.execCommand('copy');}catch(e){}
+    document.body.removeChild(ta);
+}
+function renderWorldStatus(msg,type){
+    document.getElementById('status').innerHTML = '<div class="'+type+'">'+msg+'</div>';
+}
+
+/* =========================================================
+   邮件相关（从 mail.html 迁移）
+   ========================================================= */
+function fmtDate(v){
+    if(v==null||v==='')return '';
+    if(v instanceof Date)return v.getFullYear()+'-'+String(v.getMonth()+1).padStart(2,'0')+'-'+String(v.getDate()).padStart(2,'0');
+    if(typeof v==='number'){const d=new Date(Math.round((v-25569)*86400*1000));return d.getUTCFullYear()+'-'+String(d.getUTCMonth()+1).padStart(2,'0')+'-'+String(d.getUTCDate()).padStart(2,'0');}
+    const s=String(v).trim();
+    const m=s.match(/^(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})/);
+    if(m)return m[1]+'-'+m[2].padStart(2,'0')+'-'+m[3].padStart(2,'0');
+    return s;
+}
+function fmtTime(v){
+    if(v==null||v==='')return '';
+    if(v instanceof Date)return String(v.getHours()).padStart(2,'0')+':'+String(v.getMinutes()).padStart(2,'0');
+    if(typeof v==='number'){const t=Math.round(v*24*60);return String(Math.floor(t/60)%24).padStart(2,'0')+':'+String(t%60).padStart(2,'0');}
+    const s=String(v).trim();const m=s.match(/(\d{1,2}):(\d{2})/);
+    if(m)return m[1].padStart(2,'0')+':'+m[2];return s;
+}
+function toUtc(dateStr,timeStr,tzOffset){
+    if(!dateStr||!timeStr)return null;
+    const dm=dateStr.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    const tm=timeStr.match(/^(\d{1,2}):(\d{2})/);
+    if(!dm||!tm)return null;
+    const y=+dm[1],mo=+dm[2],d=+dm[3],hh=+tm[1],mm=+tm[2];
+    const dt=new Date(y,mo-1,d,hh,mm);dt.setHours(dt.getHours()-tzOffset);
+    return {date:dt,
+        dateText:String(dt.getDate()).padStart(2,'0')+MONTHS[dt.getMonth()],
+        dateTextSp:String(dt.getDate()).padStart(2,'0')+' '+MONTHS[dt.getMonth()],
+        timeText:String(dt.getHours()).padStart(2,'0')+String(dt.getMinutes()).padStart(2,'0')+'Z'};
+}
+function formatRegDash(reg){
+    if(!reg)return '';
+    if(reg.indexOf('-')!==-1)return reg;
+    if(/^VP/.test(reg))return 'VP-'+reg.slice(2);
+    if(/^T7/.test(reg))return 'T7-'+reg.slice(2);
+    if(/^[BNM]/.test(reg))return reg[0]+'-'+reg.slice(1);
+    return reg;
+}
+function parseMap(text){
+    const map={};text.split('\n').forEach(line=>{
+        const s=line.trim();if(!s||s.startsWith('#'))return;
+        const idx=s.indexOf('=');if(idx===-1)return;
+        const k=s.slice(0,idx).trim();const v=s.slice(idx+1).trim();if(k)map[k]=v;
+    });return map;
+}
+function parseCrewMap(text){
+    const map={};text.split('\n').forEach(line=>{
+        const s=line.trim();if(!s||s.startsWith('#'))return;
+        const idx=s.indexOf('=');if(idx===-1)return;
+        const k=s.slice(0,idx).trim();const v=s.slice(idx+1).trim();
+        const parts=v.split('|');
+        map[k]={pic:(parts[0]||'').trim(),sic:(parts[1]||'').trim()};
+    });return map;
+}
+function getConfig(){
+    return {
+        tzOffset:parseFloat(val('cfgTzOffset'))||10,
+        font:val('cfgFont')||'Calibri',
+        fontSize:val('cfgFontSize')||'11pt',
+        defaultRoute:val('cfgDefaultRoute'),
+        defaultOvf:val('cfgDefaultOvf'),
+        defaultPurpose:val('cfgDefaultPurpose')||'Private Flight',
+        szAddress:val('cfgSzAddress'),
+        hkAddress:val('cfgHkAddress'),
+        hkbacEmail:val('cfgHkbacEmail')||'hkbac@hkbac.com',
+        aircraftMap:parseMap(val('cfgAircraft')),
+        crewMap:parseCrewMap(val('cfgCrew')),
+        operatorMap:parseMap(val('cfgOperatorMap')),
+        billingMap:parseMap(val('cfgBillingMap'))
+    };
+}
+function addressFromBilling(billing,cfg){if(/Hong Kong/i.test(billing))return cfg.hkAddress;return cfg.szAddress;}
+function getDefaults(reg){
+    const cfg=getConfig();
+    const billing=cfg.billingMap[reg]||'';
+    return {
+        acType:cfg.aircraftMap[reg]||'',
+        route:cfg.defaultRoute||'',
+        ovf:cfg.defaultOvf||'',
+        pic:(cfg.crewMap[reg]&&cfg.crewMap[reg].pic)||'',
+        sic:(cfg.crewMap[reg]&&cfg.crewMap[reg].sic)||'',
+        operator:cfg.operatorMap[reg]||'',
+        billing:billing,
+        address:addressFromBilling(billing,cfg)
+    };
+}
+function renderBody(text){
+    const lines=text.split(/\r\n|\r|\n/);
+    const out=lines.map(line=>{
+        if(!line.trim())return '';
+        let processed=escapeHtml(line);
+        processed=processed.replace(/\*\*(.+?)\*\*/g,'<b>$1</b>');
+        processed=processed.replace(/==(.+?)==/g,'<span style="background-color:#FFFF00">$1</span>');
+        const trimmed=line.trim();
+        if(/^\d+[\.\)]\s/.test(trimmed)){processed='&nbsp;&nbsp;&nbsp;&nbsp;'+processed;}
+        else if(/^[•·]\s/.test(trimmed)){processed='&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;'+processed;}
+        return processed;
+    });
+    return out.join('<br>\n');
+}
+function stripMarkdown(text){return text.replace(/\*\*(.+?)\*\*/g,'$1').replace(/==(.+?)==/g,'$1');}
+
+function isWithinNextWeek(depDate){
+    if(!depDate)return false;
+    const dm=depDate.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if(!dm)return false;
+    const target=new Date(+dm[1],+dm[2]-1,+dm[3]);
+    const today=new Date();today.setHours(0,0,0,0);
+    const limit=new Date(today);limit.setDate(limit.getDate()+7);
+    return target>=today && target<limit;
+}
+function updateFilterBtn(){
+    const btn=document.getElementById('filterWeekBtn');
+    if(!btn)return;
+    if(showOnlyWeek){btn.classList.add('active');btn.textContent='📅 只看未来一周（已开启，点击显示全部）';}
+    else{btn.classList.remove('active');btn.textContent='📅 只看未来一周（已关闭，点击只显示一周）';}
+}
+function toggleFilterWeek(){showOnlyWeek=!showOnlyWeek;updateFilterBtn();renderMailList();}
+
+function renderMailList(){
+    const container=document.getElementById('flightList');
+    if(flightRows.length===0){container.innerHTML='<div class="info">请先在上方世界时行程中上传航段数据</div>';document.getElementById('filterStatus').textContent='';return;}
+    let visibleRows=flightRows.map((row,idx)=>({row,idx}));
+    if(showOnlyWeek){visibleRows=visibleRows.filter(item=>isWithinNextWeek(item.row.depDate));}
+    const fs=document.getElementById('filterStatus');
+    if(showOnlyWeek){fs.textContent='（当前显示 '+visibleRows.length+' 条未来一周内的计划 / 共 '+flightRows.length+' 条）';}
+    else{fs.textContent='（当前显示全部 '+flightRows.length+' 条）';}
+    if(visibleRows.length===0){container.innerHTML='<div class="info">未来一周内没有计划</div>';return;}
+    const groups={};
+    visibleRows.forEach(item=>{
+        const reg=item.row.reg;
+        if(!groups[reg])groups[reg]=[];
+        groups[reg].push(item);
+    });
+    const allRegs=Object.keys(groups);
+    const priorityRegs=REG_ORDER.filter(r=>allRegs.indexOf(r)!==-1);
+    const otherRegs=allRegs.filter(r=>REG_ORDER.indexOf(r)===-1).sort();
+    const sortedRegs=priorityRegs.concat(otherRegs);
+    let html='';
+    for(const reg of sortedRegs){
+        const items=groups[reg];
+        html+='<div class="reg-group">';
+        html+='<div class="reg-group-title">✈️ '+escapeHtml(reg)+' <span class="reg-count">（'+items.length+' 条）</span></div>';
+        html+='<table><thead><tr><th class="col-route">航线</th><th class="col-time">出发时间</th><th class="col-purpose">用途</th><th class="col-action">操作</th></tr></thead><tbody>';
+        items.forEach(({row,idx})=>{
+            const depCity=row.depCity||row.dep;
+            const arrCity=row.arrCity||row.arr;
+            const route=depCity+' → '+arrCity;
+            const time=(row.depDate||'')+' '+(row.depTime||'');
+            const hasVhhh=(row.dep==='VHHH'||row.arr==='VHHH');
+            let btnHtml='<button class="primary small mail-btn" data-idx="'+idx+'">飞越邮件</button>';
+            if(hasVhhh){btnHtml+=' <button class="hkbac small hkbac-btn" data-idx="'+idx+'">🏢 HKBAC</button>';}
+            html+='<tr id="row-'+idx+'"><td class="col-route" title="'+escapeHtml(route)+'">'+escapeHtml(route)+'</td><td class="col-time">'+escapeHtml(time)+'</td><td class="col-purpose" title="'+escapeHtml(row.purpose)+'">'+escapeHtml(row.purpose)+'</td><td class="col-action">'+btnHtml+'</td></tr>';
+            html+='<tr id="panel-'+idx+'" style="display:none;"><td colspan="4" style="padding:0;"><div class="mail-panel" id="panel-body-'+idx+'"></div></td></tr>';
+            html+='<tr id="hkbac-panel-'+idx+'" style="display:none;"><td colspan="4" style="padding:0;"><div class="mail-panel hkbac-panel" id="hkbac-panel-body-'+idx+'"></div></td></tr>';
+        });
+        html+='</tbody></table>';
+        html+='</div>';
+    }
+    container.innerHTML=html;
+    container.querySelectorAll('button.mail-btn').forEach(btn=>{
+        btn.addEventListener('click',function(){const idx=parseInt(this.dataset.idx,10);toggleMail(idx);});
+    });
+    container.querySelectorAll('button.hkbac-btn').forEach(btn=>{
+        btn.addEventListener('click',function(){const idx=parseInt(this.dataset.idx,10);toggleHkbac(idx);});
+    });
+}
+
+function toggleMail(i){
+    const panel=document.getElementById('panel-'+i);
+    if(!panel)return;
+    const hkPanel=document.getElementById('hkbac-panel-'+i);
+    if(hkPanel)hkPanel.style.display='none';
+    if(panel.style.display==='table-row'){panel.style.display='none';return;}
+    renderMailPanel(i);
+    panel.style.display='table-row';
+    setTimeout(()=>panel.scrollIntoView({behavior:'smooth',block:'nearest'}),50);
+}
+function renderMailPanel(i){
+    const panelBody=document.getElementById('panel-body-'+i);
+    const r=buildMail(i);
+    panelBody.innerHTML=
+        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">'+
+            '<div class="panel-title" style="margin-bottom:0;">✉️ 飞越邮件</div>'+
+            '<button class="small close-panel-btn" data-panel-id="panel-'+i+'" style="margin:0;">✖ 收起</button>'+
+        '</div>'+
+        '<div class="subject-row" id="subj-'+i+'"></div>'+
+        '<div class="mail-preview-html" id="preview-'+i+'"></div>'+
+        '<div style="margin-top:10px;">'+
+            '<button class="eml small" id="downloadEmlBtn-'+i+'">📥 下载 EML（双击自动打开带格式邮件）⭐</button>'+
+            '<button class="primary small" id="copyRichBtn-'+i+'">复制邮件全文（保留加粗/黄底）</button>'+
+            '<button class="small" id="copySubjBtn-'+i+'">复制主题</button>'+
+        '</div>';
+    document.getElementById('subj-'+i).textContent='主题：'+r.subject;
+    document.getElementById('preview-'+i).innerHTML=r.htmlBody;
+    panelBody.querySelector('.close-panel-btn').addEventListener('click',function(){
+        document.getElementById(this.dataset.panelId).style.display='none';
+    });
+    document.getElementById('downloadEmlBtn-'+i).addEventListener('click',e=>{
+        downloadEml(r.subject,r.htmlBody,'',`OVF_${formatRegDash(flightRows[i].reg)}_${flightRows[i].dep}-${flightRows[i].arr}.eml`);
+        flashOk(e.target,'已下载');
+    });
+    document.getElementById('copyRichBtn-'+i).addEventListener('click',e=>copyRichMail(i,e.target,'ovf'));
+    document.getElementById('copySubjBtn-'+i).addEventListener('click',e=>{
+        copyPlainText(document.getElementById('subj-'+i).textContent.replace(/^主题：/,''),e.target);
+    });
+}
+function buildMail(i){
+    const row=flightRows[i];
+    const cfg=getConfig();
+    const d=getDefaults(row.reg);
+    let route=d.route.replace(/\$dep\b/g,row.dep||'').replace(/\$arr\b/g,row.arr||'');
+    const depUtc=toUtc(row.depDate,row.depTime,cfg.tzOffset);
+    const arrUtc=toUtc(row.arrDate,row.arrTime,cfg.tzOffset);
+    const etdLine=depUtc?'ETD '+row.dep+' '+depUtc.dateText+' '+depUtc.timeText:'';
+    const etaLine=arrUtc?'ETA '+row.arr+' '+arrUtc.dateText+' '+arrUtc.timeText:'';
+    const dateText=depUtc?(String(depUtc.date.getDate()).padStart(2,'0')+MONTHS[depUtc.date.getMonth()]):'';
+    const dateTextSp=depUtc?(String(depUtc.date.getDate()).padStart(2,'0')+' '+MONTHS[depUtc.date.getMonth()]):'';
+    const purposeEn=cfg.defaultPurpose;
+    const vars={reg:row.reg||'',regDash:formatRegDash(row.reg),
+        dep:row.dep||'',arr:row.arr||'',depCity:row.depCity||'',arrCity:row.arrCity||'',
+        dateText,dateTextSp,acType:d.acType,purpose:purposeEn,
+        operator:d.operator,billing:d.billing,address:d.address,
+        etdLine,etaLine,route,ovf:d.ovf,pic:d.pic,sic:d.sic,flight:row.flight||'',crew:row.crew||''};
+    const subject=applyVars(val('subjectText'),vars);
+    const mdBody=applyVars(val('templateText'),vars);
+    const plainBody=stripMarkdown(mdBody);
+    const htmlInner=renderBody(mdBody);
+    const htmlBody='<div style="font-family:\''+cfg.font+'\',Arial,sans-serif;font-size:'+cfg.fontSize+';line-height:1.5;color:#000;">'+htmlInner+'</div>';
+    return {subject,plainBody,htmlBody};
+}
+function findHkbacPair(idx){
+    const row=flightRows[idx];
+    let arrIdx=-1,depIdx=-1;
+    if(row.arr==='VHHH'&&row.dep!=='VHHH'){
+        arrIdx=idx;
+        const arrTimeStr=(row.arrDate||'')+' '+(row.arrTime||'');
+        let bestDep=-1,bestTime=null;
+        for(let j=0;j<flightRows.length;j++){
+            if(j===idx)continue;
+            const o=flightRows[j];
+            if(o.reg!==row.reg)continue;
+            if(o.dep!=='VHHH')continue;
+            const t=(o.depDate||'')+' '+(o.depTime||'');
+            if(t<=arrTimeStr)continue;
+            if(bestDep===-1||t<bestTime){bestDep=j;bestTime=t;}
+        }
+        depIdx=bestDep;
+    }else if(row.dep==='VHHH'&&row.arr!=='VHHH'){
+        depIdx=idx;
+        const depTimeStr=(row.depDate||'')+' '+(row.depTime||'');
+        let bestArr=-1,bestTime=null;
+        for(let j=0;j<flightRows.length;j++){
+            if(j===idx)continue;
+            const o=flightRows[j];
+            if(o.reg!==row.reg)continue;
+            if(o.arr!=='VHHH')continue;
+            const t=(o.arrDate||'')+' '+(o.arrTime||'');
+            if(t>=depTimeStr)continue;
+            if(bestArr===-1||t>bestTime){bestArr=j;bestTime=t;}
+        }
+        arrIdx=bestArr;
+    }else if(row.dep==='VHHH'&&row.arr==='VHHH'){
+        arrIdx=idx;depIdx=idx;
+    }
+    return {arrIdx,depIdx};
+}
+function buildScheduleLine(row){
+    const depUtc=toUtc(row.depDate,row.depTime,HKBAC_TZ_OFFSET);
+    const arrUtc=toUtc(row.arrDate,row.arrTime,HKBAC_TZ_OFFSET);
+    if(!depUtc||!arrUtc)return '';
+    const type=/调机/.test(row.purpose||'')?'FERRY':'PAX';
+    return 'ETD '+row.dep+' '+depUtc.dateText+' '+depUtc.timeText+' // ETA '+row.arr+' '+arrUtc.dateText+' '+arrUtc.timeText+'  '+type;
+}
+function buildHkbacDateText(arrRow,depRow){
+    const arrUtc=arrRow?toUtc(arrRow.arrDate,arrRow.arrTime,HKBAC_TZ_OFFSET):null;
+    const depUtc=depRow?toUtc(depRow.depDate,depRow.depTime,HKBAC_TZ_OFFSET):null;
+    const arrTxt=arrUtc?arrUtc.dateText:'';
+    const depTxt=depUtc?depUtc.dateText:'';
+    if(arrTxt&&depTxt&&arrTxt!==depTxt){
+        const arrD=arrTxt.slice(0,2),arrM=arrTxt.slice(2);
+        const depD=depTxt.slice(0,2),depM=depTxt.slice(2);
+        if(arrM===depM){return arrD+'-'+depD+arrM;}
+        return arrTxt+'-'+depTxt;
+    }
+    return arrTxt||depTxt;
+}
+function buildHkbacMail(idx){
+    const pair=findHkbacPair(idx);
+    const arrRow=pair.arrIdx>=0?flightRows[pair.arrIdx]:null;
+    const depRow=pair.depIdx>=0?flightRows[pair.depIdx]:null;
+    const mainRow=arrRow||depRow;
+    const d=getDefaults(mainRow.reg);
+    const cfg=getConfig();
+    const dateText=buildHkbacDateText(arrRow,depRow);
+    const lines=[];
+    if(arrRow)lines.push(buildScheduleLine(arrRow));
+    if(depRow&&depRow!==arrRow)lines.push(buildScheduleLine(depRow));
+    const scheduleLines=lines.join('\n');
+    const acTypeICAO=(d.acType||'').split('/')[0].trim();
+    const vars={reg:mainRow.reg||'',regDash:formatRegDash(mainRow.reg),
+        acTypeICAO:acTypeICAO,dateText:dateText,
+        operator:d.operator,billing:d.billing,address:d.address,
+        scheduleLines:scheduleLines};
+    const subject=applyVars(val('subjectHkbac'),vars);
+    const mdBody=applyVars(val('templateHkbac'),vars);
+    const plainBody=stripMarkdown(mdBody);
+    const htmlInner=renderBody(mdBody);
+    const htmlBody='<div style="font-family:\''+cfg.font+'\',Arial,sans-serif;font-size:'+cfg.fontSize+';line-height:1.5;color:#000;">'+htmlInner+'</div>';
+    return {subject,plainBody,htmlBody};
+}
+function toggleHkbac(idx){
+    const panel=document.getElementById('hkbac-panel-'+idx);
+    if(!panel)return;
+    const ovfPanel=document.getElementById('panel-'+idx);
+    if(ovfPanel)ovfPanel.style.display='none';
+    if(panel.style.display==='table-row'){panel.style.display='none';return;}
+    renderHkbacPanel(idx);
+    panel.style.display='table-row';
+    setTimeout(()=>panel.scrollIntoView({behavior:'smooth',block:'nearest'}),50);
+}
+function renderHkbacPanel(idx){
+    const panelBody=document.getElementById('hkbac-panel-body-'+idx);
+    const pair=findHkbacPair(idx);
+    const arrRow=pair.arrIdx>=0?flightRows[pair.arrIdx]:null;
+    const depRow=pair.depIdx>=0?flightRows[pair.depIdx]:null;
+    const mainRow=arrRow||depRow;
+    let pairNote='';
+    if(arrRow&&depRow&&arrRow!==depRow){pairNote='（自动配对：进港 '+arrRow.dep+' → VHHH，出港 VHHH → '+depRow.arr+'）';}
+    else if(arrRow&&!depRow){pairNote='（仅找到进港段，未找到相邻出港段）';}
+    else if(!arrRow&&depRow){pairNote='（仅找到出港段，未找到相邻进港段）';}
+    const r=buildHkbacMail(idx);
+    const cfg=getConfig();
+    panelBody.innerHTML=
+        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">'+
+            '<div class="panel-title" style="margin-bottom:0;">🏢 HKBAC 代理需求邮件（'+escapeHtml(mainRow.reg)+'）'+escapeHtml(pairNote)+'</div>'+
+            '<button class="small close-panel-btn" data-panel-id="hkbac-panel-'+idx+'" style="margin:0;">✖ 收起</button>'+
+        '</div>'+
+        '<div class="subject-row" id="hkbac-subj-'+idx+'"></div>'+
+        '<div class="mail-preview-html" id="hkbac-preview-'+idx+'"></div>'+
+        '<div style="margin-top:10px;">'+
+            '<button class="eml small" id="hkbac-downloadEmlBtn-'+idx+'">📥 下载 EML（收件人已填，双击自动打开）⭐</button>'+
+            '<button class="hkbac small" id="hkbac-copyRichBtn-'+idx+'">复制邮件全文（保留加粗）</button>'+
+            '<button class="small" id="hkbac-copySubjBtn-'+idx+'">复制主题</button>'+
+        '</div>'+
+        '<div class="hint" style="margin-top:8px;">💡 <b>推荐</b>：点「下载 EML」→ 双击下载的 .eml 文件 → Outlook 自动打开，收件人（'+escapeHtml(cfg.hkbacEmail)+'）/主题/格式全都有 → 直接点发送。</div>';
+    document.getElementById('hkbac-subj-'+idx).textContent='主题：'+r.subject;
+    document.getElementById('hkbac-preview-'+idx).innerHTML=r.htmlBody;
+    panelBody.querySelector('.close-panel-btn').addEventListener('click',function(){
+        document.getElementById(this.dataset.panelId).style.display='none';
+    });
+    document.getElementById('hkbac-downloadEmlBtn-'+idx).addEventListener('click',e=>{
+        const dateText=buildHkbacDateText(arrRow,depRow);
+        downloadEml(r.subject,r.htmlBody,cfg.hkbacEmail,`HKBAC_${formatRegDash(mainRow.reg)}_${dateText}.eml`);
+        flashOk(e.target,'已下载');
+    });
+    document.getElementById('hkbac-copyRichBtn-'+idx).addEventListener('click',e=>copyRichMail(idx,e.target,'hkbac'));
+    document.getElementById('hkbac-copySubjBtn-'+idx).addEventListener('click',e=>{
+        copyPlainText(document.getElementById('hkbac-subj-'+idx).textContent.replace(/^主题：/,''),e.target);
+    });
+}
+function applyVars(tpl,vars){
+    const keys=Object.keys(vars).sort((a,b)=>b.length-a.length);
+    let out=tpl;
+    for(const k of keys){const re=new RegExp('\\$'+k+'\\b','g');out=out.replace(re,vars[k]);}
+    return out;
+}
+function b64EncodeUnicode(str){
+    const bytes=new TextEncoder().encode(str);
+    let binary='';
+    for(let i=0;i<bytes.byteLength;i++)binary+=String.fromCharCode(bytes[i]);
+    return btoa(binary);
+}
+function wrap76(b64){return b64.replace(/(.{76})/g,'$1\r\n');}
+function buildEml(subject,htmlBody,toEmail){
+    const encodedSubject='=?UTF-8?B?'+b64EncodeUnicode(subject)+'?=';
+    const htmlB64=wrap76(b64EncodeUnicode(htmlBody));
+    let eml='';
+    eml+='MIME-Version: 1.0\r\n';
+    if(toEmail)eml+='To: '+toEmail+'\r\n';
+    eml+='Subject: '+encodedSubject+'\r\n';
+    eml+='X-Unsent: 1\r\n';
+    eml+='Content-Type: text/html; charset=UTF-8\r\n';
+    eml+='Content-Transfer-Encoding: base64\r\n';
+    eml+='\r\n';
+    eml+=htmlB64;
+    return eml;
+}
+function downloadEml(subject,htmlBody,toEmail,filename){
+    const eml=buildEml(subject,htmlBody,toEmail);
+    const blob=new Blob([eml],{type:'message/rfc822'});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');
+    a.href=url;a.download=filename;
+    document.body.appendChild(a);a.click();document.body.removeChild(a);
+    setTimeout(()=>URL.revokeObjectURL(url),5000);
+}
+async function copyRichMail(i,btn,mode){
+    const r=mode==='hkbac'?buildHkbacMail(i):buildMail(i);
+    const htmlFull='<div>'+r.htmlBody+'</div>';
+    const plainFull=r.subject+'\n\n'+r.plainBody;
+    if(navigator.clipboard&&window.ClipboardItem){
+        try{
+            await navigator.clipboard.write([new ClipboardItem({
+                'text/html':new Blob([htmlFull],{type:'text/html'}),
+                'text/plain':new Blob([plainFull],{type:'text/plain'})
+            })]);
+            flashOk(btn,'已复制');return;
+        }catch(e){console.warn('富文本复制失败：',e);}
+    }
+    fallbackCopy(plainFull);flashOk(btn,'已复制');
+}
+function copyPlainText(text,btn){
+    if(navigator.clipboard&&navigator.clipboard.writeText){
+        navigator.clipboard.writeText(text).then(()=>flashOk(btn,'已复制')).catch(()=>{fallbackCopy(text);flashOk(btn,'已复制');});
+    }else{fallbackCopy(text);flashOk(btn,'已复制');}
+}
+function flashOk(btn,msg){
+    if(!btn)return;
+    const old=btn.textContent;
+    btn.textContent=msg||'已复制';
+    btn.classList.add('copy-ok');
+    setTimeout(()=>{btn.textContent=old;btn.classList.remove('copy-ok');},1800);
+}
+
+/* =========================================================
+   文件解析（一次上传，两者共用）
+   ========================================================= */
+function buildFlightRows(rows){
+    let headerIdx=-1;
+    for(let i=0;i<Math.min(rows.length,10);i++){
+        const vals=rows[i].map(v=>String(v).trim());
+        if(vals.includes('飞机注册号')&&vals.includes('出发地')&&vals.includes('到达地')){headerIdx=i;break;}
+    }
+    if(headerIdx===-1)return {error:'未找到表头行（需含：飞机注册号、出发地、到达地）'};
+    const headers=rows[headerIdx].map(h=>String(h).trim());
+    const findCol=(...names)=>{
+        for(const n of names){const idx=headers.indexOf(n);if(idx!==-1)return idx;}
+        return -1;
+    };
+    const cReg=findCol('飞机注册号'),cFlight=findCol('航班号'),cDep=findCol('出发地'),cArr=findCol('到达地'),
+          cDepCity=findCol('出发城市'),cArrCity=findCol('到达城市'),cDepDate=findCol('出发日期'),
+          cDepTime=findCol('计划出发'),cArrDate=findCol('到达日期'),cArrTime=findCol('预计到达'),
+          cPurpose=findCol('用途'),cCrew=findCol('机组');
+    const out=[];
+    for(let i=headerIdx+1;i<rows.length;i++){
+        const r=rows[i];if(!r||r.length===0)continue;
+        const get=idx=>(idx>=0&&idx<r.length)?r[idx]:'';
+        const reg=String(get(cReg)||'').trim();if(!reg)continue;
+        out.push({
+            reg,
+            flight:String(get(cFlight)||'').trim(),
+            dep:String(get(cDep)||'').trim(),
+            arr:String(get(cArr)||'').trim(),
+            depCity:String(get(cDepCity)||'').trim(),
+            arrCity:String(get(cArrCity)||'').trim(),
+            depDate:fmtDate(get(cDepDate)),
+            depTime:fmtTime(get(cDepTime)),
+            arrDate:fmtDate(get(cArrDate)),
+            arrTime:fmtTime(get(cArrTime)),
+            purpose:String(get(cPurpose)||'').trim(),
+            crew:String(get(cCrew)||'').trim()
+        });
+    }
+    if(out.length===0)return {error:'未读取到有效航段'};
+    return {rows:out};
+}
+
+function handleFile(file){
+    renderWorldStatus('⏳ 正在读取文件...','info');
+    const rd=new FileReader();
+    rd.onload=(ev)=>{
+        try{
+            const data=new Uint8Array(ev.target.result);
+            const wb=XLSX.read(data,{type:'array',cellDates:true});
+            const ws=wb.Sheets[wb.SheetNames[0]];
+            const rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:'',raw:true});
+            const built=buildFlightRows(rows);
+            if(built.error){
+                renderWorldStatus('❌ '+escapeHtml(built.error),'error');
+                return;
+            }
+            flightRows=built.rows;
+
+            // 世界时：生成 plans + 存历史
+            const np=buildWorldPlans();
+            const sp=sortWorldPlans(np);
+            const h=loadHistory();
+            let op={};
+            if(h.records.length>0){op=h.records[h.records.length-1].data||{};}
+            const ch=diffPlans(op,np);
+            const now=new Date();
+            const ts=now.getFullYear()+'-'+pad2(now.getMonth()+1)+'-'+pad2(now.getDate())+' '+pad2(now.getHours())+':'+pad2(now.getMinutes())+':'+pad2(now.getSeconds());
+            h.records.push({timestamp:ts,filename:file.name,data:np});
+            if(h.records.length>20){h.records=h.records.slice(-20);}
+            saveHistory(h);
+            saveJSON(LAST_PLANS_KEY,sp);
+            saveJSON(LAST_FILE_KEY,{name:file.name,timestamp:ts});
+            saveJSON(FLIGHT_ROWS_KEY,{name:file.name,timestamp:ts,rows:flightRows});
+
+            document.getElementById('result').style.display='block';
+            renderWorldStatus('✅ 已加载 '+flightRows.length+' 条航段（'+ts+'）','success');
+            renderWorldPlans(sp,ch,false);
+            renderHistory(h);
+            renderMailList();
+        }catch(err){
+            renderWorldStatus('❌ 处理失败：'+escapeHtml(err.message),'error');
+            console.error(err);
+        }
+    };
+    rd.readAsArrayBuffer(file);
+}
+
+/* =========================================================
+   页面初始化
+   ========================================================= */
+window.addEventListener('DOMContentLoaded',()=>{
+    // 恢复历史
+    const h=loadHistory();
+    renderHistory(h);
+
+    // 恢复上次 flightRows
+    const cached=loadJSON(FLIGHT_ROWS_KEY);
+    if(cached&&cached.rows&&cached.rows.length>0){
+        flightRows=cached.rows;
+        const plans=sortWorldPlans(buildWorldPlans());
+        document.getElementById('result').style.display='block';
+        renderWorldStatus('💾 已恢复上次上传：'+escapeHtml(cached.name||'')+'（'+(cached.timestamp||'')+'），共 '+flightRows.length+' 条航段','info');
+        renderWorldPlans(plans,{},true);
+        renderMailList();
+    }else{
+        const lp=loadJSON(LAST_PLANS_KEY);
+        if(lp&&Object.keys(lp).length>0){
+            document.getElementById('result').style.display='block';
+            renderWorldPlans(lp,{},true);
+        }
+        renderMailList();
+    }
+
+    // 事件绑定
+    document.getElementById('fileInput').addEventListener('change',(e)=>{
+        const f=e.target.files[0];if(f)handleFile(f);
+    });
+    document.getElementById('filterWeekBtn').addEventListener('click',toggleFilterWeek);
+    updateFilterBtn();
+    document.getElementById('clearHistoryBtn').addEventListener('click',()=>{
+        if(!confirm('确定清除所有历史记录吗？（不影响已上传数据）'))return;
+        saveHistory({records:[]});
+        try{localStorage.removeItem(LAST_PLANS_KEY);localStorage.removeItem(LAST_FILE_KEY);}catch(e){}
+        renderHistory({records:[]});
+    });
+});
 </script>
 </body>
 </html>
 """
-    components.html(F_HTML, height=1000, scrolling=True)
+    components.html(F_HTML, height=1400, scrolling=True)
 
 # ================================================================
 # 功能3：航路处理工具
