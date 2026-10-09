@@ -2294,83 +2294,81 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
                 new_r = pc_make_run_like(src_elem, text)
             p_elem.append(new_r)
 
+    # ★★★ 重写：更稳健的插入函数（蓝底红字） ★★★
     def pc_fill_after_on_date(paragraph, date_raw, service, nation,
                                need_service, need_nation,
                                color_hex=PC_RED, highlight=PC_HIGHLIGHT_ADDED):
+        """在 'ON <date>' 及其后可能存在的 U/H 或 N/M 之后插入缺失的 service/nation。"""
         if not (need_service or need_nation):
             return False
+
+        parts_to_add = []
+        if need_service and service:
+            parts_to_add.append(service)
+        if need_nation and nation:
+            parts_to_add.append(nation)
+        if not parts_to_add:
+            return False
+
         runs = list(paragraph.runs)
         if not runs:
             return False
+
         full_text = "".join(r.text for r in runs)
         if not full_text:
             return False
 
+        # 1) 找到 "ON <date>" 结束位置
         m = re.search(r'ON\s+' + re.escape(date_raw), full_text, re.IGNORECASE)
         if not m:
             return False
         on_end = m.end()
 
-        if need_service:
-            insert_pos = on_end
-        else:
+        # 2) 确定插入位置
+        insert_pos = on_end
+        if not need_service:
+            # 跳过已有的 service 标签（U/H 或 N/M）
             p = on_end
-            while p < len(full_text) and full_text[p] == ' ':
+            while p < len(full_text) and full_text[p] in ' \t\xa0':
                 p += 1
-            m_svc = re.match(r'^(U/H|N/M)', full_text[p:])
-            if not m_svc:
-                return False
-            insert_pos = p + m_svc.end()
+            m_svc = re.match(r'(U/H|N/M)', full_text[p:], re.IGNORECASE)
+            if m_svc:
+                insert_pos = p + m_svc.end()
+            else:
+                # 没有 service 标签，就插在 ON 日期之后
+                insert_pos = on_end
 
+        # 3) 跳过插入位置之后的空白
         skip_end = insert_pos
-        while skip_end < len(full_text) and full_text[skip_end] == ' ':
+        while skip_end < len(full_text) and full_text[skip_end] in ' \t\xa0':
             skip_end += 1
 
-        parts = []
-        if need_service and service:
-            parts.append(service)
-        if need_nation and nation:
-            parts.append(nation)
-        if not parts:
-            return False
-
-        insert_str = " " + " ".join(parts)
+        # 4) 构造插入字符串
+        insert_str = " " + " ".join(parts_to_add)
         if skip_end < len(full_text):
             insert_str += " "
 
-        pos = 0
-        target_run = None
-        local_insert = None
-        for run in runs:
-            r_text = run.text
-            r_len = len(r_text)
-            r_start = pos
-            r_end = pos + r_len
-            if r_start <= insert_pos <= r_end:
-                target_run = run
-                local_insert = insert_pos - r_start
-                break
-            pos += r_len
+        # 5) 找到包含插入位置的 run
+        def _find_run_at(position):
+            cur = 0
+            for r in runs:
+                r_text = r.text
+                r_len = len(r_text)
+                r_start = cur
+                r_end = cur + r_len
+                if r_start <= position <= r_end:
+                    return r, position - r_start
+                cur += r_len
+            return None, None
 
+        target_run, local_insert = _find_run_at(insert_pos)
         if target_run is None:
             return False
 
-        pos = 0
-        skip_run = None
-        local_skip = None
-        for run in runs:
-            r_text = run.text
-            r_len = len(r_text)
-            r_start = pos
-            r_end = pos + r_len
-            if r_start <= skip_end <= r_end:
-                skip_run = run
-                local_skip = skip_end - r_start
-                break
-            pos += r_len
-
+        skip_run, local_skip = _find_run_at(skip_end)
         if skip_run is None:
-            return False
+            skip_run = target_run
+            local_skip = local_insert
 
         if target_run is skip_run:
             r_text = target_run.text
@@ -2379,18 +2377,19 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
             target_run.text = before
 
             parent = target_run._element.getparent()
-            idx_in_parent = list(parent).index(target_run._element)
+            idx = list(parent).index(target_run._element)
 
             new_r = pc_make_run_like(target_run._element, insert_str,
                                       color_hex=color_hex, highlight=highlight)
-            parent.insert(idx_in_parent + 1, new_r)
+            parent.insert(idx + 1, new_r)
 
             if after:
                 after_r = pc_make_run_like(target_run._element, after)
                 pc_clear_run_strike(after_r)
-                parent.insert(idx_in_parent + 2, after_r)
+                parent.insert(idx + 2, after_r)
             return True
 
+        # 不同 run 的情况
         target_run.text = target_run.text[:local_insert]
         skip_run.text = skip_run.text[local_skip:]
 
@@ -2726,10 +2725,10 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
                         nation_for_expected = nat
 
             if excel_row is not None:
-                # 预期行：即使国籍未知，也用"机组未定"占位，让用户注意
                 _exp_nation = nation_for_expected if nation_for_expected else "机组未定"
                 expected_line = pc_build_expected_line(excel_row, _exp_nation)
 
+            # ★ 收集要插入的国籍 / service
             if excel_row is not None and approval["is_domestic"]:
                 has_service = bool(approval["service"])
                 remark = approval["remark"] or ""
@@ -2742,7 +2741,6 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
                     _ferry = pc_is_ferry_use(excel_row["use"])
                     _svc = "N/M" if _ferry else "U/H"
 
-                    # ★ 国籍：判定不出时用"机组未定"提示，让用户去检查
                     _nation = ""
                     if need_nation:
                         if nation_for_expected:
@@ -2758,6 +2756,7 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
                             "nation": _nation,
                             "need_service": need_service,
                             "need_nation": need_nation and bool(_nation),
+                            "orig_key": raw_text,
                         })
 
             if excel_row is None:
@@ -2931,14 +2930,36 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
             if info_note:
                 nationality_pending_paragraphs.add(raw_text)
 
+        # ★ 执行插入，并把 map 的 key 从旧文本改成新文本
         for rec in service_to_insert:
-            pc_fill_after_on_date(
-                rec["para"], rec["date_raw"],
+            para = rec["para"]
+            old_text = rec["orig_key"]
+            ok = pc_fill_after_on_date(
+                para, rec["date_raw"],
                 rec["service"], rec["nation"],
                 rec["need_service"], rec["need_nation"],
                 color_hex=PC_RED, highlight=PC_HIGHLIGHT_ADDED,
             )
+            if ok:
+                new_text = para.text.strip()
+                if new_text and new_text != old_text:
+                    if old_text in approval_red_map:
+                        approval_red_map[new_text] = approval_red_map.pop(old_text)
+                    if old_text in approval_green_map:
+                        approval_green_map[new_text] = approval_green_map.pop(old_text)
+                    if old_text in approval_highlight_map:
+                        approval_highlight_map[new_text] = approval_highlight_map.pop(old_text)
+                    if old_text in cancel_paragraphs:
+                        cancel_paragraphs.discard(old_text)
+                        cancel_paragraphs.add(new_text)
+                    if old_text in change_paragraphs:
+                        change_paragraphs.discard(old_text)
+                        change_paragraphs.add(new_text)
+                    if old_text in nationality_pending_paragraphs:
+                        nationality_pending_paragraphs.discard(old_text)
+                        nationality_pending_paragraphs.add(new_text)
 
+        # 应用颜色（map 的 key 已同步为最新文本）
         for p in pc_iter_doc_paragraphs(doc):
             raw_text = p.text.strip()
             red = approval_red_map.get(raw_text, [])
@@ -2951,6 +2972,7 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
                     highlight_overrides=[(PC_HIGHLIGHT_ADDED, highlight)] if highlight else None,
                 )
 
+        # 待取消 / 待变更 / 机组国籍待确认 的标记
         for p in pc_iter_doc_paragraphs(doc):
             raw_text = p.text.strip()
             has_cancel = "待取消" in raw_text
@@ -2970,6 +2992,7 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
                 if not has_nation:
                     pc_append_warn_text(p, "  机组国籍待确认")
 
+        # 重复前缀处理
         for p, dup_token in dup_prefix_paras:
             runs = list(p.runs)
             full_text = "".join(r.text for r in runs)
@@ -2988,6 +3011,7 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
                 strike=True,
             )
 
+        # 待申请行国籍与文本对比
         excel_route_keys = set()
         for r in excel_rows:
             if r["dep_date"] and r["dep"] and r["arr"]:
@@ -3035,6 +3059,7 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
                                   color_hex=PC_RED,
                                   highlight=PC_HIGHLIGHT_ADDED)
 
+        # 补申请：Excel 有，docx 没有
         pending_by_reg = {}
         for row in excel_rows:
             if not row["reg"]:
