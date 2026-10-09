@@ -1254,7 +1254,7 @@ button.hkbac{background:#1565c0;color:#fff;border-color:#1565c0;font-weight:bold
 button.hkbac:hover{background:#0d47a1}
 button.eml{background:#2e7d32;color:#fff;border-color:#2e7d32;font-weight:bold}
 button.eml:hover{background:#1b5e20}
-button.small{padding:4px 10px;font-size:12.5px}
+button.small{padding:3px 8px;font-size:12px}
 button.active{background:#1976d2;color:#fff;border-color:#1976d2}
 button.active:hover{background:#1565c0}
 button.close-panel-btn{background:#fff;color:#666;border-color:#ccc;font-weight:bold}
@@ -1285,7 +1285,10 @@ th{background:#f5f5f5;font-weight:bold;white-space:nowrap}
 .reg-group table{margin-top:0;border:none;table-layout:fixed}
 .reg-group th:first-child,.reg-group td:first-child{border-left:none}
 .reg-group th:last-child,.reg-group td:last-child{border-right:none}
-.col-route{width:42%}.col-time{width:26%}.col-purpose{width:14%}.col-action{width:18%}
+.col-route{width:34%}
+.col-time{width:22%}
+.col-purpose{width:13%}
+.col-action{width:31%;white-space:normal;overflow:visible;text-overflow:clip}
 .mail-panel{padding:14px 18px;background:#fafafa;border-top:1px dashed #ddd}
 .mail-panel.hkbac-panel{background:#e8f0fe;border-top-color:#90caf9}
 .panel-title{font-weight:bold;margin-bottom:10px;color:#333;font-size:14px}
@@ -1583,7 +1586,7 @@ const LAST_PLANS_KEY='worldtime_last_plans_v2';
 const LAST_FILE_KEY='worldtime_last_file_v2';
 const FLIGHT_ROWS_KEY='mailgen_flight_rows_v1';
 
-let flightRows = [];   // 共用数据源
+let flightRows = [];
 let showOnlyWeek = true;
 
 /* =========================================================
@@ -1730,7 +1733,7 @@ function renderWorldStatus(msg,type){
 }
 
 /* =========================================================
-   邮件相关（从 mail.html 迁移）
+   邮件相关
    ========================================================= */
 function fmtDate(v){
     if(v==null||v==='')return '';
@@ -2214,7 +2217,6 @@ function handleFile(file){
             }
             flightRows=built.rows;
 
-            // 世界时：生成 plans + 存历史
             const np=buildWorldPlans();
             const sp=sortWorldPlans(np);
             const h=loadHistory();
@@ -2247,11 +2249,9 @@ function handleFile(file){
    页面初始化
    ========================================================= */
 window.addEventListener('DOMContentLoaded',()=>{
-    // 恢复历史
     const h=loadHistory();
     renderHistory(h);
 
-    // 恢复上次 flightRows
     const cached=loadJSON(FLIGHT_ROWS_KEY);
     if(cached&&cached.rows&&cached.rows.length>0){
         flightRows=cached.rows;
@@ -2269,7 +2269,6 @@ window.addEventListener('DOMContentLoaded',()=>{
         renderMailList();
     }
 
-    // 事件绑定
     document.getElementById('fileInput').addEventListener('change',(e)=>{
         const f=e.target.files[0];if(f)handleFile(f);
     });
@@ -2287,7 +2286,6 @@ window.addEventListener('DOMContentLoaded',()=>{
 </html>
 """
     components.html(F_HTML, height=1400, scrolling=True)
-
 # ================================================================
 # 功能3：航路处理工具
 # ================================================================
