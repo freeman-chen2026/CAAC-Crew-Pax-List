@@ -1578,6 +1578,7 @@ VPCSZ=Amber Aviation (Hong Kong) Limited / invoice@amber-aviation.com</textarea>
    ========================================================= */
 const MONTHS=['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
 const HKBAC_TZ_OFFSET = 8;
+const CC_EMAIL = 'operation@amber-aviation.com';   // ★ 抄送地址
 const WORLD_PRIORITY = ['B652Q','B65AP','B652S','MLLIN','N88AY','B652R'];
 const REG_ORDER = ['B652Q','B652S','B65AP','MLLIN','N88AY','B652R','B8105','B8160','B8292','B8309','N2QE','N328LM','N550DR','N577QT','N7777U','N777ZH','T7178HT','T7CJK','VPCSZ','VPCVA','B3926','B8262'];
 
@@ -1605,7 +1606,7 @@ function loadHistory(){try{const r=localStorage.getItem(HISTORY_KEY);if(!r)retur
 function saveHistory(h){try{localStorage.setItem(HISTORY_KEY,JSON.stringify(h));}catch(e){}}
 
 /* =========================================================
-   世界时行程相关（保留原逻辑）
+   世界时行程相关
    ========================================================= */
 function parseDate(v){
     if(v==null||v==='')return null;
@@ -1931,8 +1932,15 @@ function renderMailPanel(i){
     panelBody.querySelector('.close-panel-btn').addEventListener('click',function(){
         document.getElementById(this.dataset.panelId).style.display='none';
     });
+    // ★ 飞越邮件：Cc 加上 operation@amber-aviation.com
     document.getElementById('downloadEmlBtn-'+i).addEventListener('click',e=>{
-        downloadEml(r.subject,r.htmlBody,'',`OVF_${formatRegDash(flightRows[i].reg)}_${flightRows[i].dep}-${flightRows[i].arr}.eml`);
+        downloadEml(
+            r.subject,
+            r.htmlBody,
+            '',
+            `OVF_${formatRegDash(flightRows[i].reg)}_${flightRows[i].dep}-${flightRows[i].arr}.eml`,
+            CC_EMAIL
+        );
         flashOk(e.target,'已下载');
     });
     document.getElementById('copyRichBtn-'+i).addEventListener('click',e=>copyRichMail(i,e.target,'ovf'));
@@ -2078,15 +2086,22 @@ function renderHkbacPanel(idx){
             '<button class="hkbac small" id="hkbac-copyRichBtn-'+idx+'">复制邮件全文（保留加粗）</button>'+
             '<button class="small" id="hkbac-copySubjBtn-'+idx+'">复制主题</button>'+
         '</div>'+
-        '<div class="hint" style="margin-top:8px;">💡 <b>推荐</b>：点「下载 EML」→ 双击下载的 .eml 文件 → Outlook 自动打开，收件人（'+escapeHtml(cfg.hkbacEmail)+'）/主题/格式全都有 → 直接点发送。</div>';
+        '<div class="hint" style="margin-top:8px;">💡 <b>推荐</b>：点「下载 EML」→ 双击下载的 .eml 文件 → Outlook 自动打开，收件人（'+escapeHtml(cfg.hkbacEmail)+'）/抄送（'+escapeHtml(CC_EMAIL)+'）/主题/格式全都有 → 直接点发送。</div>';
     document.getElementById('hkbac-subj-'+idx).textContent='主题：'+r.subject;
     document.getElementById('hkbac-preview-'+idx).innerHTML=r.htmlBody;
     panelBody.querySelector('.close-panel-btn').addEventListener('click',function(){
         document.getElementById(this.dataset.panelId).style.display='none';
     });
+    // ★ HKBAC：Cc 加上 operation@amber-aviation.com
     document.getElementById('hkbac-downloadEmlBtn-'+idx).addEventListener('click',e=>{
         const dateText=buildHkbacDateText(arrRow,depRow);
-        downloadEml(r.subject,r.htmlBody,cfg.hkbacEmail,`HKBAC_${formatRegDash(mainRow.reg)}_${dateText}.eml`);
+        downloadEml(
+            r.subject,
+            r.htmlBody,
+            cfg.hkbacEmail,
+            `HKBAC_${formatRegDash(mainRow.reg)}_${dateText}.eml`,
+            CC_EMAIL
+        );
         flashOk(e.target,'已下载');
     });
     document.getElementById('hkbac-copyRichBtn-'+idx).addEventListener('click',e=>copyRichMail(idx,e.target,'hkbac'));
@@ -2107,12 +2122,15 @@ function b64EncodeUnicode(str){
     return btoa(binary);
 }
 function wrap76(b64){return b64.replace(/(.{76})/g,'$1\r\n');}
-function buildEml(subject,htmlBody,toEmail){
+
+// ★ buildEml 增加 ccEmail 参数
+function buildEml(subject,htmlBody,toEmail,ccEmail){
     const encodedSubject='=?UTF-8?B?'+b64EncodeUnicode(subject)+'?=';
     const htmlB64=wrap76(b64EncodeUnicode(htmlBody));
     let eml='';
     eml+='MIME-Version: 1.0\r\n';
     if(toEmail)eml+='To: '+toEmail+'\r\n';
+    if(ccEmail)eml+='Cc: '+ccEmail+'\r\n';
     eml+='Subject: '+encodedSubject+'\r\n';
     eml+='X-Unsent: 1\r\n';
     eml+='Content-Type: text/html; charset=UTF-8\r\n';
@@ -2121,8 +2139,10 @@ function buildEml(subject,htmlBody,toEmail){
     eml+=htmlB64;
     return eml;
 }
-function downloadEml(subject,htmlBody,toEmail,filename){
-    const eml=buildEml(subject,htmlBody,toEmail);
+
+// ★ downloadEml 增加 ccEmail 参数
+function downloadEml(subject,htmlBody,toEmail,filename,ccEmail){
+    const eml=buildEml(subject,htmlBody,toEmail,ccEmail);
     const blob=new Blob([eml],{type:'message/rfc822'});
     const url=URL.createObjectURL(blob);
     const a=document.createElement('a');
