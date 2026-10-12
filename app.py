@@ -1226,9 +1226,40 @@ with tab1:
         st.info("👆 请同时上传 GD单 和 模板文件。")
 
 # ================================================================
-# 功能2：世界时行程 + 飞越&香港邮件（共用一次上传 + 签名）
+# 功能2：世界时行程 + 飞越&香港邮件（共用一次上传 + 签名后端注入）
 # ================================================================
 with tab2:
+    # ===== ★ 新增：Python 后端签名图片上传（比浏览器上传更可靠） =====
+    st.markdown("#### ✍️ 签名图片（在 Streamlit 里上传，会直接注入到邮件 HTML）")
+    _sig_col1, _sig_col2 = st.columns([1, 3])
+    with _sig_col1:
+        _sig_img_file = st.file_uploader(
+            "上传签名图片（PNG/JPG）",
+            type=["png", "jpg", "jpeg"],
+            key="sig_img_backend_v2",
+        )
+    with _sig_col2:
+        if _sig_img_file is not None:
+            import base64 as _b64mod
+            _img_bytes = _sig_img_file.getvalue()
+            _mime = _sig_img_file.type or "image/png"
+            _b64_str = _b64mod.b64encode(_img_bytes).decode("ascii")
+            _data_uri = f"data:{_mime};base64,{_b64_str}"
+            st.session_state["sig_img_data_uri_v2"] = _data_uri
+            st.success(f"✅ 已加载：{_sig_img_file.name}（{len(_img_bytes)//1024} KB）")
+        elif "sig_img_data_uri_v2" in st.session_state:
+            st.info("💾 已从上次上传恢复（重新上传即可覆盖）")
+
+    _sig_img_data_uri = st.session_state.get("sig_img_data_uri_v2", "")
+    if _sig_img_data_uri:
+        st.image(_sig_img_data_uri, width=280)
+
+    _sig_clear = st.button("🗑️ 清除后端签名图片", key="sig_clear_backend_v2")
+    if _sig_clear:
+        st.session_state.pop("sig_img_data_uri_v2", None)
+        st.rerun()
+
+    # ===== 下面就是原来的 iframe（HTML 里用 __SIG_IMAGE_DATA_URI__ 占位） =====
     F_HTML = r"""<!DOCTYPE html>
 <html>
 <head>
@@ -1311,8 +1342,6 @@ code{background:#f0f0f0;padding:1px 5px;border-radius:3px;font-family:Consolas,m
 .default-row input{margin-left:8px}
 .sig-box{background:#f3e5f5;padding:12px;border-radius:6px;border:1px solid #ce93d8;margin-top:14px}
 .sig-box label{font-weight:bold;font-size:13px;display:inline-block}
-.sig-preview{margin-top:8px;padding:10px;background:#fff;border:1px dashed #ccc;border-radius:6px;min-height:60px;text-align:center}
-.sig-preview img{max-width:100%;max-height:200px;}
 </style>
 </head>
 <body>
@@ -1383,12 +1412,11 @@ code{background:#f0f0f0;padding:1px 5px;border-radius:3px;font-family:Consolas,m
         </div>
     </div>
 
-    <!-- ===== 签名区 ===== -->
     <div class="sig-box">
         <label>✍️ 签名 HTML 模板：</label>
         <div class="hint" style="margin:4px 0 6px;">
-            在正文模板里用 <code>$signature</code> 引用签名；<code>$sigImage</code> 会被替换成下方上传的图片。
-            换行自动转 &lt;br&gt;；电话/网址会自动加上蓝色下划线样式。此处内容会自动保存到浏览器本地。
+            在正文模板里用 <code>$signature</code> 引用签名；<code>$sigImage</code> 会被替换成**上面 Streamlit 上传的图片**。
+            换行自动转 &lt;br&gt;；电话/网址会自动加上蓝色下划线样式。
         </div>
         <textarea id="signatureTemplate" style="height:220px;">Best Regards
 
@@ -1403,23 +1431,13 @@ Fax +86 755 2720 4830
 www.amber-aviation.com
 
 $sigImage</textarea>
-
-        <div style="margin-top:10px;">
-            <label>🖼️ 签名图片（PNG/JPG，建议 ≤ 600px 宽，< 1MB）：</label>
-            <input type="file" id="sigImageInput" accept="image/*" style="display:block;margin-top:4px;">
-            <button id="clearSigImageBtn" class="danger small" style="margin-top:6px;">🗑️ 清除签名图片</button>
-            <span id="sigImageStatus" class="hint" style="margin-left:8px;"></span>
-        </div>
-        <div class="sig-preview" id="sigImagePreview">
-            <span style="color:#999;font-size:12.5px;">（暂无签名图片，上传后这里显示预览）</span>
-        </div>
+        <div class="hint" style="margin-top:6px;">💡 图片请用**上面 Streamlit 的「上传签名图片」**，本 iframe 不再处理图片存储。</div>
     </div>
-    <!-- ===== 签名区结束 ===== -->
 
     <div style="margin-top:14px;">
         <label style="font-weight:bold;font-size:13px;">飞越邮件主题模板：</label>
         <input type="text" id="subjectText" value="$reg // OVF RQST // $dep-$arr //$dateTextSp">
-        <div class="hint" style="margin-top:4px;">可用变量：<code>$reg</code>（机号无横线）、<code>$regDash</code>（带横线）、<code>$dep</code>、<code>$arr</code>、<code>$dateText</code>（10OCT）、<code>$dateTextSp</code>（10 OCT）。</div>
+        <div class="hint" style="margin-top:4px;">可用变量：<code>$reg</code>、<code>$regDash</code>、<code>$dep</code>、<code>$arr</code>、<code>$dateText</code>（10OCT）、<code>$dateTextSp</code>（10 OCT）。</div>
     </div>
 
     <div style="margin-top:14px;">
@@ -1617,8 +1635,10 @@ VPCSZ=Amber Aviation (Hong Kong) Limited / invoice@amber-aviation.com</textarea>
 
 <script>
 /* =========================================================
-   公共常量
+   ★ 从 Python 后端注入的签名图片（关键修复）
    ========================================================= */
+const SIG_IMAGE_INJECTED = "__SIG_IMAGE_DATA_URI__";
+
 const MONTHS=['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
 const HKBAC_TZ_OFFSET = 8;
 const CC_EMAIL = 'operation@amber-aviation.com';
@@ -1629,16 +1649,13 @@ const HISTORY_KEY='worldtime_history_v2';
 const LAST_PLANS_KEY='worldtime_last_plans_v2';
 const LAST_FILE_KEY='worldtime_last_file_v2';
 const FLIGHT_ROWS_KEY='mailgen_flight_rows_v1';
-const SIG_IMAGE_KEY='mailgen_sig_image_v1';
 const SIG_TEMPLATE_KEY='mailgen_sig_template_v1';
 
-// 签名使用的字体栈：英文 Calibri，中文微软雅黑
 const SIG_FONT_STACK = "Calibri, 'Microsoft YaHei', '微软雅黑', Arial, sans-serif";
 const SIG_FAREAST_FONT = "'Microsoft YaHei', '微软雅黑'";
 
 let flightRows = [];
 let showOnlyWeek = true;
-let sigImageDataUri = '';
 
 /* =========================================================
    通用工具
@@ -1647,57 +1664,25 @@ function pad2(n){return String(n).padStart(2,'0');}
 function escapeHtml(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 function val(id){const el=document.getElementById(id);return el?el.value.trim():'';}
 
-/* =========================================================
-   localStorage 封装
-   ========================================================= */
 function loadJSON(k){try{const r=localStorage.getItem(k);return r?JSON.parse(r):null;}catch(e){return null;}}
 function saveJSON(k,v){try{localStorage.setItem(k,JSON.stringify(v));}catch(e){}}
 function loadHistory(){try{const r=localStorage.getItem(HISTORY_KEY);if(!r)return{records:[]};const o=JSON.parse(r);if(!o.records)o.records=[];return o;}catch(e){return{records:[]};}}
 function saveHistory(h){try{localStorage.setItem(HISTORY_KEY,JSON.stringify(h));}catch(e){}}
 
 /* =========================================================
-   签名相关
+   签名相关（关键修复：优先使用 Python 注入的图片）
    ========================================================= */
-function loadSigImage(){
-    try{ sigImageDataUri = localStorage.getItem(SIG_IMAGE_KEY) || ''; }catch(e){ sigImageDataUri = ''; }
-}
-// ★ 每次都直接从 localStorage 读取（不依赖全局变量，防止 Streamlit rerun 丢失）
 function readSigImageDirect(){
+    // ★ 优先用 Python 后端注入的图片
+    if(SIG_IMAGE_INJECTED && SIG_IMAGE_INJECTED.startsWith("data:image")){
+        return SIG_IMAGE_INJECTED;
+    }
+    // 兜底：读 localStorage
     let imgData = '';
-    try { imgData = localStorage.getItem(SIG_IMAGE_KEY) || ''; } catch(e) { imgData = ''; }
-    if(!imgData) imgData = sigImageDataUri;
+    try { imgData = localStorage.getItem('mailgen_sig_image_v1') || ''; } catch(e) { imgData = ''; }
     return imgData;
 }
-function saveSigImage(dataUri){
-    try{
-        localStorage.setItem(SIG_IMAGE_KEY, dataUri);
-        sigImageDataUri = dataUri;
-        return true;
-    }catch(e){ return false; }
-}
-function clearSigImage(){
-    try{ localStorage.removeItem(SIG_IMAGE_KEY); }catch(e){}
-    sigImageDataUri = '';
-}
-function renderSigPreview(){
-    const box = document.getElementById('sigImagePreview');
-    if(!box) return;
-    // ★ 直接读 localStorage
-    const imgData = readSigImageDirect();
-    if(imgData){
-        box.innerHTML = '<img src="'+imgData+'" alt="签名预览">';
-    } else {
-        box.innerHTML = '<span style="color:#999;font-size:12.5px;">（暂无签名图片，上传后这里显示预览）</span>';
-    }
-}
-function updateSigStatus(msg, ok){
-    const el = document.getElementById('sigImageStatus');
-    if(!el) return;
-    el.textContent = msg || '';
-    el.style.color = ok === false ? '#d32f2f' : '#2e7d32';
-}
 
-/* 自动把签名里的电话/网址变成蓝色下划线 */
 function stylizeSignatureLinks(html){
     html = html.replace(
         /(https?:\/\/[^\s<>"）)]+|www\.[a-zA-Z0-9][a-zA-Z0-9.-]*\.[a-zA-Z]{2,}(?:\/[^\s<>"）)]*)?)/g,
@@ -1713,14 +1698,10 @@ function stylizeSignatureLinks(html){
     return html;
 }
 
-/* 生成签名 HTML（$sigImage 会被替换成 <img>） */
 function buildSignatureHtml(){
     const tpl = val('signatureTemplate');
     if(!tpl) return '';
-
-    // ★ 直接读 localStorage 拿图片（关键修复）
     const imgData = readSigImageDirect();
-
     let html = escapeHtml(tpl);
     html = html.replace(/\r\n|\r|\n/g, '<br>\n');
     html = stylizeSignatureLinks(html);
@@ -1728,12 +1709,10 @@ function buildSignatureHtml(){
         ? '<img src="'+imgData+'" style="max-width:600px;height:auto;display:block;border:0;margin-top:12px;" alt="signature">'
         : '';
     html = html.replace(/\$sigImage\b/g, imgTag);
-    // mso-fareast-font-family 专门控制东亚字体（中文），解决 Outlook 回退宋体问题
     return '<div style="font-family:'+SIG_FONT_STACK+';font-size:11pt;line-height:1.5;color:#000;'
          + 'mso-fareast-font-family:'+SIG_FAREAST_FONT+';">'+html+'</div>';
 }
 
-/* 生成签名纯文本（用于 plainBody） */
 function buildSignaturePlain(){
     const tpl = val('signatureTemplate');
     if(!tpl) return '';
@@ -2069,12 +2048,9 @@ function renderMailPanel(i){
     });
     document.getElementById('downloadEmlBtn-'+i).addEventListener('click',e=>{
         downloadEml(
-            r.subject,
-            r.htmlBody,
-            '',
+            r.subject, r.htmlBody, '',
             `OVF_${formatRegDash(flightRows[i].reg)}_${flightRows[i].dep}-${flightRows[i].arr}.eml`,
-            CC_EMAIL,
-            r.plainBody
+            CC_EMAIL, r.plainBody
         );
         flashOk(e.target,'已下载');
     });
@@ -2238,12 +2214,9 @@ function renderHkbacPanel(idx){
     document.getElementById('hkbac-downloadEmlBtn-'+idx).addEventListener('click',e=>{
         const dateText=buildHkbacDateText(arrRow,depRow);
         downloadEml(
-            r.subject,
-            r.htmlBody,
-            cfg.hkbacEmail,
+            r.subject, r.htmlBody, cfg.hkbacEmail,
             `HKBAC_${formatRegDash(mainRow.reg)}_${dateText}.eml`,
-            CC_EMAIL,
-            r.plainBody
+            CC_EMAIL, r.plainBody
         );
         flashOk(e.target,'已下载');
     });
@@ -2266,7 +2239,6 @@ function b64EncodeUnicode(str){
 }
 function wrap76(b64){return b64.replace(/(.{76})/g,'$1\r\n');}
 
-/* 把 HTML 里的 <img src="data:image/xxx;base64,..."> 抽出来变成单独的 MIME 附件 */
 function extractDataUriImages(html){
     const images=[];
     let idx=0;
@@ -2287,17 +2259,14 @@ function mimeExt(mime){
     return map[String(mime).toLowerCase()] || 'png';
 }
 
-/* 嵌套 multipart/alternative > multipart/related（图片兼容性更好） */
 function buildEml(subject, htmlBody, plainBody, toEmail, ccEmail){
     const encodedSubject = '=?UTF-8?B?' + b64EncodeUnicode(subject) + '?=';
     const extracted = extractDataUriImages(htmlBody);
     const htmlForEml = extracted.html;
     const images = extracted.images;
-
     const htmlB64 = wrap76(b64EncodeUnicode(htmlForEml));
     const plainB64 = wrap76(b64EncodeUnicode(plainBody || ''));
 
-    // 无图片 → 单段 text/html
     if(images.length === 0){
         let eml = '';
         eml += 'MIME-Version: 1.0\r\n';
@@ -2313,7 +2282,6 @@ function buildEml(subject, htmlBody, plainBody, toEmail, ccEmail){
         return eml;
     }
 
-    // 有图片 → 嵌套结构
     const B1 = '----=_Alt_' + Date.now() + '_' + Math.random().toString(36).slice(2,10);
     const B2 = '----=_Rel_' + Date.now() + '_' + Math.random().toString(36).slice(2,10);
 
@@ -2326,31 +2294,17 @@ function buildEml(subject, htmlBody, plainBody, toEmail, ccEmail){
     eml += 'X-Unsent: 1\r\n';
     eml += 'Content-Type: multipart/alternative; boundary="' + B1 + '"\r\n';
     eml += '\r\n';
-    eml += 'This is a multi-part message in MIME format.\r\n';
-    eml += '\r\n';
-
-    // 1) text/plain
+    eml += 'This is a multi-part message in MIME format.\r\n\r\n';
     eml += '--' + B1 + '\r\n';
     eml += 'Content-Type: text/plain; charset=UTF-8\r\n';
-    eml += 'Content-Transfer-Encoding: base64\r\n';
-    eml += '\r\n';
-    eml += plainB64 + '\r\n';
-    eml += '\r\n';
-
-    // 2) multipart/related（HTML + 图片）
+    eml += 'Content-Transfer-Encoding: base64\r\n\r\n';
+    eml += plainB64 + '\r\n\r\n';
     eml += '--' + B1 + '\r\n';
-    eml += 'Content-Type: multipart/related; type="text/html"; boundary="' + B2 + '"\r\n';
-    eml += '\r\n';
-
-    // 2a) HTML
+    eml += 'Content-Type: multipart/related; type="text/html"; boundary="' + B2 + '"\r\n\r\n';
     eml += '--' + B2 + '\r\n';
     eml += 'Content-Type: text/html; charset=UTF-8\r\n';
-    eml += 'Content-Transfer-Encoding: base64\r\n';
-    eml += '\r\n';
-    eml += htmlB64 + '\r\n';
-    eml += '\r\n';
-
-    // 2b) 图片
+    eml += 'Content-Transfer-Encoding: base64\r\n\r\n';
+    eml += htmlB64 + '\r\n\r\n';
     for(const img of images){
         const ext = mimeExt(img.mime);
         const filename = 'signature.' + ext;
@@ -2359,13 +2313,10 @@ function buildEml(subject, htmlBody, plainBody, toEmail, ccEmail){
         eml += 'Content-Transfer-Encoding: base64\r\n';
         eml += 'Content-ID: <' + img.cid + '>\r\n';
         eml += 'Content-Location: ' + img.cid + '\r\n';
-        eml += 'Content-Disposition: inline; filename="' + filename + '"\r\n';
-        eml += '\r\n';
-        eml += wrap76(img.b64) + '\r\n';
-        eml += '\r\n';
+        eml += 'Content-Disposition: inline; filename="' + filename + '"\r\n\r\n';
+        eml += wrap76(img.b64) + '\r\n\r\n';
     }
-    eml += '--' + B2 + '--\r\n';
-    eml += '\r\n';
+    eml += '--' + B2 + '--\r\n\r\n';
     eml += '--' + B1 + '--\r\n';
     return eml;
 }
@@ -2409,7 +2360,7 @@ function flashOk(btn,msg){
 }
 
 /* =========================================================
-   文件解析（一次上传，两者共用）
+   文件解析
    ========================================================= */
 function buildFlightRows(rows){
     let headerIdx=-1;
@@ -2466,7 +2417,6 @@ function handleFile(file){
                 return;
             }
             flightRows=built.rows;
-
             const np=buildWorldPlans();
             const sp=sortWorldPlans(np);
             const h=loadHistory();
@@ -2481,7 +2431,6 @@ function handleFile(file){
             saveJSON(LAST_PLANS_KEY,sp);
             saveJSON(LAST_FILE_KEY,{name:file.name,timestamp:ts});
             saveJSON(FLIGHT_ROWS_KEY,{name:file.name,timestamp:ts,rows:flightRows});
-
             document.getElementById('result').style.display='block';
             renderWorldStatus('✅ 已加载 '+flightRows.length+' 条航段（'+ts+'）','success');
             renderWorldPlans(sp,ch,false);
@@ -2499,12 +2448,6 @@ function handleFile(file){
    页面初始化
    ========================================================= */
 window.addEventListener('DOMContentLoaded',()=>{
-    // 1) 恢复签名图片
-    loadSigImage();
-    renderSigPreview();
-    if(sigImageDataUri) updateSigStatus('（已从本地恢复）', true);
-
-    // 2) 恢复签名模板
     try{
         const savedTpl = localStorage.getItem(SIG_TEMPLATE_KEY);
         if(savedTpl !== null){
@@ -2512,7 +2455,6 @@ window.addEventListener('DOMContentLoaded',()=>{
         }
     }catch(e){}
 
-    // 3) 恢复历史 & 航段数据
     const h=loadHistory();
     renderHistory(h);
     const cached=loadJSON(FLIGHT_ROWS_KEY);
@@ -2532,7 +2474,6 @@ window.addEventListener('DOMContentLoaded',()=>{
         renderMailList();
     }
 
-    // 4) 事件绑定
     document.getElementById('fileInput').addEventListener('change',(e)=>{
         const f=e.target.files[0];if(f)handleFile(f);
     });
@@ -2545,41 +2486,7 @@ window.addEventListener('DOMContentLoaded',()=>{
         renderHistory({records:[]});
     });
 
-    // 5) 签名图片上传
-    document.getElementById('sigImageInput').addEventListener('change',function(e){
-        const file=e.target.files[0];
-        if(!file)return;
-        if(!/^image\//.test(file.type)){
-            updateSigStatus('❌ 请选择图片文件', false);
-            return;
-        }
-        if(file.size > 2 * 1024 * 1024){
-            updateSigStatus('❌ 图片太大（'+ (file.size/1024/1024).toFixed(2) +'MB），建议 < 1MB', false);
-            return;
-        }
-        const reader=new FileReader();
-        reader.onload=function(ev){
-            const uri=ev.target.result;
-            if(saveSigImage(uri)){
-                renderSigPreview();
-                updateSigStatus('✅ 已保存（'+ (file.size/1024).toFixed(0) +' KB）', true);
-            }else{
-                updateSigStatus('❌ 保存失败（本地存储已满，请清除一些图片或历史）', false);
-            }
-        };
-        reader.readAsDataURL(file);
-    });
-
-    // 6) 清除签名图片
-    document.getElementById('clearSigImageBtn').addEventListener('click',function(){
-        if(!confirm('确定清除已保存的签名图片吗？'))return;
-        clearSigImage();
-        renderSigPreview();
-        document.getElementById('sigImageInput').value='';
-        updateSigStatus('已清除', true);
-    });
-
-    // 7) 签名模板自动保存
+    // 签名模板自动保存
     let sigTplTimer=null;
     document.getElementById('signatureTemplate').addEventListener('input',function(e){
         clearTimeout(sigTplTimer);
@@ -2593,7 +2500,10 @@ window.addEventListener('DOMContentLoaded',()=>{
 </body>
 </html>
 """
-    components.html(F_HTML, height=1400, scrolling=True)
+
+    # ★ 关键：把 Python 后端准备好的 base64 图片注入到 HTML 里
+    F_HTML_FINAL = F_HTML.replace("__SIG_IMAGE_DATA_URI__", _sig_img_data_uri)
+    components.html(F_HTML_FINAL, height=1400, scrolling=True)
 # ================================================================
 # 功能3：航路处理工具
 # ================================================================
