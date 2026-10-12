@@ -1388,7 +1388,7 @@ code{background:#f0f0f0;padding:1px 5px;border-radius:3px;font-family:Consolas,m
         <label>✍️ 签名 HTML 模板：</label>
         <div class="hint" style="margin:4px 0 6px;">
             在正文模板里用 <code>$signature</code> 引用签名；<code>$sigImage</code> 会被替换成下方上传的图片。
-            换行自动转 &lt;br&gt;。此处内容会自动保存到浏览器本地。
+            换行自动转 &lt;br&gt;；电话/网址会自动加上蓝色下划线样式。此处内容会自动保存到浏览器本地。
         </div>
         <textarea id="signatureTemplate" style="height:220px;">Best Regards
 
@@ -1632,6 +1632,9 @@ const FLIGHT_ROWS_KEY='mailgen_flight_rows_v1';
 const SIG_IMAGE_KEY='mailgen_sig_image_v1';
 const SIG_TEMPLATE_KEY='mailgen_sig_template_v1';
 
+// 签名使用的字体栈：英文 Calibri，中文回退到微软雅黑
+const SIG_FONT_STACK = "Calibri, 'Microsoft YaHei', '微软雅黑', Arial, sans-serif";
+
 let flightRows = [];
 let showOnlyWeek = true;
 let sigImageDataUri = '';
@@ -1662,9 +1665,7 @@ function saveSigImage(dataUri){
         localStorage.setItem(SIG_IMAGE_KEY, dataUri);
         sigImageDataUri = dataUri;
         return true;
-    }catch(e){
-        return false;
-    }
+    }catch(e){ return false; }
 }
 function clearSigImage(){
     try{ localStorage.removeItem(SIG_IMAGE_KEY); }catch(e){}
@@ -1685,21 +1686,40 @@ function updateSigStatus(msg, ok){
     el.textContent = msg || '';
     el.style.color = ok === false ? '#d32f2f' : '#2e7d32';
 }
-// 生成签名 HTML（$sigImage 会被替换成 <img>）
+
+/* 自动把签名里的电话/网址变成蓝色下划线 */
+function stylizeSignatureLinks(html){
+    // 1) URL：http(s)://xxx 或 www.xxx.yyy
+    html = html.replace(
+        /(https?:\/\/[^\s<>"）)]+|www\.[a-zA-Z0-9][a-zA-Z0-9.-]*\.[a-zA-Z]{2,}(?:\/[^\s<>"）)]*)?)/g,
+        function(m){
+            const href = /^https?:\/\//i.test(m) ? m : ('http://' + m);
+            return '<a href="'+href+'" style="color:#0563C1;text-decoration:underline;">'+m+'</a>';
+        }
+    );
+    // 2) 电话：+86 133 7812 9224 等
+    html = html.replace(
+        /(\+\d{1,3}(?:[\s\u00a0\-]?\d{2,4}){2,4})/g,
+        '<a href="tel:$1" style="color:#0563C1;text-decoration:underline;">$1</a>'
+    );
+    return html;
+}
+
+/* 生成签名 HTML（$sigImage 会被替换成 <img>） */
 function buildSignatureHtml(){
     const tpl = val('signatureTemplate');
     if(!tpl) return '';
     let html = escapeHtml(tpl);
-    // 换行 → <br>
     html = html.replace(/\r\n|\r|\n/g, '<br>\n');
-    // $sigImage → <img>
+    html = stylizeSignatureLinks(html);
     const imgTag = sigImageDataUri
-        ? '<img src="'+sigImageDataUri+'" style="max-width:600px;height:auto;display:block;border:0;" alt="signature">'
+        ? '<img src="'+sigImageDataUri+'" style="max-width:600px;height:auto;display:block;border:0;margin-top:12px;" alt="signature">'
         : '';
     html = html.replace(/\$sigImage\b/g, imgTag);
-    return html;
+    return '<div style="font-family:'+SIG_FONT_STACK+';font-size:11pt;line-height:1.5;color:#000;">'+html+'</div>';
 }
-// 生成签名纯文本（用于 plainBody）
+
+/* 生成签名纯文本（用于 plainBody） */
 function buildSignaturePlain(){
     const tpl = val('signatureTemplate');
     if(!tpl) return '';
@@ -2069,7 +2089,6 @@ function buildMail(i){
     const mdBody=applyVars(val('templateText'),vars);
     let plainBody=stripMarkdown(mdBody);
     let htmlInner=renderBody(mdBody);
-    // 处理签名（HTML 直接注入，纯文本去掉 $sigImage）
     const sigHtml=buildSignatureHtml();
     const sigPlain=buildSignaturePlain();
     htmlInner=htmlInner.replace(/\$signature\b/g, sigHtml);
@@ -2237,14 +2256,19 @@ function extractDataUriImages(html){
     let idx=0;
     const newHtml=String(html).replace(
         /<img([^>]*?)\ssrc="data:(image\/[a-zA-Z0-9.+-]+);base64,([A-Za-z0-9+/=\s]+?)"([^>]*?)>/gi,
-        (m, pre, mime, b64, post) => {
+        function(m, pre, mime, b64, post){
             idx++;
             const cid = 'sigimg' + idx + '_' + Date.now() + '@amber-aviation';
-            images.push({ cid, mime, b64: b64.replace(/\s/g, '') });
+            images.push({ cid: cid, mime: mime, b64: b64.replace(/\s/g, '') });
             return '<img' + pre + ' src="cid:' + cid + '"' + post + '>';
         }
     );
-    return { html: newHtml, images };
+    return { html: newHtml, images: images };
+}
+
+function mimeExt(mime){
+    const map = {'image/png':'png','image/jpeg':'jpg','image/jpg':'jpg','image/gif':'gif','image/bmp':'bmp','image/webp':'webp'};
+    return map[String(mime).toLowerCase()] || 'png';
 }
 
 function buildEml(subject,htmlBody,toEmail,ccEmail){
@@ -2254,7 +2278,7 @@ function buildEml(subject,htmlBody,toEmail,ccEmail){
     const images=extracted.images;
     const htmlB64=wrap76(b64EncodeUnicode(htmlForEml));
 
-    // 无内嵌图片 → 简单模式
+    // 无内嵌图片 → 简单 text/html 模式
     if(images.length === 0){
         let eml='';
         eml+='MIME-Version: 1.0\r\n';
@@ -2269,7 +2293,7 @@ function buildEml(subject,htmlBody,toEmail,ccEmail){
         return eml;
     }
 
-    // 有内嵌图片 → multipart/related
+    // 有内嵌图片 → multipart/related（图片作为 CID 内嵌）
     const boundary='----=_AmberMail_'+Date.now()+'_'+Math.random().toString(36).slice(2,10);
     let eml='';
     eml+='MIME-Version: 1.0\r\n';
@@ -2277,20 +2301,25 @@ function buildEml(subject,htmlBody,toEmail,ccEmail){
     if(ccEmail)eml+='Cc: '+ccEmail+'\r\n';
     eml+='Subject: '+encodedSubject+'\r\n';
     eml+='X-Unsent: 1\r\n';
-    eml+='Content-Type: multipart/related; boundary="'+boundary+'"\r\n';
+    eml+='Content-Type: multipart/related; type="text/html"; boundary="'+boundary+'"\r\n';
     eml+='\r\n';
+    eml+='This is a multi-part message in MIME format.\r\n';
+    eml+='\r\n';
+    // 第一段：HTML 正文
     eml+='--'+boundary+'\r\n';
     eml+='Content-Type: text/html; charset=UTF-8\r\n';
     eml+='Content-Transfer-Encoding: base64\r\n';
     eml+='\r\n';
     eml+=htmlB64+'\r\n';
     eml+='\r\n';
+    // 后续：图片
     for(const img of images){
+        const ext = mimeExt(img.mime);
         eml+='--'+boundary+'\r\n';
-        eml+='Content-Type: '+img.mime+'\r\n';
+        eml+='Content-Type: '+img.mime+'; name="signature.'+ext+'"\r\n';
         eml+='Content-Transfer-Encoding: base64\r\n';
         eml+='Content-ID: <'+img.cid+'>\r\n';
-        eml+='Content-Disposition: inline\r\n';
+        eml+='Content-Disposition: inline; filename="signature.'+ext+'"\r\n';
         eml+='\r\n';
         eml+=wrap76(img.b64)+'\r\n';
         eml+='\r\n';
@@ -2361,7 +2390,7 @@ function buildFlightRows(rows){
         const get=idx=>(idx>=0&&idx<r.length)?r[idx]:'';
         const reg=String(get(cReg)||'').trim();if(!reg)continue;
         out.push({
-            reg,
+            reg:reg,
             flight:String(get(cFlight)||'').trim(),
             dep:String(get(cDep)||'').trim(),
             arr:String(get(cArr)||'').trim(),
