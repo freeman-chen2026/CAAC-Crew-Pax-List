@@ -1628,6 +1628,13 @@ const LAST_FILE_KEY='worldtime_last_file_v2';
 const FLIGHT_ROWS_KEY='mailgen_flight_rows_v1';
 const SIG_TEMPLATE_KEY='mailgen_sig_template_v2';
 
+// ★ 正文专用字体（English = Calibri, 中文 = 微软雅黑）
+const BODY_FONT_STACK = "Calibri, 'Microsoft YaHei', '微软雅黑', Arial, sans-serif";
+const BODY_FAREAST_FONT = "'Microsoft YaHei', '微软雅黑'";
+// ★ 每一行都独立声明：行高固定 1.3、字号 11pt、字体栈 + 东亚字体
+const BODY_P_STYLE = "margin:0;padding:0;font-family:"+BODY_FONT_STACK+";font-size:11pt;line-height:1.3;"
+                   + "mso-line-height-rule:exactly;mso-fareast-font-family:"+BODY_FAREAST_FONT+";";
+
 const SIG_FONT_STACK = "Calibri, 'Microsoft YaHei', '微软雅黑', Arial, sans-serif";
 const SIG_FAREAST_FONT = "'Microsoft YaHei', '微软雅黑'";
 
@@ -1644,9 +1651,7 @@ function loadHistory(){try{const r=localStorage.getItem(HISTORY_KEY);if(!r)retur
 function saveHistory(h){try{localStorage.setItem(HISTORY_KEY,JSON.stringify(h));}catch(e){}}
 
 /* =========================================================
-   ★ 关键：签名 HTML 生成
-   签名模板里可能直接包含 <img src="data:image/..."> 标签
-   所以这里的逻辑是：把 <img> 抽出来，文字部分做转义/换行/链接化，再拼回去
+   签名 HTML 生成（图片以 <img> 字面量存在 textarea 里）
    ========================================================= */
 function stylizeSignatureLinks(html){
     html = html.replace(
@@ -1667,25 +1672,25 @@ function buildSignatureHtml(){
     let tpl = val('signatureTemplate');
     if(!tpl) return '';
 
-    // 1) 抽离所有 <img ...> 标签
     const imgRegex = /<img\b[^>]*>/gi;
     const images = tpl.match(imgRegex) || [];
-    // 2) 把 <img> 从文字里去掉，剩下的当纯文本
     let textOnly = tpl.replace(imgRegex, '');
 
-    // 3) 文字部分：escape + 换行转 <br> + 链接化
     textOnly = escapeHtml(textOnly);
     textOnly = textOnly.replace(/\r\n|\r|\n/g, '<br>\n');
     textOnly = stylizeSignatureLinks(textOnly);
 
-    // 4) 图片拼回末尾
     let finalHtml = textOnly;
     for(const img of images){
         finalHtml += '<br>\n' + img;
     }
 
-    return '<div style="font-family:'+SIG_FONT_STACK+';font-size:11pt;line-height:1.5;color:#000;'
-         + 'mso-fareast-font-family:'+SIG_FAREAST_FONT+';">'+finalHtml+'</div>';
+    // ★ 签名外层 + 内层 p 都声明字体（抗编辑）
+    return '<div style="font-family:'+SIG_FONT_STACK+';font-size:11pt;line-height:1.3;color:#000;'
+         + 'mso-line-height-rule:exactly;mso-fareast-font-family:'+SIG_FAREAST_FONT+';">'
+         + '<p style="margin:0;padding:0;font-family:'+SIG_FONT_STACK+';font-size:11pt;line-height:1.3;'
+         + 'mso-line-height-rule:exactly;mso-fareast-font-family:'+SIG_FAREAST_FONT+';">'
+         + finalHtml + '</p></div>';
 }
 
 function buildSignaturePlain(){
@@ -1906,19 +1911,27 @@ function getDefaults(reg){
         address:addressFromBilling(billing,cfg)
     };
 }
+
+/* =========================================================
+   ★ 核心改动：每一行用独立 <p> 包裹，抗粘贴、抗清格式
+   ========================================================= */
 function renderBody(text){
     const lines=text.split(/\r\n|\r|\n/);
     const out=lines.map(line=>{
-        if(!line.trim())return '';
+        // 空行 → 紧凑空 <p>（避免 <br><br> 的大间距）
+        if(!line.trim()){
+            return '<p style="'+BODY_P_STYLE+'">&nbsp;</p>';
+        }
         let processed=escapeHtml(line);
         processed=processed.replace(/\*\*(.+?)\*\*/g,'<b>$1</b>');
         processed=processed.replace(/==(.+?)==/g,'<span style="background-color:#FFFF00">$1</span>');
         const trimmed=line.trim();
         if(/^\d+[\.\)]\s/.test(trimmed)){processed='&nbsp;&nbsp;&nbsp;&nbsp;'+processed;}
         else if(/^[•·]\s/.test(trimmed)){processed='&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;'+processed;}
-        return processed;
+        // ★ 每一行都套 <p> + 完整字体声明
+        return '<p style="'+BODY_P_STYLE+'">'+processed+'</p>';
     });
-    return out.join('<br>\n');
+    return out.join('\n');
 }
 function stripMarkdown(text){return text.replace(/\*\*(.+?)\*\*/g,'$1').replace(/==(.+?)==/g,'$1');}
 
@@ -2056,7 +2069,9 @@ function buildMail(i){
     const sigPlain=buildSignaturePlain();
     htmlInner=htmlInner.replace(/\$signature\b/g, sigHtml);
     plainBody=plainBody.replace(/\$signature\b/g, sigPlain);
-    const htmlBody='<div style="font-family:\''+cfg.font+'\',Arial,sans-serif;font-size:'+cfg.fontSize+';line-height:1.5;color:#000;">'+htmlInner+'</div>';
+    // ★ 最外层 <div> 也声明字体（双保险）
+    const htmlBody='<div style="font-family:'+BODY_FONT_STACK+';font-size:11pt;line-height:1.3;color:#000;'
+        +'mso-line-height-rule:exactly;mso-fareast-font-family:'+BODY_FAREAST_FONT+';">'+htmlInner+'</div>';
     return {subject:subject,plainBody:plainBody,htmlBody:htmlBody};
 }
 function findHkbacPair(idx){
@@ -2140,7 +2155,8 @@ function buildHkbacMail(idx){
     const sigPlain=buildSignaturePlain();
     htmlInner=htmlInner.replace(/\$signature\b/g, sigHtml);
     plainBody=plainBody.replace(/\$signature\b/g, sigPlain);
-    const htmlBody='<div style="font-family:\''+cfg.font+'\',Arial,sans-serif;font-size:'+cfg.fontSize+';line-height:1.5;color:#000;">'+htmlInner+'</div>';
+    const htmlBody='<div style="font-family:'+BODY_FONT_STACK+';font-size:11pt;line-height:1.3;color:#000;'
+        +'mso-line-height-rule:exactly;mso-fareast-font-family:'+BODY_FAREAST_FONT+';">'+htmlInner+'</div>';
     return {subject:subject,plainBody:plainBody,htmlBody:htmlBody};
 }
 function toggleHkbac(idx){
@@ -2414,7 +2430,6 @@ function handleFile(file){
    页面初始化
    ========================================================= */
 window.addEventListener('DOMContentLoaded',()=>{
-    // 恢复签名模板
     try{
         const savedTpl = localStorage.getItem(SIG_TEMPLATE_KEY);
         if(savedTpl !== null){
@@ -2422,7 +2437,6 @@ window.addEventListener('DOMContentLoaded',()=>{
         }
     }catch(e){}
 
-    // 显示已有图片预览（如果模板里有 <img>）
     refreshSigPreviewFromTemplate();
 
     const h=loadHistory();
@@ -2456,7 +2470,7 @@ window.addEventListener('DOMContentLoaded',()=>{
         renderHistory({records:[]});
     });
 
-    // ★ 签名图片上传：直接把 <img> 写入 textarea
+    // 签名图片上传：把 <img> 写入 textarea
     document.getElementById('sigImageInput').addEventListener('change', function(e){
         const file = e.target.files[0];
         if(!file) return;
@@ -2473,16 +2487,11 @@ window.addEventListener('DOMContentLoaded',()=>{
             const dataUri = ev.target.result;
             const ta = document.getElementById('signatureTemplate');
             let tpl = ta.value;
-            // 移除旧的 <img> 标签
             tpl = tpl.replace(/<img\b[^>]*>/gi, '');
-            // 移除可能的 $sigImage 占位符
             tpl = tpl.replace(/\$sigImage\b/g, '');
-            // 清理尾部多余空行
             tpl = tpl.replace(/\s+$/g, '');
-            // 追加新图片
             tpl += '\n\n<img src="' + dataUri + '" style="max-width:600px;height:auto;display:block;border:0;margin-top:12px;" alt="signature">';
             ta.value = tpl;
-            // 触发 input 事件（保存到 localStorage）
             ta.dispatchEvent(new Event('input', {bubbles: true}));
             updateSigStatus('✅ 已写入签名模板（'+ (file.size/1024).toFixed(0) +' KB）', true);
             refreshSigPreviewFromTemplate();
@@ -2490,7 +2499,7 @@ window.addEventListener('DOMContentLoaded',()=>{
         reader.readAsDataURL(file);
     });
 
-    // ★ 移除签名图片
+    // 移除签名图片
     document.getElementById('clearSigImageBtn').addEventListener('click', function(){
         const ta = document.getElementById('signatureTemplate');
         let tpl = ta.value;
