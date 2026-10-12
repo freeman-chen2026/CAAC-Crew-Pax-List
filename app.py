@@ -1661,6 +1661,13 @@ function saveHistory(h){try{localStorage.setItem(HISTORY_KEY,JSON.stringify(h));
 function loadSigImage(){
     try{ sigImageDataUri = localStorage.getItem(SIG_IMAGE_KEY) || ''; }catch(e){ sigImageDataUri = ''; }
 }
+// ★ 每次都直接从 localStorage 读取（不依赖全局变量，防止 Streamlit rerun 丢失）
+function readSigImageDirect(){
+    let imgData = '';
+    try { imgData = localStorage.getItem(SIG_IMAGE_KEY) || ''; } catch(e) { imgData = ''; }
+    if(!imgData) imgData = sigImageDataUri;
+    return imgData;
+}
 function saveSigImage(dataUri){
     try{
         localStorage.setItem(SIG_IMAGE_KEY, dataUri);
@@ -1675,8 +1682,10 @@ function clearSigImage(){
 function renderSigPreview(){
     const box = document.getElementById('sigImagePreview');
     if(!box) return;
-    if(sigImageDataUri){
-        box.innerHTML = '<img src="'+sigImageDataUri+'" alt="签名预览">';
+    // ★ 直接读 localStorage
+    const imgData = readSigImageDirect();
+    if(imgData){
+        box.innerHTML = '<img src="'+imgData+'" alt="签名预览">';
     } else {
         box.innerHTML = '<span style="color:#999;font-size:12.5px;">（暂无签名图片，上传后这里显示预览）</span>';
     }
@@ -1708,14 +1717,18 @@ function stylizeSignatureLinks(html){
 function buildSignatureHtml(){
     const tpl = val('signatureTemplate');
     if(!tpl) return '';
+
+    // ★ 直接读 localStorage 拿图片（关键修复）
+    const imgData = readSigImageDirect();
+
     let html = escapeHtml(tpl);
     html = html.replace(/\r\n|\r|\n/g, '<br>\n');
     html = stylizeSignatureLinks(html);
-    const imgTag = sigImageDataUri
-        ? '<img src="'+sigImageDataUri+'" style="max-width:600px;height:auto;display:block;border:0;margin-top:12px;" alt="signature">'
+    const imgTag = imgData
+        ? '<img src="'+imgData+'" style="max-width:600px;height:auto;display:block;border:0;margin-top:12px;" alt="signature">'
         : '';
     html = html.replace(/\$sigImage\b/g, imgTag);
-    // ★ mso-fareast-font-family 专门控制东亚字体（中文），解决 Outlook 回退宋体问题
+    // mso-fareast-font-family 专门控制东亚字体（中文），解决 Outlook 回退宋体问题
     return '<div style="font-family:'+SIG_FONT_STACK+';font-size:11pt;line-height:1.5;color:#000;'
          + 'mso-fareast-font-family:'+SIG_FAREAST_FONT+';">'+html+'</div>';
 }
@@ -2054,7 +2067,6 @@ function renderMailPanel(i){
     panelBody.querySelector('.close-panel-btn').addEventListener('click',function(){
         document.getElementById(this.dataset.panelId).style.display='none';
     });
-    // ★ 传 r.plainBody 作为第 6 个参数
     document.getElementById('downloadEmlBtn-'+i).addEventListener('click',e=>{
         downloadEml(
             r.subject,
@@ -2223,7 +2235,6 @@ function renderHkbacPanel(idx){
     panelBody.querySelector('.close-panel-btn').addEventListener('click',function(){
         document.getElementById(this.dataset.panelId).style.display='none';
     });
-    // ★ 传 r.plainBody 作为第 6 个参数
     document.getElementById('hkbac-downloadEmlBtn-'+idx).addEventListener('click',e=>{
         const dateText=buildHkbacDateText(arrRow,depRow);
         downloadEml(
@@ -2276,7 +2287,7 @@ function mimeExt(mime){
     return map[String(mime).toLowerCase()] || 'png';
 }
 
-/* ★ 嵌套 multipart/alternative > multipart/related（图片兼容性更好） */
+/* 嵌套 multipart/alternative > multipart/related（图片兼容性更好） */
 function buildEml(subject, htmlBody, plainBody, toEmail, ccEmail){
     const encodedSubject = '=?UTF-8?B?' + b64EncodeUnicode(subject) + '?=';
     const extracted = extractDataUriImages(htmlBody);
