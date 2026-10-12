@@ -1632,8 +1632,9 @@ const FLIGHT_ROWS_KEY='mailgen_flight_rows_v1';
 const SIG_IMAGE_KEY='mailgen_sig_image_v1';
 const SIG_TEMPLATE_KEY='mailgen_sig_template_v1';
 
-// 签名使用的字体栈：英文 Calibri，中文回退到微软雅黑
+// 签名使用的字体栈：英文 Calibri，中文微软雅黑
 const SIG_FONT_STACK = "Calibri, 'Microsoft YaHei', '微软雅黑', Arial, sans-serif";
+const SIG_FAREAST_FONT = "'Microsoft YaHei', '微软雅黑'";
 
 let flightRows = [];
 let showOnlyWeek = true;
@@ -1689,7 +1690,6 @@ function updateSigStatus(msg, ok){
 
 /* 自动把签名里的电话/网址变成蓝色下划线 */
 function stylizeSignatureLinks(html){
-    // 1) URL：http(s)://xxx 或 www.xxx.yyy
     html = html.replace(
         /(https?:\/\/[^\s<>"）)]+|www\.[a-zA-Z0-9][a-zA-Z0-9.-]*\.[a-zA-Z]{2,}(?:\/[^\s<>"）)]*)?)/g,
         function(m){
@@ -1697,7 +1697,6 @@ function stylizeSignatureLinks(html){
             return '<a href="'+href+'" style="color:#0563C1;text-decoration:underline;">'+m+'</a>';
         }
     );
-    // 2) 电话：+86 133 7812 9224 等
     html = html.replace(
         /(\+\d{1,3}(?:[\s\u00a0\-]?\d{2,4}){2,4})/g,
         '<a href="tel:$1" style="color:#0563C1;text-decoration:underline;">$1</a>'
@@ -1716,7 +1715,9 @@ function buildSignatureHtml(){
         ? '<img src="'+sigImageDataUri+'" style="max-width:600px;height:auto;display:block;border:0;margin-top:12px;" alt="signature">'
         : '';
     html = html.replace(/\$sigImage\b/g, imgTag);
-    return '<div style="font-family:'+SIG_FONT_STACK+';font-size:11pt;line-height:1.5;color:#000;">'+html+'</div>';
+    // ★ mso-fareast-font-family 专门控制东亚字体（中文），解决 Outlook 回退宋体问题
+    return '<div style="font-family:'+SIG_FONT_STACK+';font-size:11pt;line-height:1.5;color:#000;'
+         + 'mso-fareast-font-family:'+SIG_FAREAST_FONT+';">'+html+'</div>';
 }
 
 /* 生成签名纯文本（用于 plainBody） */
@@ -2053,13 +2054,15 @@ function renderMailPanel(i){
     panelBody.querySelector('.close-panel-btn').addEventListener('click',function(){
         document.getElementById(this.dataset.panelId).style.display='none';
     });
+    // ★ 传 r.plainBody 作为第 6 个参数
     document.getElementById('downloadEmlBtn-'+i).addEventListener('click',e=>{
         downloadEml(
             r.subject,
             r.htmlBody,
             '',
             `OVF_${formatRegDash(flightRows[i].reg)}_${flightRows[i].dep}-${flightRows[i].arr}.eml`,
-            CC_EMAIL
+            CC_EMAIL,
+            r.plainBody
         );
         flashOk(e.target,'已下载');
     });
@@ -2082,9 +2085,9 @@ function buildMail(i){
     const purposeEn=cfg.defaultPurpose;
     const vars={reg:row.reg||'',regDash:formatRegDash(row.reg),
         dep:row.dep||'',arr:row.arr||'',depCity:row.depCity||'',arrCity:row.arrCity||'',
-        dateText,dateTextSp,acType:d.acType,purpose:purposeEn,
+        dateText:dateText,dateTextSp:dateTextSp,acType:d.acType,purpose:purposeEn,
         operator:d.operator,billing:d.billing,address:d.address,
-        etdLine,etaLine,route,ovf:d.ovf,pic:d.pic,sic:d.sic,flight:row.flight||'',crew:row.crew||''};
+        etdLine:etdLine,etaLine:etaLine,route:route,ovf:d.ovf,pic:d.pic,sic:d.sic,flight:row.flight||'',crew:row.crew||''};
     const subject=applyVars(val('subjectText'),vars);
     const mdBody=applyVars(val('templateText'),vars);
     let plainBody=stripMarkdown(mdBody);
@@ -2094,7 +2097,7 @@ function buildMail(i){
     htmlInner=htmlInner.replace(/\$signature\b/g, sigHtml);
     plainBody=plainBody.replace(/\$signature\b/g, sigPlain);
     const htmlBody='<div style="font-family:\''+cfg.font+'\',Arial,sans-serif;font-size:'+cfg.fontSize+';line-height:1.5;color:#000;">'+htmlInner+'</div>';
-    return {subject,plainBody,htmlBody};
+    return {subject:subject,plainBody:plainBody,htmlBody:htmlBody};
 }
 function findHkbacPair(idx){
     const row=flightRows[idx];
@@ -2130,7 +2133,7 @@ function findHkbacPair(idx){
     }else if(row.dep==='VHHH'&&row.arr==='VHHH'){
         arrIdx=idx;depIdx=idx;
     }
-    return {arrIdx,depIdx};
+    return {arrIdx:arrIdx,depIdx:depIdx};
 }
 function buildScheduleLine(row){
     const depUtc=toUtc(row.depDate,row.depTime,HKBAC_TZ_OFFSET);
@@ -2178,7 +2181,7 @@ function buildHkbacMail(idx){
     htmlInner=htmlInner.replace(/\$signature\b/g, sigHtml);
     plainBody=plainBody.replace(/\$signature\b/g, sigPlain);
     const htmlBody='<div style="font-family:\''+cfg.font+'\',Arial,sans-serif;font-size:'+cfg.fontSize+';line-height:1.5;color:#000;">'+htmlInner+'</div>';
-    return {subject,plainBody,htmlBody};
+    return {subject:subject,plainBody:plainBody,htmlBody:htmlBody};
 }
 function toggleHkbac(idx){
     const panel=document.getElementById('hkbac-panel-'+idx);
@@ -2220,6 +2223,7 @@ function renderHkbacPanel(idx){
     panelBody.querySelector('.close-panel-btn').addEventListener('click',function(){
         document.getElementById(this.dataset.panelId).style.display='none';
     });
+    // ★ 传 r.plainBody 作为第 6 个参数
     document.getElementById('hkbac-downloadEmlBtn-'+idx).addEventListener('click',e=>{
         const dateText=buildHkbacDateText(arrRow,depRow);
         downloadEml(
@@ -2227,7 +2231,8 @@ function renderHkbacPanel(idx){
             r.htmlBody,
             cfg.hkbacEmail,
             `HKBAC_${formatRegDash(mainRow.reg)}_${dateText}.eml`,
-            CC_EMAIL
+            CC_EMAIL,
+            r.plainBody
         );
         flashOk(e.target,'已下载');
     });
@@ -2271,72 +2276,99 @@ function mimeExt(mime){
     return map[String(mime).toLowerCase()] || 'png';
 }
 
-function buildEml(subject,htmlBody,toEmail,ccEmail){
-    const encodedSubject='=?UTF-8?B?'+b64EncodeUnicode(subject)+'?=';
-    const extracted=extractDataUriImages(htmlBody);
-    const htmlForEml=extracted.html;
-    const images=extracted.images;
-    const htmlB64=wrap76(b64EncodeUnicode(htmlForEml));
+/* ★ 嵌套 multipart/alternative > multipart/related（图片兼容性更好） */
+function buildEml(subject, htmlBody, plainBody, toEmail, ccEmail){
+    const encodedSubject = '=?UTF-8?B?' + b64EncodeUnicode(subject) + '?=';
+    const extracted = extractDataUriImages(htmlBody);
+    const htmlForEml = extracted.html;
+    const images = extracted.images;
 
-    // 无内嵌图片 → 简单 text/html 模式
+    const htmlB64 = wrap76(b64EncodeUnicode(htmlForEml));
+    const plainB64 = wrap76(b64EncodeUnicode(plainBody || ''));
+
+    // 无图片 → 单段 text/html
     if(images.length === 0){
-        let eml='';
-        eml+='MIME-Version: 1.0\r\n';
-        if(toEmail)eml+='To: '+toEmail+'\r\n';
-        if(ccEmail)eml+='Cc: '+ccEmail+'\r\n';
-        eml+='Subject: '+encodedSubject+'\r\n';
-        eml+='X-Unsent: 1\r\n';
-        eml+='Content-Type: text/html; charset=UTF-8\r\n';
-        eml+='Content-Transfer-Encoding: base64\r\n';
-        eml+='\r\n';
-        eml+=htmlB64;
+        let eml = '';
+        eml += 'MIME-Version: 1.0\r\n';
+        eml += 'Date: ' + new Date().toUTCString() + '\r\n';
+        if(toEmail) eml += 'To: ' + toEmail + '\r\n';
+        if(ccEmail) eml += 'Cc: ' + ccEmail + '\r\n';
+        eml += 'Subject: ' + encodedSubject + '\r\n';
+        eml += 'X-Unsent: 1\r\n';
+        eml += 'Content-Type: text/html; charset=UTF-8\r\n';
+        eml += 'Content-Transfer-Encoding: base64\r\n';
+        eml += '\r\n';
+        eml += htmlB64 + '\r\n';
         return eml;
     }
 
-    // 有内嵌图片 → multipart/related（图片作为 CID 内嵌）
-    const boundary='----=_AmberMail_'+Date.now()+'_'+Math.random().toString(36).slice(2,10);
-    let eml='';
-    eml+='MIME-Version: 1.0\r\n';
-    if(toEmail)eml+='To: '+toEmail+'\r\n';
-    if(ccEmail)eml+='Cc: '+ccEmail+'\r\n';
-    eml+='Subject: '+encodedSubject+'\r\n';
-    eml+='X-Unsent: 1\r\n';
-    eml+='Content-Type: multipart/related; type="text/html"; boundary="'+boundary+'"\r\n';
-    eml+='\r\n';
-    eml+='This is a multi-part message in MIME format.\r\n';
-    eml+='\r\n';
-    // 第一段：HTML 正文
-    eml+='--'+boundary+'\r\n';
-    eml+='Content-Type: text/html; charset=UTF-8\r\n';
-    eml+='Content-Transfer-Encoding: base64\r\n';
-    eml+='\r\n';
-    eml+=htmlB64+'\r\n';
-    eml+='\r\n';
-    // 后续：图片
+    // 有图片 → 嵌套结构
+    const B1 = '----=_Alt_' + Date.now() + '_' + Math.random().toString(36).slice(2,10);
+    const B2 = '----=_Rel_' + Date.now() + '_' + Math.random().toString(36).slice(2,10);
+
+    let eml = '';
+    eml += 'MIME-Version: 1.0\r\n';
+    eml += 'Date: ' + new Date().toUTCString() + '\r\n';
+    if(toEmail) eml += 'To: ' + toEmail + '\r\n';
+    if(ccEmail) eml += 'Cc: ' + ccEmail + '\r\n';
+    eml += 'Subject: ' + encodedSubject + '\r\n';
+    eml += 'X-Unsent: 1\r\n';
+    eml += 'Content-Type: multipart/alternative; boundary="' + B1 + '"\r\n';
+    eml += '\r\n';
+    eml += 'This is a multi-part message in MIME format.\r\n';
+    eml += '\r\n';
+
+    // 1) text/plain
+    eml += '--' + B1 + '\r\n';
+    eml += 'Content-Type: text/plain; charset=UTF-8\r\n';
+    eml += 'Content-Transfer-Encoding: base64\r\n';
+    eml += '\r\n';
+    eml += plainB64 + '\r\n';
+    eml += '\r\n';
+
+    // 2) multipart/related（HTML + 图片）
+    eml += '--' + B1 + '\r\n';
+    eml += 'Content-Type: multipart/related; type="text/html"; boundary="' + B2 + '"\r\n';
+    eml += '\r\n';
+
+    // 2a) HTML
+    eml += '--' + B2 + '\r\n';
+    eml += 'Content-Type: text/html; charset=UTF-8\r\n';
+    eml += 'Content-Transfer-Encoding: base64\r\n';
+    eml += '\r\n';
+    eml += htmlB64 + '\r\n';
+    eml += '\r\n';
+
+    // 2b) 图片
     for(const img of images){
         const ext = mimeExt(img.mime);
-        eml+='--'+boundary+'\r\n';
-        eml+='Content-Type: '+img.mime+'; name="signature.'+ext+'"\r\n';
-        eml+='Content-Transfer-Encoding: base64\r\n';
-        eml+='Content-ID: <'+img.cid+'>\r\n';
-        eml+='Content-Disposition: inline; filename="signature.'+ext+'"\r\n';
-        eml+='\r\n';
-        eml+=wrap76(img.b64)+'\r\n';
-        eml+='\r\n';
+        const filename = 'signature.' + ext;
+        eml += '--' + B2 + '\r\n';
+        eml += 'Content-Type: ' + img.mime + '; name="' + filename + '"\r\n';
+        eml += 'Content-Transfer-Encoding: base64\r\n';
+        eml += 'Content-ID: <' + img.cid + '>\r\n';
+        eml += 'Content-Location: ' + img.cid + '\r\n';
+        eml += 'Content-Disposition: inline; filename="' + filename + '"\r\n';
+        eml += '\r\n';
+        eml += wrap76(img.b64) + '\r\n';
+        eml += '\r\n';
     }
-    eml+='--'+boundary+'--\r\n';
+    eml += '--' + B2 + '--\r\n';
+    eml += '\r\n';
+    eml += '--' + B1 + '--\r\n';
     return eml;
 }
 
-function downloadEml(subject,htmlBody,toEmail,filename,ccEmail){
-    const eml=buildEml(subject,htmlBody,toEmail,ccEmail);
-    const blob=new Blob([eml],{type:'message/rfc822'});
-    const url=URL.createObjectURL(blob);
-    const a=document.createElement('a');
-    a.href=url;a.download=filename;
-    document.body.appendChild(a);a.click();document.body.removeChild(a);
-    setTimeout(()=>URL.revokeObjectURL(url),5000);
+function downloadEml(subject, htmlBody, toEmail, filename, ccEmail, plainBody){
+    const eml = buildEml(subject, htmlBody, plainBody || '', toEmail, ccEmail);
+    const blob = new Blob([eml], {type: 'message/rfc822'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
 }
+
 async function copyRichMail(i,btn,mode){
     const r=mode==='hkbac'?buildHkbacMail(i):buildMail(i);
     const htmlFull='<div>'+r.htmlBody+'</div>';
