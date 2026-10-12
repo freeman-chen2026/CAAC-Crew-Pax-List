@@ -1226,7 +1226,7 @@ with tab1:
         st.info("👆 请同时上传 GD单 和 模板文件。")
 
 # ================================================================
-# 功能2：世界时行程 + 飞越&香港邮件（共用一次上传）
+# 功能2：世界时行程 + 飞越&香港邮件（共用一次上传 + 签名）
 # ================================================================
 with tab2:
     F_HTML = r"""<!DOCTYPE html>
@@ -1259,6 +1259,8 @@ button.active{background:#1976d2;color:#fff;border-color:#1976d2}
 button.active:hover{background:#1565c0}
 button.close-panel-btn{background:#fff;color:#666;border-color:#ccc;font-weight:bold}
 button.close-panel-btn:hover{background:#ffebee;color:#d32f2f;border-color:#ef9a9a}
+button.danger{background:#fff;color:#d32f2f;border-color:#ef9a9a}
+button.danger:hover{background:#ffebee}
 
 .upload-hint{font-size:14px;color:#555;margin:4px 0 6px 0;}
 .status{color:#555;font-size:14px;margin-left:8px;}
@@ -1307,6 +1309,10 @@ code{background:#f0f0f0;padding:1px 5px;border-radius:3px;font-family:Consolas,m
 .default-row{background:#fff3e0;padding:10px;border-radius:6px;border:1px solid #ffb74d;margin-top:10px}
 .default-row label{font-weight:bold;font-size:13px;display:inline-block}
 .default-row input{margin-left:8px}
+.sig-box{background:#f3e5f5;padding:12px;border-radius:6px;border:1px solid #ce93d8;margin-top:14px}
+.sig-box label{font-weight:bold;font-size:13px;display:inline-block}
+.sig-preview{margin-top:8px;padding:10px;background:#fff;border:1px dashed #ccc;border-radius:6px;min-height:60px;text-align:center}
+.sig-preview img{max-width:100%;max-height:200px;}
 </style>
 </head>
 <body>
@@ -1377,6 +1383,39 @@ code{background:#f0f0f0;padding:1px 5px;border-radius:3px;font-family:Consolas,m
         </div>
     </div>
 
+    <!-- ===== 签名区 ===== -->
+    <div class="sig-box">
+        <label>✍️ 签名 HTML 模板：</label>
+        <div class="hint" style="margin:4px 0 6px;">
+            在正文模板里用 <code>$signature</code> 引用签名；<code>$sigImage</code> 会被替换成下方上传的图片。
+            换行自动转 &lt;br&gt;。此处内容会自动保存到浏览器本地。
+        </div>
+        <textarea id="signatureTemplate" style="height:220px;">Best Regards
+
+Freeman Chen 陈宇鸣
+
+Operation Control Officer 运行控制专员
+Operation Control 运行控制
+—
+Mob (CN) +86 133 7812 9224
+Tel +86 185 6672 5728
+Fax +86 755 2720 4830
+www.amber-aviation.com
+
+$sigImage</textarea>
+
+        <div style="margin-top:10px;">
+            <label>🖼️ 签名图片（PNG/JPG，建议 ≤ 600px 宽，< 1MB）：</label>
+            <input type="file" id="sigImageInput" accept="image/*" style="display:block;margin-top:4px;">
+            <button id="clearSigImageBtn" class="danger small" style="margin-top:6px;">🗑️ 清除签名图片</button>
+            <span id="sigImageStatus" class="hint" style="margin-left:8px;"></span>
+        </div>
+        <div class="sig-preview" id="sigImagePreview">
+            <span style="color:#999;font-size:12.5px;">（暂无签名图片，上传后这里显示预览）</span>
+        </div>
+    </div>
+    <!-- ===== 签名区结束 ===== -->
+
     <div style="margin-top:14px;">
         <label style="font-weight:bold;font-size:13px;">飞越邮件主题模板：</label>
         <input type="text" id="subjectText" value="$reg // OVF RQST // $dep-$arr //$dateTextSp">
@@ -1420,7 +1459,9 @@ SIC: $sic
 
 Should you need any further info / document, please let us know.
 
-Thank you and standby for your updates.</textarea>
+Thank you and standby for your updates.
+
+$signature</textarea>
     </div>
 
     <div style="margin-top:14px;">
@@ -1455,7 +1496,9 @@ T B652S 05OCT 014GLF4 0930VVDN D / ID.VHHHDGN4556000/
 
 BAPS Ref. No.: 2026004454
 
-Thank you!</textarea>
+Thank you!
+
+$signature</textarea>
     </div>
 
     <div style="margin-top:14px;">
@@ -1578,7 +1621,7 @@ VPCSZ=Amber Aviation (Hong Kong) Limited / invoice@amber-aviation.com</textarea>
    ========================================================= */
 const MONTHS=['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
 const HKBAC_TZ_OFFSET = 8;
-const CC_EMAIL = 'operation@amber-aviation.com';   // ★ 抄送地址
+const CC_EMAIL = 'operation@amber-aviation.com';
 const WORLD_PRIORITY = ['B652Q','B65AP','B652S','MLLIN','N88AY','B652R'];
 const REG_ORDER = ['B652Q','B652S','B65AP','MLLIN','N88AY','B652R','B8105','B8160','B8292','B8309','N2QE','N328LM','N550DR','N577QT','N7777U','N777ZH','T7178HT','T7CJK','VPCSZ','VPCVA','B3926','B8262'];
 
@@ -1586,9 +1629,12 @@ const HISTORY_KEY='worldtime_history_v2';
 const LAST_PLANS_KEY='worldtime_last_plans_v2';
 const LAST_FILE_KEY='worldtime_last_file_v2';
 const FLIGHT_ROWS_KEY='mailgen_flight_rows_v1';
+const SIG_IMAGE_KEY='mailgen_sig_image_v1';
+const SIG_TEMPLATE_KEY='mailgen_sig_template_v1';
 
 let flightRows = [];
 let showOnlyWeek = true;
+let sigImageDataUri = '';
 
 /* =========================================================
    通用工具
@@ -1604,6 +1650,61 @@ function loadJSON(k){try{const r=localStorage.getItem(k);return r?JSON.parse(r):
 function saveJSON(k,v){try{localStorage.setItem(k,JSON.stringify(v));}catch(e){}}
 function loadHistory(){try{const r=localStorage.getItem(HISTORY_KEY);if(!r)return{records:[]};const o=JSON.parse(r);if(!o.records)o.records=[];return o;}catch(e){return{records:[]};}}
 function saveHistory(h){try{localStorage.setItem(HISTORY_KEY,JSON.stringify(h));}catch(e){}}
+
+/* =========================================================
+   签名相关
+   ========================================================= */
+function loadSigImage(){
+    try{ sigImageDataUri = localStorage.getItem(SIG_IMAGE_KEY) || ''; }catch(e){ sigImageDataUri = ''; }
+}
+function saveSigImage(dataUri){
+    try{
+        localStorage.setItem(SIG_IMAGE_KEY, dataUri);
+        sigImageDataUri = dataUri;
+        return true;
+    }catch(e){
+        return false;
+    }
+}
+function clearSigImage(){
+    try{ localStorage.removeItem(SIG_IMAGE_KEY); }catch(e){}
+    sigImageDataUri = '';
+}
+function renderSigPreview(){
+    const box = document.getElementById('sigImagePreview');
+    if(!box) return;
+    if(sigImageDataUri){
+        box.innerHTML = '<img src="'+sigImageDataUri+'" alt="签名预览">';
+    } else {
+        box.innerHTML = '<span style="color:#999;font-size:12.5px;">（暂无签名图片，上传后这里显示预览）</span>';
+    }
+}
+function updateSigStatus(msg, ok){
+    const el = document.getElementById('sigImageStatus');
+    if(!el) return;
+    el.textContent = msg || '';
+    el.style.color = ok === false ? '#d32f2f' : '#2e7d32';
+}
+// 生成签名 HTML（$sigImage 会被替换成 <img>）
+function buildSignatureHtml(){
+    const tpl = val('signatureTemplate');
+    if(!tpl) return '';
+    let html = escapeHtml(tpl);
+    // 换行 → <br>
+    html = html.replace(/\r\n|\r|\n/g, '<br>\n');
+    // $sigImage → <img>
+    const imgTag = sigImageDataUri
+        ? '<img src="'+sigImageDataUri+'" style="max-width:600px;height:auto;display:block;border:0;" alt="signature">'
+        : '';
+    html = html.replace(/\$sigImage\b/g, imgTag);
+    return html;
+}
+// 生成签名纯文本（用于 plainBody）
+function buildSignaturePlain(){
+    const tpl = val('signatureTemplate');
+    if(!tpl) return '';
+    return tpl.replace(/\$sigImage\b/g, '').replace(/\r\n|\r|\n/g, '\n').trim();
+}
 
 /* =========================================================
    世界时行程相关
@@ -1932,7 +2033,6 @@ function renderMailPanel(i){
     panelBody.querySelector('.close-panel-btn').addEventListener('click',function(){
         document.getElementById(this.dataset.panelId).style.display='none';
     });
-    // ★ 飞越邮件：Cc 加上 operation@amber-aviation.com
     document.getElementById('downloadEmlBtn-'+i).addEventListener('click',e=>{
         downloadEml(
             r.subject,
@@ -1967,8 +2067,13 @@ function buildMail(i){
         etdLine,etaLine,route,ovf:d.ovf,pic:d.pic,sic:d.sic,flight:row.flight||'',crew:row.crew||''};
     const subject=applyVars(val('subjectText'),vars);
     const mdBody=applyVars(val('templateText'),vars);
-    const plainBody=stripMarkdown(mdBody);
-    const htmlInner=renderBody(mdBody);
+    let plainBody=stripMarkdown(mdBody);
+    let htmlInner=renderBody(mdBody);
+    // 处理签名（HTML 直接注入，纯文本去掉 $sigImage）
+    const sigHtml=buildSignatureHtml();
+    const sigPlain=buildSignaturePlain();
+    htmlInner=htmlInner.replace(/\$signature\b/g, sigHtml);
+    plainBody=plainBody.replace(/\$signature\b/g, sigPlain);
     const htmlBody='<div style="font-family:\''+cfg.font+'\',Arial,sans-serif;font-size:'+cfg.fontSize+';line-height:1.5;color:#000;">'+htmlInner+'</div>';
     return {subject,plainBody,htmlBody};
 }
@@ -2047,8 +2152,12 @@ function buildHkbacMail(idx){
         scheduleLines:scheduleLines};
     const subject=applyVars(val('subjectHkbac'),vars);
     const mdBody=applyVars(val('templateHkbac'),vars);
-    const plainBody=stripMarkdown(mdBody);
-    const htmlInner=renderBody(mdBody);
+    let plainBody=stripMarkdown(mdBody);
+    let htmlInner=renderBody(mdBody);
+    const sigHtml=buildSignatureHtml();
+    const sigPlain=buildSignaturePlain();
+    htmlInner=htmlInner.replace(/\$signature\b/g, sigHtml);
+    plainBody=plainBody.replace(/\$signature\b/g, sigPlain);
     const htmlBody='<div style="font-family:\''+cfg.font+'\',Arial,sans-serif;font-size:'+cfg.fontSize+';line-height:1.5;color:#000;">'+htmlInner+'</div>';
     return {subject,plainBody,htmlBody};
 }
@@ -2092,7 +2201,6 @@ function renderHkbacPanel(idx){
     panelBody.querySelector('.close-panel-btn').addEventListener('click',function(){
         document.getElementById(this.dataset.panelId).style.display='none';
     });
-    // ★ HKBAC：Cc 加上 operation@amber-aviation.com
     document.getElementById('hkbac-downloadEmlBtn-'+idx).addEventListener('click',e=>{
         const dateText=buildHkbacDateText(arrRow,depRow);
         downloadEml(
@@ -2123,24 +2231,74 @@ function b64EncodeUnicode(str){
 }
 function wrap76(b64){return b64.replace(/(.{76})/g,'$1\r\n');}
 
-// ★ buildEml 增加 ccEmail 参数
+/* 把 HTML 里的 <img src="data:image/xxx;base64,..."> 抽出来变成单独的 MIME 附件 */
+function extractDataUriImages(html){
+    const images=[];
+    let idx=0;
+    const newHtml=String(html).replace(
+        /<img([^>]*?)\ssrc="data:(image\/[a-zA-Z0-9.+-]+);base64,([A-Za-z0-9+/=\s]+?)"([^>]*?)>/gi,
+        (m, pre, mime, b64, post) => {
+            idx++;
+            const cid = 'sigimg' + idx + '_' + Date.now() + '@amber-aviation';
+            images.push({ cid, mime, b64: b64.replace(/\s/g, '') });
+            return '<img' + pre + ' src="cid:' + cid + '"' + post + '>';
+        }
+    );
+    return { html: newHtml, images };
+}
+
 function buildEml(subject,htmlBody,toEmail,ccEmail){
     const encodedSubject='=?UTF-8?B?'+b64EncodeUnicode(subject)+'?=';
-    const htmlB64=wrap76(b64EncodeUnicode(htmlBody));
+    const extracted=extractDataUriImages(htmlBody);
+    const htmlForEml=extracted.html;
+    const images=extracted.images;
+    const htmlB64=wrap76(b64EncodeUnicode(htmlForEml));
+
+    // 无内嵌图片 → 简单模式
+    if(images.length === 0){
+        let eml='';
+        eml+='MIME-Version: 1.0\r\n';
+        if(toEmail)eml+='To: '+toEmail+'\r\n';
+        if(ccEmail)eml+='Cc: '+ccEmail+'\r\n';
+        eml+='Subject: '+encodedSubject+'\r\n';
+        eml+='X-Unsent: 1\r\n';
+        eml+='Content-Type: text/html; charset=UTF-8\r\n';
+        eml+='Content-Transfer-Encoding: base64\r\n';
+        eml+='\r\n';
+        eml+=htmlB64;
+        return eml;
+    }
+
+    // 有内嵌图片 → multipart/related
+    const boundary='----=_AmberMail_'+Date.now()+'_'+Math.random().toString(36).slice(2,10);
     let eml='';
     eml+='MIME-Version: 1.0\r\n';
     if(toEmail)eml+='To: '+toEmail+'\r\n';
     if(ccEmail)eml+='Cc: '+ccEmail+'\r\n';
     eml+='Subject: '+encodedSubject+'\r\n';
     eml+='X-Unsent: 1\r\n';
+    eml+='Content-Type: multipart/related; boundary="'+boundary+'"\r\n';
+    eml+='\r\n';
+    eml+='--'+boundary+'\r\n';
     eml+='Content-Type: text/html; charset=UTF-8\r\n';
     eml+='Content-Transfer-Encoding: base64\r\n';
     eml+='\r\n';
-    eml+=htmlB64;
+    eml+=htmlB64+'\r\n';
+    eml+='\r\n';
+    for(const img of images){
+        eml+='--'+boundary+'\r\n';
+        eml+='Content-Type: '+img.mime+'\r\n';
+        eml+='Content-Transfer-Encoding: base64\r\n';
+        eml+='Content-ID: <'+img.cid+'>\r\n';
+        eml+='Content-Disposition: inline\r\n';
+        eml+='\r\n';
+        eml+=wrap76(img.b64)+'\r\n';
+        eml+='\r\n';
+    }
+    eml+='--'+boundary+'--\r\n';
     return eml;
 }
 
-// ★ downloadEml 增加 ccEmail 参数
 function downloadEml(subject,htmlBody,toEmail,filename,ccEmail){
     const eml=buildEml(subject,htmlBody,toEmail,ccEmail);
     const blob=new Blob([eml],{type:'message/rfc822'});
@@ -2269,9 +2427,22 @@ function handleFile(file){
    页面初始化
    ========================================================= */
 window.addEventListener('DOMContentLoaded',()=>{
+    // 1) 恢复签名图片
+    loadSigImage();
+    renderSigPreview();
+    if(sigImageDataUri) updateSigStatus('（已从本地恢复）', true);
+
+    // 2) 恢复签名模板
+    try{
+        const savedTpl = localStorage.getItem(SIG_TEMPLATE_KEY);
+        if(savedTpl !== null){
+            document.getElementById('signatureTemplate').value = savedTpl;
+        }
+    }catch(e){}
+
+    // 3) 恢复历史 & 航段数据
     const h=loadHistory();
     renderHistory(h);
-
     const cached=loadJSON(FLIGHT_ROWS_KEY);
     if(cached&&cached.rows&&cached.rows.length>0){
         flightRows=cached.rows;
@@ -2289,6 +2460,7 @@ window.addEventListener('DOMContentLoaded',()=>{
         renderMailList();
     }
 
+    // 4) 事件绑定
     document.getElementById('fileInput').addEventListener('change',(e)=>{
         const f=e.target.files[0];if(f)handleFile(f);
     });
@@ -2299,6 +2471,50 @@ window.addEventListener('DOMContentLoaded',()=>{
         saveHistory({records:[]});
         try{localStorage.removeItem(LAST_PLANS_KEY);localStorage.removeItem(LAST_FILE_KEY);}catch(e){}
         renderHistory({records:[]});
+    });
+
+    // 5) 签名图片上传
+    document.getElementById('sigImageInput').addEventListener('change',function(e){
+        const file=e.target.files[0];
+        if(!file)return;
+        if(!/^image\//.test(file.type)){
+            updateSigStatus('❌ 请选择图片文件', false);
+            return;
+        }
+        if(file.size > 2 * 1024 * 1024){
+            updateSigStatus('❌ 图片太大（'+ (file.size/1024/1024).toFixed(2) +'MB），建议 < 1MB', false);
+            return;
+        }
+        const reader=new FileReader();
+        reader.onload=function(ev){
+            const uri=ev.target.result;
+            if(saveSigImage(uri)){
+                renderSigPreview();
+                updateSigStatus('✅ 已保存（'+ (file.size/1024).toFixed(0) +' KB）', true);
+            }else{
+                updateSigStatus('❌ 保存失败（本地存储已满，请清除一些图片或历史）', false);
+            }
+        };
+        reader.readAsDataURL(file);
+    });
+
+    // 6) 清除签名图片
+    document.getElementById('clearSigImageBtn').addEventListener('click',function(){
+        if(!confirm('确定清除已保存的签名图片吗？'))return;
+        clearSigImage();
+        renderSigPreview();
+        document.getElementById('sigImageInput').value='';
+        updateSigStatus('已清除', true);
+    });
+
+    // 7) 签名模板自动保存
+    let sigTplTimer=null;
+    document.getElementById('signatureTemplate').addEventListener('input',function(e){
+        clearTimeout(sigTplTimer);
+        const v=e.target.value;
+        sigTplTimer=setTimeout(()=>{
+            try{ localStorage.setItem(SIG_TEMPLATE_KEY, v); }catch(err){}
+        }, 500);
     });
 });
 </script>
