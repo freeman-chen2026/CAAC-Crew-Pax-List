@@ -1226,40 +1226,9 @@ with tab1:
         st.info("👆 请同时上传 GD单 和 模板文件。")
 
 # ================================================================
-# 功能2：世界时行程 + 飞越&香港邮件（共用一次上传 + 签名后端注入）
+# 功能2：世界时行程 + 飞越&香港邮件（签名内嵌到 textarea）
 # ================================================================
 with tab2:
-    # ===== ★ 新增：Python 后端签名图片上传（比浏览器上传更可靠） =====
-    st.markdown("#### ✍️ 签名图片（在 Streamlit 里上传，会直接注入到邮件 HTML）")
-    _sig_col1, _sig_col2 = st.columns([1, 3])
-    with _sig_col1:
-        _sig_img_file = st.file_uploader(
-            "上传签名图片（PNG/JPG）",
-            type=["png", "jpg", "jpeg"],
-            key="sig_img_backend_v2",
-        )
-    with _sig_col2:
-        if _sig_img_file is not None:
-            import base64 as _b64mod
-            _img_bytes = _sig_img_file.getvalue()
-            _mime = _sig_img_file.type or "image/png"
-            _b64_str = _b64mod.b64encode(_img_bytes).decode("ascii")
-            _data_uri = f"data:{_mime};base64,{_b64_str}"
-            st.session_state["sig_img_data_uri_v2"] = _data_uri
-            st.success(f"✅ 已加载：{_sig_img_file.name}（{len(_img_bytes)//1024} KB）")
-        elif "sig_img_data_uri_v2" in st.session_state:
-            st.info("💾 已从上次上传恢复（重新上传即可覆盖）")
-
-    _sig_img_data_uri = st.session_state.get("sig_img_data_uri_v2", "")
-    if _sig_img_data_uri:
-        st.image(_sig_img_data_uri, width=280)
-
-    _sig_clear = st.button("🗑️ 清除后端签名图片", key="sig_clear_backend_v2")
-    if _sig_clear:
-        st.session_state.pop("sig_img_data_uri_v2", None)
-        st.rerun()
-
-    # ===== 下面就是原来的 iframe（HTML 里用 __SIG_IMAGE_DATA_URI__ 占位） =====
     F_HTML = r"""<!DOCTYPE html>
 <html>
 <head>
@@ -1342,6 +1311,9 @@ code{background:#f0f0f0;padding:1px 5px;border-radius:3px;font-family:Consolas,m
 .default-row input{margin-left:8px}
 .sig-box{background:#f3e5f5;padding:12px;border-radius:6px;border:1px solid #ce93d8;margin-top:14px}
 .sig-box label{font-weight:bold;font-size:13px;display:inline-block}
+.sig-preview{margin-top:8px;padding:10px;background:#fff;border:1px dashed #ccc;border-radius:6px;min-height:60px;text-align:center}
+.sig-preview img{max-width:100%;max-height:200px;}
+.sig-status{font-size:12.5px;margin-left:8px;}
 </style>
 </head>
 <body>
@@ -1412,13 +1384,21 @@ code{background:#f0f0f0;padding:1px 5px;border-radius:3px;font-family:Consolas,m
         </div>
     </div>
 
+    <!-- ===== 签名区 ===== -->
     <div class="sig-box">
         <label>✍️ 签名 HTML 模板：</label>
         <div class="hint" style="margin:4px 0 6px;">
-            在正文模板里用 <code>$signature</code> 引用签名；<code>$sigImage</code> 会被替换成**上面 Streamlit 上传的图片**。
-            换行自动转 &lt;br&gt;；电话/网址会自动加上蓝色下划线样式。
+            👉 <b>推荐流程</b>：① 点下面「📷 上传签名图片」→ ② 图片 base64 会自动写入下面的模板 → ③ 邮件里就有图了。<br>
+            你也可以手动编辑这个模板（换行自动转 &lt;br&gt;；电话/网址会自动加蓝色下划线）。
         </div>
-        <textarea id="signatureTemplate" style="height:220px;">Best Regards
+
+        <div style="margin:8px 0;">
+            <input type="file" id="sigImageInput" accept="image/*" style="display:inline-block;">
+            <button id="clearSigImageBtn" class="danger small" style="margin-left:6px;">🗑️ 移除签名图片</button>
+            <span id="sigImageStatus" class="sig-status"></span>
+        </div>
+
+        <textarea id="signatureTemplate" style="height:240px;">Best Regards
 
 Freeman Chen 陈宇鸣
 
@@ -1428,11 +1408,13 @@ Operation Control 运行控制
 Mob (CN) +86 133 7812 9224
 Tel +86 185 6672 5728
 Fax +86 755 2720 4830
-www.amber-aviation.com
+www.amber-aviation.com</textarea>
 
-$sigImage</textarea>
-        <div class="hint" style="margin-top:6px;">💡 图片请用**上面 Streamlit 的「上传签名图片」**，本 iframe 不再处理图片存储。</div>
+        <div class="sig-preview" id="sigImagePreview">
+            <span style="color:#999;font-size:12.5px;">（上传后这里显示预览）</span>
+        </div>
     </div>
+    <!-- ===== 签名区结束 ===== -->
 
     <div style="margin-top:14px;">
         <label style="font-weight:bold;font-size:13px;">飞越邮件主题模板：</label>
@@ -1634,11 +1616,6 @@ VPCSZ=Amber Aviation (Hong Kong) Limited / invoice@amber-aviation.com</textarea>
 </details>
 
 <script>
-/* =========================================================
-   ★ 从 Python 后端注入的签名图片（关键修复）
-   ========================================================= */
-const SIG_IMAGE_INJECTED = "__SIG_IMAGE_DATA_URI__";
-
 const MONTHS=['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
 const HKBAC_TZ_OFFSET = 8;
 const CC_EMAIL = 'operation@amber-aviation.com';
@@ -1649,7 +1626,7 @@ const HISTORY_KEY='worldtime_history_v2';
 const LAST_PLANS_KEY='worldtime_last_plans_v2';
 const LAST_FILE_KEY='worldtime_last_file_v2';
 const FLIGHT_ROWS_KEY='mailgen_flight_rows_v1';
-const SIG_TEMPLATE_KEY='mailgen_sig_template_v1';
+const SIG_TEMPLATE_KEY='mailgen_sig_template_v2';
 
 const SIG_FONT_STACK = "Calibri, 'Microsoft YaHei', '微软雅黑', Arial, sans-serif";
 const SIG_FAREAST_FONT = "'Microsoft YaHei', '微软雅黑'";
@@ -1657,12 +1634,9 @@ const SIG_FAREAST_FONT = "'Microsoft YaHei', '微软雅黑'";
 let flightRows = [];
 let showOnlyWeek = true;
 
-/* =========================================================
-   通用工具
-   ========================================================= */
 function pad2(n){return String(n).padStart(2,'0');}
 function escapeHtml(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
-function val(id){const el=document.getElementById(id);return el?el.value.trim():'';}
+function val(id){const el=document.getElementById(id);return el?el.value:'';}
 
 function loadJSON(k){try{const r=localStorage.getItem(k);return r?JSON.parse(r):null;}catch(e){return null;}}
 function saveJSON(k,v){try{localStorage.setItem(k,JSON.stringify(v));}catch(e){}}
@@ -1670,19 +1644,10 @@ function loadHistory(){try{const r=localStorage.getItem(HISTORY_KEY);if(!r)retur
 function saveHistory(h){try{localStorage.setItem(HISTORY_KEY,JSON.stringify(h));}catch(e){}}
 
 /* =========================================================
-   签名相关（关键修复：优先使用 Python 注入的图片）
+   ★ 关键：签名 HTML 生成
+   签名模板里可能直接包含 <img src="data:image/..."> 标签
+   所以这里的逻辑是：把 <img> 抽出来，文字部分做转义/换行/链接化，再拼回去
    ========================================================= */
-function readSigImageDirect(){
-    // ★ 优先用 Python 后端注入的图片
-    if(SIG_IMAGE_INJECTED && SIG_IMAGE_INJECTED.startsWith("data:image")){
-        return SIG_IMAGE_INJECTED;
-    }
-    // 兜底：读 localStorage
-    let imgData = '';
-    try { imgData = localStorage.getItem('mailgen_sig_image_v1') || ''; } catch(e) { imgData = ''; }
-    return imgData;
-}
-
 function stylizeSignatureLinks(html){
     html = html.replace(
         /(https?:\/\/[^\s<>"）)]+|www\.[a-zA-Z0-9][a-zA-Z0-9.-]*\.[a-zA-Z]{2,}(?:\/[^\s<>"）)]*)?)/g,
@@ -1699,24 +1664,34 @@ function stylizeSignatureLinks(html){
 }
 
 function buildSignatureHtml(){
-    const tpl = val('signatureTemplate');
+    let tpl = val('signatureTemplate');
     if(!tpl) return '';
-    const imgData = readSigImageDirect();
-    let html = escapeHtml(tpl);
-    html = html.replace(/\r\n|\r|\n/g, '<br>\n');
-    html = stylizeSignatureLinks(html);
-    const imgTag = imgData
-        ? '<img src="'+imgData+'" style="max-width:600px;height:auto;display:block;border:0;margin-top:12px;" alt="signature">'
-        : '';
-    html = html.replace(/\$sigImage\b/g, imgTag);
+
+    // 1) 抽离所有 <img ...> 标签
+    const imgRegex = /<img\b[^>]*>/gi;
+    const images = tpl.match(imgRegex) || [];
+    // 2) 把 <img> 从文字里去掉，剩下的当纯文本
+    let textOnly = tpl.replace(imgRegex, '');
+
+    // 3) 文字部分：escape + 换行转 <br> + 链接化
+    textOnly = escapeHtml(textOnly);
+    textOnly = textOnly.replace(/\r\n|\r|\n/g, '<br>\n');
+    textOnly = stylizeSignatureLinks(textOnly);
+
+    // 4) 图片拼回末尾
+    let finalHtml = textOnly;
+    for(const img of images){
+        finalHtml += '<br>\n' + img;
+    }
+
     return '<div style="font-family:'+SIG_FONT_STACK+';font-size:11pt;line-height:1.5;color:#000;'
-         + 'mso-fareast-font-family:'+SIG_FAREAST_FONT+';">'+html+'</div>';
+         + 'mso-fareast-font-family:'+SIG_FAREAST_FONT+';">'+finalHtml+'</div>';
 }
 
 function buildSignaturePlain(){
-    const tpl = val('signatureTemplate');
+    let tpl = val('signatureTemplate');
     if(!tpl) return '';
-    return tpl.replace(/\$sigImage\b/g, '').replace(/\r\n|\r|\n/g, '\n').trim();
+    return tpl.replace(/<img\b[^>]*>/gi, '').replace(/\r\n|\r|\n/g, '\n').trim();
 }
 
 /* =========================================================
@@ -1847,9 +1822,6 @@ function renderWorldStatus(msg,type){
     document.getElementById('status').innerHTML = '<div class="'+type+'">'+msg+'</div>';
 }
 
-/* =========================================================
-   邮件相关
-   ========================================================= */
 function fmtDate(v){
     if(v==null||v==='')return '';
     if(v instanceof Date)return v.getFullYear()+'-'+String(v.getMonth()+1).padStart(2,'0')+'-'+String(v.getDate()).padStart(2,'0');
@@ -2276,8 +2248,7 @@ function buildEml(subject, htmlBody, plainBody, toEmail, ccEmail){
         eml += 'Subject: ' + encodedSubject + '\r\n';
         eml += 'X-Unsent: 1\r\n';
         eml += 'Content-Type: text/html; charset=UTF-8\r\n';
-        eml += 'Content-Transfer-Encoding: base64\r\n';
-        eml += '\r\n';
+        eml += 'Content-Transfer-Encoding: base64\r\n\r\n';
         eml += htmlB64 + '\r\n';
         return eml;
     }
@@ -2292,9 +2263,7 @@ function buildEml(subject, htmlBody, plainBody, toEmail, ccEmail){
     if(ccEmail) eml += 'Cc: ' + ccEmail + '\r\n';
     eml += 'Subject: ' + encodedSubject + '\r\n';
     eml += 'X-Unsent: 1\r\n';
-    eml += 'Content-Type: multipart/alternative; boundary="' + B1 + '"\r\n';
-    eml += '\r\n';
-    eml += 'This is a multi-part message in MIME format.\r\n\r\n';
+    eml += 'Content-Type: multipart/alternative; boundary="' + B1 + '"\r\n\r\n';
     eml += '--' + B1 + '\r\n';
     eml += 'Content-Type: text/plain; charset=UTF-8\r\n';
     eml += 'Content-Transfer-Encoding: base64\r\n\r\n';
@@ -2359,9 +2328,6 @@ function flashOk(btn,msg){
     setTimeout(()=>{btn.textContent=old;btn.classList.remove('copy-ok');},1800);
 }
 
-/* =========================================================
-   文件解析
-   ========================================================= */
 function buildFlightRows(rows){
     let headerIdx=-1;
     for(let i=0;i<Math.min(rows.length,10);i++){
@@ -2448,12 +2414,16 @@ function handleFile(file){
    页面初始化
    ========================================================= */
 window.addEventListener('DOMContentLoaded',()=>{
+    // 恢复签名模板
     try{
         const savedTpl = localStorage.getItem(SIG_TEMPLATE_KEY);
         if(savedTpl !== null){
             document.getElementById('signatureTemplate').value = savedTpl;
         }
     }catch(e){}
+
+    // 显示已有图片预览（如果模板里有 <img>）
+    refreshSigPreviewFromTemplate();
 
     const h=loadHistory();
     renderHistory(h);
@@ -2486,6 +2456,52 @@ window.addEventListener('DOMContentLoaded',()=>{
         renderHistory({records:[]});
     });
 
+    // ★ 签名图片上传：直接把 <img> 写入 textarea
+    document.getElementById('sigImageInput').addEventListener('change', function(e){
+        const file = e.target.files[0];
+        if(!file) return;
+        if(!/^image\//.test(file.type)){
+            updateSigStatus('❌ 请选择图片文件', false);
+            return;
+        }
+        if(file.size > 2 * 1024 * 1024){
+            updateSigStatus('❌ 图片太大（'+ (file.size/1024/1024).toFixed(2) +'MB），建议 < 1MB', false);
+            return;
+        }
+        const reader = new FileReader();
+        reader.onload = function(ev){
+            const dataUri = ev.target.result;
+            const ta = document.getElementById('signatureTemplate');
+            let tpl = ta.value;
+            // 移除旧的 <img> 标签
+            tpl = tpl.replace(/<img\b[^>]*>/gi, '');
+            // 移除可能的 $sigImage 占位符
+            tpl = tpl.replace(/\$sigImage\b/g, '');
+            // 清理尾部多余空行
+            tpl = tpl.replace(/\s+$/g, '');
+            // 追加新图片
+            tpl += '\n\n<img src="' + dataUri + '" style="max-width:600px;height:auto;display:block;border:0;margin-top:12px;" alt="signature">';
+            ta.value = tpl;
+            // 触发 input 事件（保存到 localStorage）
+            ta.dispatchEvent(new Event('input', {bubbles: true}));
+            updateSigStatus('✅ 已写入签名模板（'+ (file.size/1024).toFixed(0) +' KB）', true);
+            refreshSigPreviewFromTemplate();
+        };
+        reader.readAsDataURL(file);
+    });
+
+    // ★ 移除签名图片
+    document.getElementById('clearSigImageBtn').addEventListener('click', function(){
+        const ta = document.getElementById('signatureTemplate');
+        let tpl = ta.value;
+        tpl = tpl.replace(/<img\b[^>]*>/gi, '');
+        tpl = tpl.replace(/\s+$/g, '');
+        ta.value = tpl;
+        ta.dispatchEvent(new Event('input', {bubbles: true}));
+        updateSigStatus('已移除签名图片', true);
+        refreshSigPreviewFromTemplate();
+    });
+
     // 签名模板自动保存
     let sigTplTimer=null;
     document.getElementById('signatureTemplate').addEventListener('input',function(e){
@@ -2496,14 +2512,30 @@ window.addEventListener('DOMContentLoaded',()=>{
         }, 500);
     });
 });
+
+function updateSigStatus(msg, ok){
+    const el = document.getElementById('sigImageStatus');
+    if(!el) return;
+    el.textContent = msg || '';
+    el.style.color = ok === false ? '#d32f2f' : '#2e7d32';
+}
+
+function refreshSigPreviewFromTemplate(){
+    const box = document.getElementById('sigImagePreview');
+    if(!box) return;
+    const tpl = val('signatureTemplate');
+    const m = tpl.match(/<img\b[^>]*src="([^"]+)"/i);
+    if(m){
+        box.innerHTML = '<img src="'+m[1]+'" alt="signature">';
+    }else{
+        box.innerHTML = '<span style="color:#999;font-size:12.5px;">（上传后这里显示预览）</span>';
+    }
+}
 </script>
 </body>
 </html>
 """
-
-    # ★ 关键：把 Python 后端准备好的 base64 图片注入到 HTML 里
-    F_HTML_FINAL = F_HTML.replace("__SIG_IMAGE_DATA_URI__", _sig_img_data_uri)
-    components.html(F_HTML_FINAL, height=1400, scrolling=True)
+    components.html(F_HTML, height=1500, scrolling=True)
 # ================================================================
 # 功能3：航路处理工具
 # ================================================================
