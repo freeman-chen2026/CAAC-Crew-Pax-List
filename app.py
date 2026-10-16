@@ -20,6 +20,21 @@ from datetime import datetime, timedelta
 import traceback
 import json
 import os
+import sys
+
+# ---------- ★ 环境检测：是否支持 PyWin32（仅 Windows + Excel 环境） ----------
+def _env_supports_pdf():
+    """检测当前环境是否支持 PyWin32 调用 Excel 生成 PDF"""
+    if sys.platform != "win32":
+        return False
+    try:
+        import win32com.client  # noqa: F401
+        return True
+    except ImportError:
+        return False
+
+_SUPPORTS_PDF = _env_supports_pdf()
+# ---------- ★ 环境检测结束 ----------
 
 # ---------- 页面设置 ----------
 st.set_page_config(page_title="备案表&世界时行程&航路处理&批复核对", layout="wide")
@@ -997,6 +1012,46 @@ with tab1:
         return buf.getvalue()
     # ---------- ★ 缓存结束 ----------
 
+    # ---------- ★ 新增：Excel → PDF（仅在 Windows + Excel 环境生效） ----------
+    def _convert_xlsx_to_pdf(xlsx_bytes):
+        """用本机 Excel 本体转 PDF，效果与 Ctrl+P 完全一致。"""
+        import tempfile
+        import os as _os
+        import pythoncom
+        import win32com.client as win32
+
+        pythoncom.CoInitialize()
+        try:
+            with tempfile.TemporaryDirectory() as tmpdir:
+                xlsx_path = _os.path.join(tmpdir, "input.xlsx")
+                pdf_path = _os.path.join(tmpdir, "input.pdf")
+                with open(xlsx_path, "wb") as f:
+                    f.write(xlsx_bytes)
+
+                excel = win32.DispatchEx("Excel.Application")
+                excel.Visible = False
+                excel.DisplayAlerts = False
+                try:
+                    wb = excel.Workbooks.Open(xlsx_path)
+                    wb.ExportAsFixedFormat(0, pdf_path)
+                    wb.Close(SaveChanges=False)
+                finally:
+                    excel.Quit()
+
+                if not _os.path.exists(pdf_path):
+                    raise RuntimeError("Excel 转换后找不到 PDF 文件")
+
+                with open(pdf_path, "rb") as f:
+                    return f.read()
+        finally:
+            pythoncom.CoUninitialize()
+
+    @st.cache_data(show_spinner=False, max_entries=8)
+    def _cached_xlsx_to_pdf(xlsx_bytes):
+        """PDF 生成缓存：Excel 内容不变时秒出。"""
+        return _convert_xlsx_to_pdf(xlsx_bytes)
+    # ---------- ★ 新增结束 ----------
+
     st.subheader("📂 上传文件")
     st.info("⚠️ 注意：模板文件必须是 **.xlsx** 格式（非 .xls）。联系方式、执照号码及证件号码已内置，机型已内置，无需额外上传。")
 
@@ -1217,6 +1272,23 @@ with tab1:
                 file_name=download_file_name,
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             )
+
+            # ---------- ★ 新增：PDF 下载（仅 Windows + Excel 环境显示） ----------
+            if _SUPPORTS_PDF:
+                try:
+                    with st.spinner("正在生成 PDF（首次约 10-30 秒，之后有缓存会很快）..."):
+                        pdf_bytes = _cached_xlsx_to_pdf(result_bytes)
+                    pdf_file_name = download_file_name.replace(".xlsx", ".pdf")
+                    st.download_button(
+                        label="⬇️ 下载 PDF 版本",
+                        data=pdf_bytes,
+                        file_name=pdf_file_name,
+                        mime="application/pdf",
+                    )
+                except Exception as _pdf_err:
+                    st.warning(f"⚠️ PDF 生成失败：{_pdf_err}")
+            # ---------- ★ 新增结束 ----------
+
             st.caption("⏳ 输入文件名之后稍等3秒钟后再点击下载")
 
         except Exception as e:
@@ -1224,7 +1296,6 @@ with tab1:
             st.exception(e)
     else:
         st.info("👆 请同时上传 GD单 和 模板文件。")
-
 # ================================================================
 # 功能2：世界时行程 + 飞越&香港邮件（签名内嵌到 textarea）
 # ================================================================
