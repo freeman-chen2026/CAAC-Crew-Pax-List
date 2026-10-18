@@ -5040,20 +5040,27 @@ async function parseWordDocx(buf) {
     while ((tm = tRegex.exec(pXml)) !== null) text += tm[1];
     text = decodeXmlEntities(text).trim();
     
-    // 判断是否有底色（高亮或底纹），精准排除纯白、自动、无主题
+    // ★ 只识别【青绿色】底色
     let isColored = false;
     
+    // 1. 检查高亮色（Word自带的“文本突出显示颜色”里的青绿色系）
     const hlMatch = pXml.match(/<w:highlight\b[^>]*?w:val="([^"]+)"/);
-    if (hlMatch && hlMatch[1] !== 'none' && hlMatch[1] !== 'white') {
-        isColored = true;
+    if (hlMatch) {
+        const color = hlMatch[1].toLowerCase();
+        if (['green', 'cyan', 'darkgreen', 'darkcyan', 'brightgreen'].includes(color)) {
+            isColored = true;
+        }
     }
     
+    // 2. 检查底纹色（自定义填充的青绿色/浅绿色 Hex 色值）
     if (!isColored) {
         const shdRegex = /<w:shd\b[^>]*?w:fill="([^"]+)"/g;
         let shdMatch;
+        // 兼容各种常用的青绿、深绿、浅绿、青蓝色值
+        const greenRegex = /^(00B050|00B0F0|92D050|00FF00|00FFFF|C6EFCE|A9D08E|33CCCC|66CCCC|00CCFF|CCFFFF|00FFCC|00CC99|99FF99|CCFFCC|00FF99|00CC66|33CC33|66FF66|00FA9A|90EE90|32CD32)$/i;
         while ((shdMatch = shdRegex.exec(pXml)) !== null) {
             const fill = shdMatch[1].toUpperCase();
-            if (fill !== 'FFFFFF' && fill !== 'AUTO' && fill !== 'NONE' && !fill.startsWith('THEME')) {
+            if (greenRegex.test(fill)) {
                 isColored = true;
                 break;
             }
