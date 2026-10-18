@@ -52,8 +52,6 @@ tab1, tab2, tab3, tab4 = st.tabs([
 # 功能1：备案表生成
 # ================================================================
 with tab1:
-    st.markdown("上传 GD单 和模板，自动生成备案表（联系方式、执照号码及证件号码已内置）。")
-
     from copy import copy as _copy_style
     import json as _json
 
@@ -201,10 +199,7 @@ with tab1:
         reg_clean = str(reg).strip().upper() if reg else ""
         gd_type_str = str(gd_type).strip() if gd_type else ""
         if reg_clean and reg_clean in AIRCRAFT_TYPE_MAP:
-            mapped = AIRCRAFT_TYPE_MAP[reg_clean]
-            if gd_type_str and gd_type_str.upper() != mapped.upper():
-                st.info(f"✈️ 机型按注册号确定：{gd_type_str} → {mapped}（注册号 {reg_clean}）")
-            return mapped
+            return AIRCRAFT_TYPE_MAP[reg_clean]
         return gd_type_str
 
     def get_nation_name(code):
@@ -447,7 +442,7 @@ with tab1:
         return input_text
 
     def parse_general_declaration(file_bytes):
-        wb = load_workbook(file_bytes)
+        wb = load_workbook(io.BytesIO(file_bytes))
         ws = wb.active
         data = {}
         for row in ws.iter_rows(min_row=1, max_row=20):
@@ -540,14 +535,13 @@ with tab1:
 
     def parse_route_plan(file_bytes):
         try:
-            df = pd.read_excel(file_bytes, skiprows=1)
+            df = pd.read_excel(io.BytesIO(file_bytes), skiprows=1)
             df.columns = [str(c).strip() for c in df.columns]
             if '飞机注册号' not in df.columns:
-                df = pd.read_excel(file_bytes, header=1)
+                df = pd.read_excel(io.BytesIO(file_bytes), header=1)
                 df.columns = [str(c).strip() for c in df.columns]
             return df
         except Exception as e:
-            st.warning(f"⚠️ 航段数据解析失败：{e}")
             return None
 
     def _parse_gd_date(date_str):
@@ -717,7 +711,6 @@ with tab1:
                     return True
         return False
 
-    # ---------- ★ 新增：乘客区自动扩展 ----------
     def _style_snapshot(cell):
         return {
             'font': _copy_style(cell.font),
@@ -737,7 +730,6 @@ with tab1:
         cell.alignment = _copy_style(snap['alignment'])
 
     def _find_first_content_row(ws, start_row, max_scan=300):
-        """从 start_row 向下找第一个有内容的行（返回行号，找不到返回 None）。"""
         max_col = ws.max_column or 10
         for r in range(start_row, start_row + max_scan):
             for c in range(1, max_col + 1):
@@ -747,11 +739,6 @@ with tab1:
         return None
 
     def _shift_images_down(ws, end_row, extra):
-        """insert_rows 之后调整图片/形状 anchor，让它们跟着内容整体下移。
-
-        ★ 只要图片的 from.row 或 to.row 有一个 ≥ 插入点，整张图片一起 +extra。
-        openpyxl 内部的行号是 0-based。
-        """
         if extra <= 0:
             return
         end_row_0 = end_row - 1
@@ -759,10 +746,8 @@ with tab1:
             anchor = getattr(img, 'anchor', None)
             if anchor is None:
                 continue
-
             frm = getattr(anchor, '_from', None)
             to = getattr(anchor, 'to', None)
-
             need_shift = False
             if frm is not None:
                 r = getattr(frm, 'row', None)
@@ -772,10 +757,8 @@ with tab1:
                 r = getattr(to, 'row', None)
                 if r is not None and r >= end_row_0:
                     need_shift = True
-
             if not need_shift:
                 continue
-
             if frm is not None:
                 try:
                     frm.row = frm.row + extra
@@ -788,31 +771,18 @@ with tab1:
                     pass
 
     def _ensure_passenger_rows(ws, data_start_row, needed_count):
-        """确保乘客数据区至少有 needed_count 行；不够则在承诺行之前插入。
-
-        - 复制某一行（优先选有合并结构的行）的样式 + 行高 + 合并到新行
-        - 保存并恢复 end_row 及以下所有行的行高
-        - 只处理受影响的合并单元格，其余不动
-        - 图片整体下移，保持宽高比
-        """
         if needed_count <= 0:
             return data_start_row
-
         from openpyxl.utils import get_column_letter
-
         end_row = _find_first_content_row(ws, data_start_row)
         if end_row is None:
             return data_start_row
-
         existing_rows = end_row - data_start_row
         if needed_count <= existing_rows:
             return data_start_row
-
         extra = needed_count - existing_rows
         template_row = end_row - 1
-
         max_col = ws.max_column or 10
-
         merge_template_row = template_row
         for r in range(template_row, data_start_row - 1, -1):
             hit = False
@@ -823,25 +793,21 @@ with tab1:
             if hit:
                 merge_template_row = r
                 break
-
         template_styles = {
             c: _style_snapshot(ws.cell(template_row, c))
             for c in range(1, max_col + 1)
         }
         template_height = ws.row_dimensions[template_row].height
-
         template_merges = []
         for mr in list(ws.merged_cells.ranges):
             if mr.min_row == merge_template_row and mr.max_row == merge_template_row:
                 template_merges.append((mr.min_col, mr.max_col))
-
         max_row = ws.max_row
         saved_heights = {}
         for r in range(end_row, max_row + 1):
             h = ws.row_dimensions[r].height
             if h is not None:
                 saved_heights[r] = h
-
         affected = []
         for mr in list(ws.merged_cells.ranges):
             if mr.min_row >= end_row or mr.min_row < end_row <= mr.max_row:
@@ -850,11 +816,8 @@ with tab1:
                     ws.unmerge_cells(str(mr))
                 except Exception:
                     pass
-
         ws.insert_rows(end_row, extra)
-
         _shift_images_down(ws, end_row, extra)
-
         for min_r, min_c, max_r, max_c in affected:
             if min_r >= end_row:
                 new_min_r, new_max_r = min_r + extra, max_r + extra
@@ -866,7 +829,6 @@ with tab1:
                 ws.merge_cells(rng)
             except Exception:
                 pass
-
         for r in list(ws.row_dimensions.keys()):
             if r >= end_row:
                 try:
@@ -875,7 +837,6 @@ with tab1:
                     pass
         for old_r, h in saved_heights.items():
             ws.row_dimensions[old_r + extra].height = h
-
         for i in range(extra):
             new_row = end_row + i
             for c, snap in template_styles.items():
@@ -889,17 +850,12 @@ with tab1:
                     ws.merge_cells(rng)
                 except Exception:
                     pass
-
         return data_start_row
-    # ---------- ★ 新增结束 ----------
 
     def fill_template(template_bytes, data, crew_rows, passenger_list, route_display):
         try:
             wb = load_workbook(template_bytes)
         except Exception as e:
-            if "Bad magic number" in str(e) or "BadZipFile" in str(e):
-                st.error("❌ 模板文件格式不正确。请确保模板为 **.xlsx** 格式（非 .xls）。")
-                st.info("💡 解决方法：用 Excel 打开该模板，选择“另存为”，将文件类型选为 **Excel工作簿（.xlsx）**，然后重新上传。")
             raise e
 
         ws = wb.active
@@ -997,24 +953,29 @@ with tab1:
                 safe_set_cell_value(ws, row_num, 5, doc_type_clean)
                 safe_set_cell_value(ws, row_num, 6, pax.get("passport_no", ""))
 
+        # ---------- 新增：自动打印居中（不动缩放/分页） ----------
+        try:
+            ws.page_setup.horizontalCentered = True
+            ws.page_setup.verticalCentered = True
+            ws.print_options.horizontalCentered = True
+            ws.print_options.verticalCentered = True
+        except Exception:
+            pass
+        # ---------- 新增结束 ----------
+
         output = BytesIO()
         wb.save(output); output.seek(0)
         return output
 
-    # ---------- ★ 缓存：避免每次 rerun 都重跑一遍生成 ----------
     @st.cache_data(show_spinner=False, max_entries=16)
     def _cached_fill_template(template_bytes, data_json, crew_json, pax_json, route_display):
-        """把 fill_template 结果缓存。只有内容/输入变化才会重新生成。"""
         _data = _json.loads(data_json)
         _crew = _json.loads(crew_json)
         _pax = _json.loads(pax_json)
         buf = fill_template(template_bytes, _data, _crew, _pax, route_display)
         return buf.getvalue()
-    # ---------- ★ 缓存结束 ----------
 
-    # ---------- ★ 新增：Excel → PDF（仅在 Windows + Excel 环境生效） ----------
     def _convert_xlsx_to_pdf(xlsx_bytes):
-        """用本机 Excel 本体转 PDF，效果与 Ctrl+P 完全一致。"""
         import tempfile
         import os as _os
         import pythoncom
@@ -1048,12 +1009,7 @@ with tab1:
 
     @st.cache_data(show_spinner=False, max_entries=8)
     def _cached_xlsx_to_pdf(xlsx_bytes):
-        """PDF 生成缓存：Excel 内容不变时秒出。"""
         return _convert_xlsx_to_pdf(xlsx_bytes)
-    # ---------- ★ 新增结束 ----------
-
-    st.subheader("📂 上传文件")
-    st.info("⚠️ 注意：模板文件必须是 **.xlsx** 格式（非 .xls）。联系方式、执照号码及证件号码已内置，机型已内置，无需额外上传。")
 
     data_file = st.file_uploader(
         "上传 GD单（General Declaration）Excel（.xlsx）",
@@ -1070,22 +1026,7 @@ with tab1:
 
     if data_file and template_file:
         try:
-            data, crew_list, passenger_list = parse_general_declaration(data_file)
-            st.success(f"✅ 解析成功：机组 {len(crew_list)} 人，乘客 {len(passenger_list)} 人")
-
-            if data.get("ac_type") or data.get("reg"):
-                st.caption(
-                    f"✈️ 注册号：**{data.get('reg', '')}** ｜ 机型：**{data.get('ac_type', '')}**"
-                    + (f"（GD单原始机型：{data.get('ac_type_raw', '')}）"
-                       if data.get('ac_type_raw') and data.get('ac_type_raw') != data.get('ac_type') else "")
-                )
-
-            st.subheader("📋 本次机组信息（可编辑）")
-            st.caption(
-                "系统已从内置名单匹配出**将要写入的证件号码 / 执照号码 / 联系方式**，"
-                "如有出入可直接在表格里修改（也可改姓名、性别、出生日期或调整职务）。"
-                "改完下方下载按钮生成的就是最新数据。"
-            )
+            data, crew_list, passenger_list = parse_general_declaration(data_file.getvalue())
 
             role_order = ["机长", "副驾驶", "乘务", "机务"]
             role_rows = {r: None for r in role_order}
@@ -1142,9 +1083,9 @@ with tab1:
                     f"{r['姓名']}（当前标为「{r['职务']}」）" for r in overflow_rows
                 )
                 st.warning(
-                    f"⚠️ **本次机组共 {len(crew_list)} 人**，而模板机组区只有 **4 行**"
-                    f"（机长 / 副驾驶 / 乘务 / 机务）。以下人员**不会自动写入模板**：\n\n"
-                    f"**{overflow_desc}**\n\n"
+                    f"本次机组共 {len(crew_list)} 人，而模板机组区只有 4 行"
+                    f"（机长 / 副驾驶 / 乘务 / 机务）。以下人员不会自动写入模板：\n\n"
+                    f"{overflow_desc}\n\n"
                     f"如需写入模板，请下载后在 Excel 中手动插入行。"
                 )
 
@@ -1178,9 +1119,6 @@ with tab1:
                 if not edited_crew_df.empty else []
             )
 
-            if passenger_list:
-                st.caption(f"👥 本次乘客共 **{len(passenger_list)}** 人，模板行数不足时会自动插入行。")
-
             st.markdown("---")
 
             from_code = data.get("from", ""); to_code = data.get("to", "")
@@ -1192,7 +1130,7 @@ with tab1:
             matched_note = ""
             gd_date_parsed = _parse_gd_date(date_str)
             if flight_plan_file is not None and reg and from_code and to_code:
-                route_df = parse_route_plan(flight_plan_file)
+                route_df = parse_route_plan(flight_plan_file.getvalue())
                 if route_df is not None:
                     matched_flight = find_matching_flight(
                         route_df, reg, from_code, to_code, gd_date=gd_date_parsed
@@ -1205,8 +1143,8 @@ with tab1:
                             row_date = _extract_row_date(matched_flight.get('出发日期'))
                             date_hint = row_date.strftime("%m-%d") if row_date else "?"
                             matched_note = (
-                                f"✅ 已从航段数据自动匹配到飞行计划（航班号 {flight_no}，"
-                                f"{from_code} → {to_code}，{date_hint}），已预填到下方输入框"
+                                f"已从航段数据自动匹配到飞行计划（航班号 {flight_no}，"
+                                f"{from_code} -> {to_code}，{date_hint}），已预填到下方输入框"
                             )
 
             if not default_route:
@@ -1218,12 +1156,6 @@ with tab1:
 
             if matched_note:
                 st.success(matched_note)
-            elif flight_plan_file is not None and reg and from_code and to_code:
-                date_hint = f"{gd_date_parsed[0]}月{gd_date_parsed[1]}日" if gd_date_parsed else "未知日期"
-                st.info(
-                    f"ℹ️ 航段数据中未找到 {reg} {from_code}→{to_code}（{date_hint}）的匹配记录，"
-                    f"已使用 GD单 信息生成默认值。"
-                )
 
             raw_route = st.text_input(
                 "从Jetops复制航班信息并适当调整起落时间 比如： F B652S 08:00 - 14:00  柬埔寨金边 德崇 - 日本东京 羽田",
@@ -1251,7 +1183,6 @@ with tab1:
                 safe_file_name = "备案表"
             download_file_name = f"{safe_file_name}.xlsx"
 
-            # ★ 用缓存版本；内容不变时秒出，不再重复跑 fill_template
             try:
                 result_bytes = _cached_fill_template(
                     template_file.getvalue(),
@@ -1261,9 +1192,8 @@ with tab1:
                     route_display,
                 )
             except Exception:
-                # 缓存失败 fallback 到直调
                 result_bytes = fill_template(
-                    template_file, data, crew_for_template, passenger_list, route_display
+                    template_file.getvalue(), data, crew_for_template, passenger_list, route_display
                 ).getvalue()
 
             st.download_button(
@@ -1273,10 +1203,9 @@ with tab1:
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             )
 
-            # ---------- ★ 新增：PDF 下载（仅 Windows + Excel 环境显示） ----------
             if _SUPPORTS_PDF:
                 try:
-                    with st.spinner("正在生成 PDF（首次约 10-30 秒，之后有缓存会很快）..."):
+                    with st.spinner("正在生成 PDF..."):
                         pdf_bytes = _cached_xlsx_to_pdf(result_bytes)
                     pdf_file_name = download_file_name.replace(".xlsx", ".pdf")
                     st.download_button(
@@ -1286,13 +1215,12 @@ with tab1:
                         mime="application/pdf",
                     )
                 except Exception as _pdf_err:
-                    st.warning(f"⚠️ PDF 生成失败：{_pdf_err}")
-            # ---------- ★ 新增结束 ----------
+                    st.warning(f"PDF 生成失败：{_pdf_err}")
 
             st.caption("⏳ 输入文件名之后稍等3秒钟后再点击下载")
 
         except Exception as e:
-            st.error(f"❌ 处理失败：{e}")
+            st.error(f"处理失败：{e}")
             st.exception(e)
     else:
         st.info("👆 请同时上传 GD单 和 模板文件。")
