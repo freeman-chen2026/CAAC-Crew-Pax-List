@@ -41,11 +41,12 @@ st.set_page_config(page_title="备案表&世界时行程&航路处理&批复核�
 st.title("🛫 备案表 / 世界时行程 / 航路处理 / 批复核对")
 
 # ---------- 创建选项卡 ----------
-tab1, tab2, tab3, tab4 = st.tabs([
+tab1, tab2, tab3, tab4, tab5 = st.tabs([
     "📋 功能1：备案表生成",
     "🌐 功能2：世界时行程",
     "✈️ 功能3：航路处理工具",
     "🔍 功能4：批复核对",
+    "📊 功能5：内地批复执行情况统计表",
 ])
 
 # ================================================================
@@ -4568,3 +4569,1372 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
             mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
             key="pc_download_btn",
         )
+
+
+# ================================================================
+# 功能5：内地批复执行情况统计表
+# ================================================================
+with tab5:
+    H_HTML = r"""<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>内地批复执行情况统计</title>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+<style>
+:root{
+  --bg:#f4f6fa; --card:#fff; --border:#e3e8ef; --text:#1f2937; --muted:#6b7280;
+  --primary:#2563eb; --primary-dark:#1d4ed8; --green:#059669; --red:#dc2626; --amber:#d97706;
+}
+*{box-sizing:border-box}
+body{
+  margin:0; padding:26px 18px 60px; background:var(--bg); color:var(--text);
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+  font-size:14px; line-height:1.6;
+}
+.wrap{max-width:1180px;margin:0 auto}
+header h1{font-size:20px;margin:0 0 18px;font-weight:700}
+.card{
+  background:var(--card);border:1px solid var(--border);border-radius:14px;
+  padding:20px;margin-bottom:16px;box-shadow:0 1px 3px rgba(16,24,40,.04);
+}
+.uploads{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px}
+@media(max-width:900px){.uploads{grid-template-columns:1fr}}
+.drop{
+  border:2px dashed #cbd5e1;border-radius:12px;padding:20px 16px;text-align:center;
+  cursor:pointer;transition:.15s;background:#fcfdff;
+}
+.drop:hover,.drop.drag{border-color:var(--primary);background:#eff6ff}
+.drop.loaded{border-color:#34d399;background:#f0fdf4}
+.drop .ico{line-height:0;display:flex;justify-content:center}
+.drop .ico svg{display:block}
+.drop .t{font-weight:600;margin-top:8px;font-size:13px}
+.drop .hint{color:var(--muted);font-size:11px;margin-top:2px}
+.drop .tip{
+  margin-top:8px;padding:6px 10px;border-radius:8px;
+  background:#fef3c7;border:1px solid #fcd34d;
+  font-size:11.5px;color:#92400e;line-height:1.5;text-align:left;
+}
+.drop .tip b{color:#78350f}
+.drop .fname{font-size:11px;margin-top:6px;color:var(--green);word-break:break-all;font-weight:500}
+.opts{display:flex;flex-wrap:wrap;gap:16px;align-items:center}
+.opts label{display:flex;align-items:center;gap:6px;font-size:13px;color:#374151}
+.opts select,.opts input[type="date"]{
+  padding:6px 10px;border-radius:8px;border:1px solid var(--border);background:#fff;
+  font-size:13px;outline:none;cursor:pointer;font-family:inherit;
+}
+.opts select:focus,.opts input[type="date"]:focus{border-color:var(--primary)}
+.chips{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px}
+.chip{
+  background:#f8fafc;border:1px solid var(--border);border-radius:10px;
+  padding:8px 14px;min-width:80px;text-align:center;
+}
+.chip b{display:block;font-size:18px;line-height:1.2}
+.chip span{font-size:11px;color:var(--muted)}
+.chip.ok b{color:var(--green)} .chip.bad b{color:var(--red)}
+.chip.info b{color:var(--primary)}
+table.pt{width:100%;border-collapse:collapse;font-size:13px}
+table.pt th{
+  background:#f8fafc;text-align:left;padding:8px 10px;font-weight:600;
+  color:#475569;border-bottom:1px solid var(--border);white-space:nowrap;
+}
+table.pt td{padding:8px 10px;border-bottom:1px solid #f1f5f9;vertical-align:top}
+table.pt tr:last-child td{border-bottom:none}
+.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-weight:600}
+td.ok{color:var(--green);font-weight:600}
+td.bad{color:var(--red);font-weight:600}
+.seg{padding:2px 0;color:#475569;font-size:12.5px;border-bottom:1px dashed #f1f5f9}
+.seg:last-child{border-bottom:none}
+.seg em{font-style:normal;font-weight:600;margin-left:4px}
+.seg.ok em{color:var(--green)}
+.seg.bad{color:var(--text)}
+.seg.bad em{color:var(--red)}
+.sobt-tag{
+  display:inline-block;font-size:11px;padding:0 6px;border-radius:6px;
+  background:#dbeafe;color:#1e40af;margin-left:4px;font-weight:600;
+}
+.sobt-tag.missing{background:#fef3c7;color:#92400e}
+.sobt-tag.converted{background:#fce7f3;color:#9d174d}
+.late-list{display:flex;flex-direction:column;gap:8px;margin-top:10px}
+.late-item{
+  display:flex;flex-wrap:wrap;gap:12px;align-items:center;
+  background:#fffbeb;border:1px solid #fde68a;border-radius:10px;padding:10px 12px;
+}
+.late-item em{font-style:normal;color:var(--red);font-weight:600}
+.late-item input{
+  flex:1;min-width:200px;padding:6px 10px;border-radius:8px;
+  border:1px solid #e5e7eb;outline:none;font-size:13px;font-family:inherit;
+}
+.late-item input:focus{border-color:var(--primary)}
+.actions{display:flex;gap:16px;flex-wrap:wrap;align-items:center;margin-top:6px}
+button.primary{
+  border:none;border-radius:10px;padding:12px 28px;font-size:15px;font-weight:600;
+  background:var(--primary);color:#fff;cursor:pointer;transition:.15s;font-family:inherit;
+}
+button.primary:hover{background:var(--primary-dark)}
+button.primary:disabled{background:#c7d2fe;cursor:not-allowed}
+.status{font-size:13px;color:var(--muted)}
+.status.ok{color:var(--green)}
+.status.err{color:var(--red)}
+.empty{color:var(--muted);font-size:13px;padding:8px 0}
+.section-title{
+  font-size:14px;margin:24px 0 10px;font-weight:600;color:#1e293b;
+  border-left:4px solid var(--primary);padding-left:8px;
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <h1>内地批复执行情况统计</h1>
+  </header>
+
+  <section class="card">
+    <div class="uploads">
+      <div class="drop" id="dropSeg">
+        <div class="ico">
+          <svg width="32" height="32" viewBox="0 0 32 32">
+            <rect x="2" y="2" width="28" height="28" rx="4" fill="#217346"/>
+            <path d="M10 10 L22 22 M22 10 L10 22" stroke="#ffffff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+          </svg>
+        </div>
+        <div class="t">航段数据导出</div>
+        <div class="hint">.xlsx / .xls / .csv</div>
+        <div class="tip"><b>⚠ 注意：</b>请以<b>北京时间</b>导出<b>需要统计的当天</b>并且<b>涉及内陆的计划</b></div>
+        <div class="fname" id="segNameBox"></div>
+        <input type="file" id="fileSeg" accept=".xlsx,.xls,.csv" hidden>
+      </div>
+      <div class="drop" id="dropTpl">
+        <div class="ico">
+          <svg width="32" height="32" viewBox="0 0 32 32">
+            <rect x="2" y="2" width="28" height="28" rx="4" fill="#217346"/>
+            <path d="M10 10 L22 22 M22 10 L10 22" stroke="#ffffff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+          </svg>
+        </div>
+        <div class="t">内地批复执行情况统计</div>
+        <div class="hint">.xlsx</div>
+        <div class="fname" id="tplNameBox"></div>
+        <input type="file" id="fileTpl" accept=".xlsx" hidden>
+      </div>
+      <div class="drop" id="dropWord">
+        <div class="ico">
+          <svg width="32" height="32" viewBox="0 0 32 32">
+            <rect x="2" y="2" width="28" height="28" rx="4" fill="#2b579a"/>
+            <path d="M8 9 L11 23 L16 13 L21 23 L24 9" stroke="#ffffff" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+          </svg>
+        </div>
+        <div class="t">国内批复信息汇总表</div>
+        <div class="hint">.docx（可选）</div>
+        <div class="fname" id="wordNameBox"></div>
+        <input type="file" id="fileWord" accept=".docx" hidden>
+      </div>
+    </div>
+  </section>
+
+  <section class="card" id="optionsCard" hidden>
+    <div class="opts">
+      <label>统计日期
+        <select id="dateFilter"></select>
+      </label>
+      <label>标题日期
+        <input type="date" id="titleDate">
+      </label>
+      <label>外机时区
+        <select id="optTz">
+          <option value="auto" selected>自动判断（B 北京时，非 B +8）</option>
+          <option value="none">全部不转换</option>
+          <option value="plus8">全部 +8</option>
+        </select>
+      </label>
+      <label>写入模式
+        <select id="optMode">
+          <option value="refreshAll" selected>先清除后填入</option>
+          <option value="fillEmpty">只填空白行</option>
+        </select>
+      </label>
+      <label>当月汇总
+        <select id="optMonth">
+          <option value="add" selected>原值 + 本次填入</option>
+          <option value="keep">保持原值</option>
+        </select>
+      </label>
+    </div>
+  </section>
+
+  <section class="card" id="previewCard" hidden>
+    <div id="summary"></div>
+    <div id="preview"></div>
+    <div id="reasons"></div>
+    <div id="applyPreview"></div>
+  </section>
+
+  <section class="actions" id="actions" hidden>
+    <button id="btnDownload" class="primary">⬇ 下载更新后的 Excel</button>
+    <span id="statusMsg" class="status"></span>
+  </section>
+
+</div>
+
+<script>
+/* ============================== 基础工具 ============================== */
+const pad2 = n => String(n).padStart(2, '0');
+const $ = id => document.getElementById(id);
+const DATA_COLS = ['B','C','D','E','F','G','H','I','J'];
+const MONTH_MAP = {
+  JAN:'01', FEB:'02', MAR:'03', APR:'04', MAY:'05', JUN:'06',
+  JUL:'07', AUG:'08', SEP:'09', OCT:'10', NOV:'11', DEC:'12'
+};
+
+function normDate(v) {
+  if (v == null || v === '') return '';
+  if (v instanceof Date) return `${v.getFullYear()}-${pad2(v.getMonth()+1)}-${pad2(v.getDate())}`;
+  if (typeof v === 'number') {
+    const d = XLSX.SSF.parse_date_code(v);
+    if (d) return `${d.y}-${pad2(d.m)}-${pad2(d.d)}`;
+  }
+  const s = String(v).trim();
+  const m = s.match(/(\d{4})\s*[-/.年]\s*(\d{1,2})\s*[-/.月]\s*(\d{1,2})/);
+  if (m) return `${m[1]}-${pad2(m[2])}-${pad2(m[3])}`;
+  return s;
+}
+
+function normTime(v) {
+  if (v == null || v === '') return '';
+  if (v instanceof Date) return pad2(v.getHours()) + pad2(v.getMinutes());
+  if (typeof v === 'number') {
+    let mins;
+    if (v >= 1) {
+      const frac = v - Math.floor(v);
+      if (frac === 0) return '';
+      mins = Math.round(frac * 1440) % 1440;
+    } else {
+      mins = Math.round(v * 1440) % 1440;
+    }
+    return pad2(Math.floor(mins/60)) + pad2(mins%60);
+  }
+  const s = String(v).trim();
+  let m = s.match(/^(\d{1,2})\s*[:：]\s*(\d{2})/);
+  if (m) return pad2(+m[1]) + m[2];
+  m = s.match(/^(\d{3,4})$/);
+  if (m) return m[1].padStart(4,'0');
+  m = s.match(/(\d{1,2}):(\d{2})/);
+  if (m) return pad2(+m[1]) + m[2];
+  return '';
+}
+
+function hhmm2min(s) {
+  if (!s) return null;
+  const t = String(s).padStart(4,'0');
+  const h = parseInt(t.slice(0,2),10), m = parseInt(t.slice(2),10);
+  if (isNaN(h) || isNaN(m)) return null;
+  return h*60 + m;
+}
+
+function minsDiff(a,b){
+  if (a==null || b==null) return null;
+  let d = a - b;
+  if (d > 720) d -= 1440;
+  if (d < -720) d += 1440;
+  return d;
+}
+
+function addOneDayStr(yyyymmdd) {
+  const [y,m,d] = yyyymmdd.split('-').map(Number);
+  const dt = new Date(y, m-1, d);
+  dt.setDate(dt.getDate() + 1);
+  return `${dt.getFullYear()}-${pad2(dt.getMonth()+1)}-${pad2(dt.getDate())}`;
+}
+
+function shiftDate(dateStr, deltaDays) {
+  if (deltaDays === 0) return dateStr;
+  const [y,m,d] = dateStr.split('-').map(Number);
+  const dt = new Date(y, m-1, d);
+  dt.setDate(dt.getDate() + deltaDays);
+  return `${dt.getFullYear()}-${pad2(dt.getMonth()+1)}-${pad2(dt.getDate())}`;
+}
+
+function convertDateTime(hhmm, dateStr, offsetHours) {
+  const m = hhmm2min(hhmm);
+  if (m == null) return { time: hhmm, date: dateStr, dayDelta: 0 };
+  let total = m + offsetHours * 60;
+  let dayDelta = 0;
+  while (total < 0) { total += 1440; dayDelta -= 1; }
+  while (total >= 1440) { total -= 1440; dayDelta += 1; }
+  return {
+    time: pad2(Math.floor(total/60)) + pad2(total%60),
+    date: shiftDate(dateStr, dayDelta),
+    dayDelta,
+  };
+}
+
+function readFileAsArrayBuffer(file) {
+  return new Promise((resolve, reject) => {
+    const fr = new FileReader();
+    fr.onload = e => resolve(new Uint8Array(e.target.result));
+    fr.onerror = reject;
+    fr.readAsArrayBuffer(file);
+  });
+}
+
+/* ============================== XML 工具 ============================== */
+function escapeXml(s) {
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/\r\n|\r/g, '\n')
+    .replace(/\n/g, '&#10;');
+}
+
+function decodeXmlEntities(s) {
+  return String(s)
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&#10;/g, '\n')
+    .replace(/&amp;/g, '&');
+}
+
+function escapeRegex(s) {
+  return String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function colToNum(col) {
+  let n = 0;
+  for (let i = 0; i < col.length; i++) n = n*26 + (col.charCodeAt(i) - 64);
+  return n;
+}
+function numToCol(n) {
+  let s = '';
+  while (n > 0) {
+    const m = (n-1) % 26;
+    s = String.fromCharCode(65+m) + s;
+    n = Math.floor((n-1)/26);
+  }
+  return s;
+}
+
+function extractStyle(sheetXml, rowNum, col) {
+  const re = new RegExp(`<c\\s+r="${col}${rowNum}"([^>]*?)(?:/>|>)`);
+  const m = sheetXml.match(re);
+  if (!m) return null;
+  const sm = m[1].match(/\ss="(\d+)"/);
+  return sm ? sm[1] : null;
+}
+
+function buildCellXml(rowNum, col, cell) {
+  const r = `r="${col}${rowNum}"`;
+  const style = cell.style ? ` s="${cell.style}"` : '';
+  if (cell.type === 'empty') return `<c ${r}${style}/>`;
+  if (cell.type === 'num') return `<c ${r}${style}><v>${cell.value}</v></c>`;
+  const txt = escapeXml(cell.value);
+  return `<c ${r}${style} t="inlineStr"><is><t xml:space="preserve">${txt}</t></is></c>`;
+}
+
+function patchRowInSheet(sheetXml, rowNum, cellMap) {
+  const openRe = new RegExp(`<row\\s+r="${rowNum}"[^>]*?/?>`, 'g');
+  const openMatch = openRe.exec(sheetXml);
+  if (!openMatch) {
+    console.warn('未找到 row', rowNum);
+    return sheetXml;
+  }
+  const openTag = openMatch[0];
+  const openStart = openMatch.index;
+  const openEnd = openStart + openTag.length;
+
+  if (openTag.endsWith('/>')) {
+    const attrs = openTag.slice(4, -2);
+    const cols = Object.keys(cellMap).sort((a,b) => colToNum(a) - colToNum(b));
+    const inner = cols.map(c => buildCellXml(rowNum, c, cellMap[c])).join('');
+    return sheetXml.slice(0, openStart) + `<row${attrs}>${inner}</row>` + sheetXml.slice(openEnd);
+  }
+
+  const closeTag = '</row>';
+  const closeIdx = sheetXml.indexOf(closeTag, openEnd);
+  if (closeIdx < 0) return sheetXml;
+
+  const attrs = openTag.slice(4, -1);
+  const inner = sheetXml.slice(openEnd, closeIdx);
+
+  const cRe = /<c\s+r="([A-Z]+)(\d+)"[^>]*?(?:\/>|>[\s\S]*?<\/c>)/g;
+  const cells = [];
+  let m;
+  while ((m = cRe.exec(inner)) !== null) {
+    cells.push({ col: m[1], xml: m[0] });
+  }
+
+  const targetCols = Object.keys(cellMap);
+  const keep = cells.filter(c => !targetCols.includes(c.col));
+  for (const col of targetCols) {
+    keep.push({ col, xml: buildCellXml(rowNum, col, cellMap[col]) });
+  }
+  keep.sort((a,b) => colToNum(a.col) - colToNum(b.col));
+
+  const newInner = keep.map(c => c.xml).join('');
+  return sheetXml.slice(0, openStart) + `<row${attrs}>${newInner}</row>` + sheetXml.slice(closeIdx + closeTag.length);
+}
+
+function patchSheetXml(sheetXml, rowUpdates) {
+  const rowNums = Object.keys(rowUpdates).map(Number).sort((a,b) => a - b);
+  for (const rn of rowNums) {
+    sheetXml = patchRowInSheet(sheetXml, rn, rowUpdates[rn]);
+  }
+  return sheetXml;
+}
+
+async function findSheetPath(zip, sheetName) {
+  const wbXml = await zip.file('xl/workbook.xml').async('string');
+  const relsXml = await zip.file('xl/_rels/workbook.xml.rels').async('string');
+
+  const sheetRe = new RegExp(`<sheet\\b[^>]*?\\bname="${escapeRegex(sheetName)}"[^>]*?\\br:id="([^"]+)"`);
+  let m = wbXml.match(sheetRe);
+  if (!m) {
+    const altRe = new RegExp(`<sheet\\b[^>]*?\\br:id="([^"]+)"[^>]*?\\bname="${escapeRegex(sheetName)}"`);
+    m = wbXml.match(altRe);
+  }
+  if (!m) throw new Error('找不到 sheet: ' + sheetName);
+  const rId = m[1];
+
+  const relRe = new RegExp(`<Relationship\\b[^>]*?\\bId="${escapeRegex(rId)}"[^>]*?\\bTarget="([^"]+)"`);
+  const rm = relsXml.match(relRe);
+  if (!rm) throw new Error('找不到 sheet 路径: ' + rId);
+  let target = rm[1];
+  if (target.startsWith('/')) target = target.slice(1);
+  else if (!target.startsWith('xl/')) target = 'xl/' + target;
+  return target;
+}
+
+/* ============================== 全局状态 ============================== */
+const state = {
+  segWb: null, tplWb: null,
+  segName: '', tplName: '', wordName: '',
+  tplBuf: null,
+  tplSheetPath: '',
+  segments: [],
+  groups: {},
+  reasons: {},
+  wordRecords: [],
+  wordConverted: [],
+  blueApplied: {},
+};
+
+/* ============================== 解析 Word 批复表 ============================== */
+async function parseWordDocx(buf) {
+  const zip = await JSZip.loadAsync(buf);
+  const docFile = zip.file('word/document.xml');
+  if (!docFile) throw new Error('不是有效的 .docx 文件');
+  const docXml = await docFile.async('string');
+
+  const paragraphs = [];
+  const pRegex = /<w:p\b[^>]*>([\s\S]*?)<\/w:p>/g;
+  let pm;
+  while ((pm = pRegex.exec(docXml)) !== null) {
+    const pXml = pm[1];
+    let text = '';
+    const tRegex = /<w:t\b[^>]*>([\s\S]*?)<\/w:t>/g;
+    let tm;
+    while ((tm = tRegex.exec(pXml)) !== null) text += tm[1];
+    text = decodeXmlEntities(text).trim();
+    
+    // 判断是否有底色（高亮或底纹），精准排除纯白、自动、无主题
+    let isColored = false;
+    
+    const hlMatch = pXml.match(/<w:highlight\b[^>]*?w:val="([^"]+)"/);
+    if (hlMatch && hlMatch[1] !== 'none' && hlMatch[1] !== 'white') {
+        isColored = true;
+    }
+    
+    if (!isColored) {
+        const shdRegex = /<w:shd\b[^>]*?w:fill="([^"]+)"/g;
+        let shdMatch;
+        while ((shdMatch = shdRegex.exec(pXml)) !== null) {
+            const fill = shdMatch[1].toUpperCase();
+            if (fill !== 'FFFFFF' && fill !== 'AUTO' && fill !== 'NONE' && !fill.startsWith('THEME')) {
+                isColored = true;
+                break;
+            }
+        }
+    }
+
+    if (text) paragraphs.push({ text, isColored });
+  }
+
+  // 必须严格包含：机号 机型 四字码起飞时间 到达时间四字码 ON 日期
+  const flightRe = /^([A-Z0-9\-]+)\s+([A-Z0-9]+)\s+([A-Z]{4})(\d{4,5})\s+(\d{4,5})([A-Z]{4})\s+ON\s+(\d{2})([A-Z]{3})(\d{4})\b/i;
+  const records = [];
+  const blueApplied = {};
+
+  for (const p of paragraphs) {
+    const text = p.text;
+    const isColored = p.isColored;
+
+    // 严格校验：只处理完全符合标准航班格式的段落
+    const m = text.match(flightRe);
+    if (!m) continue; 
+
+    const month = MONTH_MAP[m[8].toUpperCase()];
+    if (!month) continue;
+    const reg = m[1].toUpperCase();
+
+    // 只有在完全符合航班格式的前提下，带有底色的才计入申请批复
+    if (isColored) {
+        blueApplied[reg] = (blueApplied[reg] || 0) + 1;
+    }
+
+    records.push({
+      reg,
+      type: m[2].toUpperCase(),
+      dep: m[3].toUpperCase(),
+      sobt: m[4].slice(0, 4),
+      eta: m[5].slice(0, 4),
+      arr: m[6].toUpperCase(),
+      date: `${m[9]}-${month}-${m[7]}`,
+      isDomestic: /^B/i.test(reg),
+    });
+  }
+  return { records, blueApplied };
+}
+
+function convertRecord(rec, tzMode) {
+  let offset = 0;
+  if (tzMode === 'plus8') offset = 8;
+  else if (tzMode === 'auto') offset = rec.isDomestic ? 0 : 8;
+
+  if (offset === 0) {
+    return { ...rec, sobtC: rec.sobt, etaC: rec.eta, dateC: rec.date, offset: 0, dayDelta: 0 };
+  }
+  const sR = convertDateTime(rec.sobt, rec.date, offset);
+  const eR = convertDateTime(rec.eta, rec.date, offset);
+  return { ...rec, sobtC: sR.time, etaC: eR.time, dateC: sR.date, offset, dayDelta: sR.dayDelta };
+}
+
+function buildConvertedRecords(records, tzMode) {
+  return records.map(r => convertRecord(r, tzMode));
+}
+
+function buildWordIndex(converted) {
+  const fullIdx = {};
+  const looseIdx = {};
+  for (const r of converted) {
+    const fullKey = `${r.reg}|${r.dep}|${r.arr}|${r.dateC}`;
+    (fullIdx[fullKey] = fullIdx[fullKey] || []).push(r);
+    const looseKey = `${r.reg}|${r.dep}|${r.arr}`;
+    (looseIdx[looseKey] = looseIdx[looseKey] || []).push(r);
+  }
+  return { fullIdx, looseIdx };
+}
+
+function findSobt(seg, fullIdx, looseIdx, usedRecords) {
+  const fullKey = `${seg.reg}|${seg.dep}|${seg.arr}|${seg.date}`;
+  let recs = fullIdx[fullKey] || [];
+  let matchType = 'full';
+  if (!recs.length) {
+    recs = looseIdx[`${seg.reg}|${seg.dep}|${seg.arr}`] || [];
+    matchType = 'loose';
+  }
+  if (!recs.length) return { sobt: null, matchType: 'none' };
+
+  const availableRecs = recs.filter(r => !usedRecords.has(r));
+  if (!availableRecs.length) return { sobt: null, matchType: 'none' };
+
+  availableRecs.sort((a, b) => {
+    const aSobt = hhmm2min(a.sobtC);
+    const bSobt = hhmm2min(b.sobtC);
+    if (aSobt != null && bSobt != null) return aSobt - bSobt;
+    return 0;
+  });
+
+  const rec = availableRecs[0];
+  usedRecords.add(rec);
+
+  return {
+    sobt: rec.sobtC,
+    matchType,
+    converted: rec.offset !== 0,
+    originalSobt: rec.sobt,
+  };
+}
+
+/* ============================== 解析航段数据 ============================== */
+function parseSegments(wb) {
+  const ws = wb.Sheets[wb.SheetNames[0]];
+  const aoa = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '', raw: true });
+
+  let hdr = -1;
+  for (let i = 0; i < aoa.length; i++) {
+    const r = (aoa[i] || []).map(v => String(v == null ? '' : v).trim());
+    if (r.includes('飞机注册号') && r.includes('出发地')) { hdr = i; break; }
+  }
+  if (hdr < 0) throw new Error('未找到航段数据表头');
+
+  const head = (aoa[hdr] || []).map(v => String(v == null ? '' : v).trim());
+  const col = {};
+  head.forEach((h,i) => { if (h) col[h] = i; });
+  const pick = (row, name) => {
+    const i = col[name];
+    return i === undefined ? '' : row[i];
+  };
+
+  const out = [];
+  for (let i = hdr + 1; i < aoa.length; i++) {
+    const row = aoa[i] || [];
+    const reg = String(pick(row, '飞机注册号') || '').trim().toUpperCase();
+    if (!reg) continue;
+    const dep = String(pick(row, '出发地') || '').trim().toUpperCase();
+    const arr = String(pick(row, '到达地') || '').trim().toUpperCase();
+    if (!dep && !arr) continue;
+    out.push({
+      reg, dep, arr,
+      date: normDate(pick(row, '出发日期')),
+      sched: normTime(pick(row, '计划出发')),
+      atd:   normTime(pick(row, '实际出发')),
+      flight: String(pick(row, '航班号') || '').trim(),
+    });
+  }
+  if (!out.length) throw new Error('航段数据中未解析到有效记录');
+  return out;
+}
+
+/* ============================== 按飞机分组 + SOBT 匹配 ============================== */
+function buildGroups(segs, wordIdx) {
+  const g = {};
+  for (const s of segs) {
+    if (!g[s.reg]) g[s.reg] = { reg: s.reg, segs: [], onTime: 0, late: 0, sobtMatched: 0, sobtMissing: 0 };
+    g[s.reg].segs.push(s);
+  }
+  
+  const usedRecords = new Set();
+
+  for (const reg in g) {
+    const grp = g[reg];
+    grp.segs.sort((a,b) => (a.sched || '').localeCompare(b.sched || ''));
+    grp.onTime = 0; grp.late = 0; grp.sobtMatched = 0; grp.sobtMissing = 0;
+
+    grp.segs.forEach(s => {
+      s.key = [s.reg, s.date, s.flight, s.dep, s.arr, s.sched].join('|');
+
+      let sobtInfo = { sobt: null, matchType: 'none' };
+      if (wordIdx) sobtInfo = findSobt(s, wordIdx.fullIdx, wordIdx.looseIdx, usedRecords);
+      
+      s.sobt = sobtInfo.sobt || '';
+      s.sobtConverted = sobtInfo.converted || false;
+      s.originalSobt = sobtInfo.originalSobt || '';
+
+      const basis = s.sobt || s.sched;
+      const basisMin = hhmm2min(basis);
+      const atdMin = hhmm2min(s.atd);
+      if (basisMin != null && atdMin != null) {
+        const d = minsDiff(atdMin, basisMin);
+        s.diff = d;
+        s.onTime = Math.abs(d) <= 60;
+        if (s.onTime) grp.onTime++; else grp.late++;
+      } else {
+        s.diff = null;
+        s.onTime = null;
+      }
+
+      if (s.sobt) grp.sobtMatched++; else grp.sobtMissing++;
+    });
+  }
+  return g;
+}
+
+/* ============================== 扫描模板结构 ============================== */
+function scanTemplate(wb) {
+  const name = wb.SheetNames.find(n => n.includes('执行及准点')) || wb.SheetNames[0];
+  const ws = wb.Sheets[name];
+  const aoa = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '', raw: true });
+
+  let hdr = -1;
+  for (let i = 0; i < aoa.length; i++) {
+    const r = (aoa[i] || []).map(v => String(v == null ? '' : v).trim());
+    if (r[0] === '飞机' && r[1] && r[1].includes('执行架次')) { hdr = i; break; }
+  }
+  if (hdr < 0) throw new Error('模板中未找到「飞机 / 执行架次」表头行');
+
+  const info = { sheetName: name, headerRow: hdr, planes: [], summaryRows: {}, monthRows: {}, aoa };
+  let section = '';
+  const SECTIONS = ['托管机队', '中心机队'];
+
+  for (let i = hdr + 1; i < aoa.length; i++) {
+    const r = (aoa[i] || []).map(v => String(v == null ? '' : v).trim());
+    const a = r[0];
+    if (!a) continue;
+    if (SECTIONS.includes(a)) { section = a; continue; }
+    if (a.includes('汇总')) {
+      if (a === '当月数据汇总') info.monthRows[section] = i;
+      else info.summaryRows[section] = i;
+      continue;
+    }
+    info.planes.push({ row: i, reg: a.toUpperCase(), section });
+  }
+  if (!info.planes.length) throw new Error('模板中未识别到任何飞机行');
+  return info;
+}
+
+function readPlaneRowFromAoa(aoa, rowIdx) {
+  const r = aoa[rowIdx] || [];
+  const total = Number(r[1]) || 0;
+  const raw = String(r[1] == null ? '' : r[1]).trim();
+  return {
+    total,
+    hasData: raw !== '' && raw !== '0',
+    onTime: Number(r[7]) || 0,
+    late: Number(r[8]) || 0,
+  };
+}
+
+/* ============================== 渲染预览 ============================== */
+function getFilteredSegments() {
+  const v = $('dateFilter').value;
+  if (!v || v === 'all') return state.segments;
+  return state.segments.filter(s => s.date === v);
+}
+
+function render() {
+  const segs = getFilteredSegments();
+
+  let wordIdx = null;
+  if (state.wordRecords.length) {
+    const tzMode = $('optTz').value;
+    state.wordConverted = buildConvertedRecords(state.wordRecords, tzMode);
+    wordIdx = buildWordIndex(state.wordConverted);
+  }
+
+  const groups = buildGroups(segs, wordIdx);
+  state.groups = groups;
+
+  const regs = Object.keys(groups).sort();
+  const totalOn = regs.reduce((a,r) => a + groups[r].onTime, 0);
+  const totalLate = regs.reduce((a,r) => a + groups[r].late, 0);
+  const totalSobt = regs.reduce((a,r) => a + groups[r].sobtMatched, 0);
+  const totalNoSobt = regs.reduce((a,r) => a + groups[r].sobtMissing, 0);
+  
+  const blueList = state.blueApplied || {};
+  const totalBlue = Object.values(blueList).reduce((a,b) => a+b, 0);
+
+  $('summary').innerHTML = `
+    <div class="chips">
+      <div class="chip"><b>${regs.length}</b><span>架飞机</span></div>
+      <div class="chip"><b>${segs.length}</b><span>个航段</span></div>
+      <div class="chip ok"><b>${totalOn}</b><span>准点</span></div>
+      <div class="chip bad"><b>${totalLate}</b><span>非准点</span></div>
+      <div class="chip info"><b>${totalSobt}</b><span>SOBT 已匹配</span></div>
+      ${totalNoSobt ? `<div class="chip"><b>${totalNoSobt}</b><span>无 SOBT（按 ETD）</span></div>` : ''}
+      ${totalBlue ? `<div class="chip info"><b>${totalBlue}</b><span>带底色批复计划</span></div>` : ''}
+    </div>`;
+
+  if (!regs.length) {
+    $('preview').innerHTML = '<div class="empty">该日期下没有航段数据</div>';
+    $('reasons').innerHTML = '';
+    $('applyPreview').innerHTML = '';
+    return;
+  }
+
+  let html = `<table class="pt">
+    <thead><tr><th>飞机</th><th>架次</th><th>准点</th><th>非准点</th><th>航段明细</th></tr></thead><tbody>`;
+  for (const r of regs) {
+    const g = groups[r];
+    const detail = g.segs.map(s => {
+      const cls = s.onTime === true ? 'ok' : (s.onTime === false ? 'bad' : '');
+      const sign = s.diff == null ? '' : (s.diff > 0 ? '+' : '') + s.diff + 'min';
+      let sobtTag;
+      if (s.sobt) {
+        sobtTag = s.sobtConverted
+          ? `<span class="sobt-tag converted">SOBT ${s.sobt}（原 ${s.originalSobt} +8）</span>`
+          : `<span class="sobt-tag">SOBT ${s.sobt}</span>`;
+      } else {
+        sobtTag = `<span class="sobt-tag missing">无 SOBT</span>`;
+      }
+      return `<div class="seg ${cls}">
+        <b>${s.dep || '—'} → ${s.arr || '—'}</b>
+        ${sobtTag}
+        · ETD ${s.sched || '—'} · ATD ${s.atd || '—'}
+        ${sign ? `<em>${sign}</em>` : ''}
+      </div>`;
+    }).join('');
+    html += `<tr>
+      <td class="mono">${r}</td>
+      <td>${g.segs.length}</td>
+      <td class="ok">${g.onTime}</td>
+      <td class="bad">${g.late > 0 ? g.late : '—'}</td>
+      <td>${detail}</td>
+    </tr>`;
+  }
+  html += '</tbody></table>';
+  $('preview').innerHTML = html;
+
+  const lateSegs = [];
+  for (const r of regs) for (const s of groups[r].segs) if (s.onTime === false) lateSegs.push(s);
+  if (!lateSegs.length) {
+    $('reasons').innerHTML = '<div class="empty" style="margin-top:12px">本批次全部准点 ✅</div>';
+  } else {
+    let rh = '<div class="late-list">';
+    for (const s of lateSegs) {
+      const sign = (s.diff > 0 ? '+' : '') + s.diff + 'min';
+      const basis = s.sobt ? `SOBT ${s.sobt}` : `ETD ${s.sched}`;
+      rh += `<div class="late-item">
+        <span class="mono">${s.reg}</span>
+        <span>${s.dep || '—'} → ${s.arr || '—'}</span>
+        <span>${basis} / ATD ${s.atd} <em>${sign}</em></span>
+        <input type="text" data-key="${s.key}" placeholder="填写非准点原因"
+               value="${(state.reasons[s.key] || '').replace(/"/g, '&quot;')}">
+      </div>`;
+    }
+    rh += '</div>';
+    $('reasons').innerHTML = rh;
+    $('reasons').querySelectorAll('input[data-key]').forEach(inp => {
+      inp.addEventListener('input', e => {
+        state.reasons[e.target.dataset.key] = e.target.value.trim();
+      });
+    });
+  }
+
+  // 第二页：申请情况预览
+  let applyHtml = '';
+  if (Object.keys(blueList).length > 0) {
+    applyHtml = `<div class="section-title">第二页：申请情况预览（带底色计划）</div>
+      <table class="pt">
+        <thead><tr><th>飞机</th><th>正常批复架次</th><th>总批复架次</th></tr></thead>
+        <tbody>`;
+    for (const [reg, count] of Object.entries(blueList)) {
+      applyHtml += `<tr>
+        <td class="mono">${reg}</td>
+        <td>${count}</td>
+        <td>${count}</td>
+      </tr>`;
+    }
+    applyHtml += `</tbody></table>`;
+  }
+  $('applyPreview').innerHTML = applyHtml;
+}
+
+/* ============================== 标题日期 patch ============================== */
+async function patchTitleDate(zip, sheetXml, aoa, keyword, newDateText) {
+  let rowIdx = -1, colIdx = -1;
+  for (let i = 0; i < aoa.length; i++) {
+    const r = aoa[i] || [];
+    for (let j = 0; j < r.length; j++) {
+      const v = String(r[j] == null ? '' : r[j]);
+      if (v.includes(keyword)) { rowIdx = i; colIdx = j; break; }
+    }
+    if (rowIdx >= 0) break;
+  }
+  if (rowIdx < 0) return { note: '未找到标题行' };
+
+  const cellRef = numToCol(colIdx + 1) + (rowIdx + 1);
+  const dateRegex = /\d{4}\.\d{2}\.\d{2}\s*0830\s*-\s*\d{4}\.\d{2}\.\d{2}\s*0830/;
+
+  const cellRe = new RegExp(`<c\\s+r="${cellRef}"[^>]*?\\/?>[\\s\\S]*?<\\/c>|<c\\s+r="${cellRef}"[^>]*?\\/>`);
+  const cellMatch = sheetXml.match(cellRe);
+  if (!cellMatch) return { note: '未找到标题单元格 ' + cellRef };
+
+  const fullCellXml = cellMatch[0];
+  const isSharedStr = /t="s"/.test(fullCellXml);
+  const isInline = /t="inlineStr"/.test(fullCellXml);
+
+  if (isSharedStr) {
+    const vMatch = fullCellXml.match(/<v>(\d+)<\/v>/);
+    if (!vMatch) return { note: 'sharedStrings 索引提取失败' };
+    const idx = parseInt(vMatch[1], 10);
+
+    const ssFile = zip.file('xl/sharedStrings.xml');
+    if (!ssFile) return { note: '无 sharedStrings.xml' };
+    const ssXml = await ssFile.async('string');
+
+    const siRegex = /<si\b[^>]*>[\s\S]*?<\/si>/g;
+    let count = -1, matchStart = -1, matchEnd = -1, targetSi = null;
+    let mm;
+    while ((mm = siRegex.exec(ssXml)) !== null) {
+      count++;
+      if (count === idx) {
+        targetSi = mm[0];
+        matchStart = mm.index;
+        matchEnd = mm.index + mm[0].length;
+        break;
+      }
+    }
+    if (!targetSi) return { note: 'sharedStrings 找不到第 ' + idx + ' 项' };
+
+    const tRegex = /<t\b([^>]*)>([\s\S]*?)<\/t>/g;
+    let found = false;
+    const newSi = targetSi.replace(tRegex, (match, attrs, content) => {
+      const decoded = decodeXmlEntities(content);
+      if (dateRegex.test(decoded)) {
+        const replaced = decoded.replace(dateRegex, newDateText);
+        if (replaced !== decoded) {
+          found = true;
+          const encoded = replaced
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;');
+          return `<t${attrs}>${encoded}</t>`;
+        }
+      }
+      return match;
+    });
+
+    if (!found) return { note: 'sharedStrings[' + idx + '] 中未匹配到日期' };
+
+    const newSsXml = ssXml.slice(0, matchStart) + newSi + ssXml.slice(matchEnd);
+    zip.file('xl/sharedStrings.xml', newSsXml);
+
+    return { note: 'sharedStrings[' + idx + '] 已更新，单元格类型/格式保持不变' };
+  } else if (isInline) {
+    const startIdx = cellMatch.index;
+    const endIdx = startIdx + fullCellXml.length;
+    const styleMatch = fullCellXml.match(/\ss="(\d+)"/);
+    const style = styleMatch ? styleMatch[1] : '';
+
+    const isMatch = fullCellXml.match(/<is>([\s\S]*?)<\/is>/);
+    if (!isMatch) return { note: 'inlineStr 结构异常' };
+    const richContent = isMatch[1];
+
+    const tRegex = /<t\b([^>]*)>([\s\S]*?)<\/t>/g;
+    let found = false;
+    const newRich = richContent.replace(tRegex, (match, attrs, content) => {
+      const decoded = decodeXmlEntities(content);
+      if (dateRegex.test(decoded)) {
+        const replaced = decoded.replace(dateRegex, newDateText);
+        if (replaced !== decoded) {
+          found = true;
+          const encoded = replaced
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;');
+          return `<t${attrs}>${encoded}</t>`;
+        }
+      }
+      return match;
+    });
+
+    if (!found) return { note: 'inlineStr 中未匹配到日期' };
+
+    const newCellXml = `<c r="${cellRef}"${style ? ` s="${style}"` : ''} t="inlineStr"><is>${newRich}</is></c>`;
+    sheetXml = sheetXml.slice(0, startIdx) + newCellXml + sheetXml.slice(endIdx);
+    return { note: 'inlineStr 已更新，富文本保留', sheetXml };
+  }
+  return { note: '单元格类型不支持' };
+}
+
+/* ============================== 生成：先清除，后填入 ============================== */
+async function applyToTemplate() {
+  if (!state.tplBuf) throw new Error('模板文件未加载');
+  if (!state.tplSheetPath) throw new Error('未定位到目标 sheet XML');
+
+  const zip = await JSZip.loadAsync(state.tplBuf);
+  const sheetFile = zip.file(state.tplSheetPath);
+  if (!sheetFile) throw new Error('未找到 sheet XML');
+  let sheetXml = await sheetFile.async('string');
+
+  const tplWb = XLSX.read(state.tplBuf, { type: 'array', cellDates: false });
+  const info = scanTemplate(tplWb);
+  const aoa = info.aoa;
+
+  const segs = getFilteredSegments();
+  let wordIdx = null;
+  if (state.wordRecords.length) {
+    const tzMode = $('optTz').value;
+    state.wordConverted = buildConvertedRecords(state.wordRecords, tzMode);
+    wordIdx = buildWordIndex(state.wordConverted);
+  }
+  const groups = buildGroups(segs, wordIdx);
+
+  const mode = $('optMode').value;
+  const monthMode = $('optMonth').value;
+  const inputVal = $('titleDate').value;
+  const d1 = inputVal.replace(/-/g, '.');
+  const d2 = addOneDayStr(inputVal).replace(/-/g, '.');
+  const newDateText = `${d1} 0830-${d2} 0830`;
+
+  const filled = {};
+  const finalPlaneValues = {};
+
+  /* --- Sheet1: 执行及准点 --- */
+  const clearUpdates = {};
+  for (const p of info.planes) {
+    if (mode !== 'refreshAll') continue;
+    const xmlRow = p.row + 1;
+    const cellMap = {};
+    for (const col of DATA_COLS) {
+      cellMap[col] = { type: 'empty', style: extractStyle(sheetXml, xmlRow, col) };
+    }
+    clearUpdates[xmlRow] = cellMap;
+  }
+  if (Object.keys(clearUpdates).length) sheetXml = patchSheetXml(sheetXml, clearUpdates);
+
+  const fillUpdates = {};
+  for (const p of info.planes) {
+    const g = groups[p.reg];
+    if (!g) {
+      finalPlaneValues[p.reg] = { total: 0, onTime: 0, late: 0 };
+      continue;
+    }
+
+    if (mode === 'fillEmpty') {
+      const exist = readPlaneRowFromAoa(aoa, p.row);
+      if (exist.hasData) {
+        finalPlaneValues[p.reg] = { total: exist.total, onTime: exist.onTime, late: exist.late };
+        continue;
+      }
+    }
+
+    const xmlRow = p.row + 1;
+    const sobtList = g.segs.map(s => s.sobt || '');
+    const hasAnySobt = sobtList.some(x => x);
+
+    const cellMap = {
+      B: { type: 'num', value: g.segs.length, style: extractStyle(sheetXml, xmlRow, 'B') },
+      C: { type: 'str', value: g.segs.map(s => s.dep || '').join('\n'), style: extractStyle(sheetXml, xmlRow, 'C') },
+      D: { type: 'str', value: g.segs.map(s => s.arr || '').join('\n'), style: extractStyle(sheetXml, xmlRow, 'D') },
+      E: hasAnySobt ? { type: 'str', value: sobtList.join('\n'), style: extractStyle(sheetXml, xmlRow, 'E') } : { type: 'empty', style: extractStyle(sheetXml, xmlRow, 'E') },
+      F: { type: 'str', value: g.segs.map(s => s.sched || '').join('\n'), style: extractStyle(sheetXml, xmlRow, 'F') },
+      G: { type: 'str', value: g.segs.map(s => s.atd || '').join('\n'), style: extractStyle(sheetXml, xmlRow, 'G') },
+      H: { type: 'num', value: g.onTime, style: extractStyle(sheetXml, xmlRow, 'H') },
+      I: g.late > 0 ? { type: 'num', value: g.late, style: extractStyle(sheetXml, xmlRow, 'I') } : { type: 'empty', style: extractStyle(sheetXml, xmlRow, 'I') },
+    };
+
+    const reasonList = g.segs.filter(s => s.onTime === false).map(s => state.reasons[s.key] || '').filter(x => x);
+    cellMap.J = reasonList.length ? { type: 'str', value: reasonList.join('\n'), style: extractStyle(sheetXml, xmlRow, 'J') } : { type: 'empty', style: extractStyle(sheetXml, xmlRow, 'J') };
+
+    fillUpdates[xmlRow] = cellMap;
+    filled[p.reg] = { total: g.segs.length, onTime: g.onTime, late: g.late };
+    finalPlaneValues[p.reg] = { total: g.segs.length, onTime: g.onTime, late: g.late };
+  }
+  if (Object.keys(fillUpdates).length) sheetXml = patchSheetXml(sheetXml, fillUpdates);
+
+  const titleChange = await patchTitleDate(zip, sheetXml, info.aoa, '执行及准点情况日度汇总', newDateText);
+  if (titleChange && titleChange.sheetXml) sheetXml = titleChange.sheetXml;
+
+  const summaryUpdates = {};
+  for (const sec of ['托管机队', '中心机队']) {
+    let total = 0, ot = 0, late = 0;
+    for (const p of info.planes.filter(x => x.section === sec)) {
+      const v = finalPlaneValues[p.reg];
+      if (v) { total += v.total; ot += v.onTime; late += v.late; }
+    }
+    const sr = info.summaryRows[sec];
+    if (sr != null) {
+      const xmlRow = sr + 1;
+      summaryUpdates[xmlRow] = {
+        B: { type: 'num', value: total, style: extractStyle(sheetXml, xmlRow, 'B') },
+        H: { type: 'num', value: ot, style: extractStyle(sheetXml, xmlRow, 'H') },
+        I: late > 0 ? { type: 'num', value: late, style: extractStyle(sheetXml, xmlRow, 'I') } : { type: 'empty', style: extractStyle(sheetXml, xmlRow, 'I') },
+      };
+    }
+  }
+  if (Object.keys(summaryUpdates).length) sheetXml = patchSheetXml(sheetXml, summaryUpdates);
+
+  if (monthMode === 'add') {
+    const monthUpdates = {};
+    for (const sec of ['托管机队', '中心机队']) {
+      const mr = info.monthRows[sec];
+      if (mr == null) continue;
+      const oldTotal = Number(aoa[mr] && aoa[mr][1]) || 0;
+      const oldOn = Number(aoa[mr] && aoa[mr][7]) || 0;
+      const oldLate = Number(aoa[mr] && aoa[mr][8]) || 0;
+
+      let addTotal = 0, addOn = 0, addLate = 0;
+      for (const p of info.planes.filter(x => x.section === sec)) {
+        const f = filled[p.reg];
+        if (f) { addTotal += f.total; addOn += f.onTime; addLate += f.late; }
+      }
+      const xmlRow = mr + 1;
+      monthUpdates[xmlRow] = {
+        B: { type: 'num', value: oldTotal + addTotal, style: extractStyle(sheetXml, xmlRow, 'B') },
+        H: { type: 'num', value: oldOn + addOn, style: extractStyle(sheetXml, xmlRow, 'H') },
+        I: (oldLate + addLate) > 0 ? { type: 'num', value: oldLate + addLate, style: extractStyle(sheetXml, xmlRow, 'I') } : { type: 'empty', style: extractStyle(sheetXml, xmlRow, 'I') },
+      };
+    }
+    if (Object.keys(monthUpdates).length) sheetXml = patchSheetXml(sheetXml, monthUpdates);
+  }
+  zip.file(state.tplSheetPath, sheetXml);
+
+
+  /* --- Sheet2: 申请情况 --- */
+  const applySheetName = tplWb.SheetNames.find(n => n.includes('申请情况')) || tplWb.SheetNames[1];
+  if (applySheetName) {
+    const applySheetPath = await findSheetPath(zip, applySheetName);
+    const applyFile = zip.file(applySheetPath);
+    if (applyFile) {
+      let applySheetXml = await applyFile.async('string');
+      const applyWs = tplWb.Sheets[applySheetName];
+      const applyAoa = XLSX.utils.sheet_to_json(applyWs, { header: 1, defval: '', raw: true });
+
+      let applyHdr = -1;
+      for (let i = 0; i < applyAoa.length; i++) {
+          const r = (applyAoa[i] || []).map(v => String(v == null ? '' : v).trim());
+          if (r[0] === '飞机' && r[1] && r[1].includes('正常批复')) { applyHdr = i; break; }
+      }
+
+      if (applyHdr >= 0) {
+          const applyInfo = { planes: [], summaryRows: {}, monthRows: {} };
+          let applySection = '';
+          for (let i = applyHdr + 1; i < applyAoa.length; i++) {
+              const r = (applyAoa[i] || []).map(v => String(v == null ? '' : v).trim());
+              const a = r[0];
+              if (!a) continue;
+              if (['托管机队', '中心机队'].includes(a)) { applySection = a; continue; }
+              if (a.includes('汇总')) {
+                  if (a === '当月数据汇总') applyInfo.monthRows[applySection] = i;
+                  else applyInfo.summaryRows[applySection] = i;
+                  continue;
+              }
+              applyInfo.planes.push({ row: i, reg: a.toUpperCase(), section: applySection });
+          }
+
+          // 1. 替换标题
+          const titleChange2 = await patchTitleDate(zip, applySheetXml, applyAoa, '申请情况日度汇总', newDateText);
+          if (titleChange2 && titleChange2.sheetXml) applySheetXml = titleChange2.sheetXml;
+
+          // 2. 清除并填入蓝底数据
+          const applyClearUpdates = {};
+          const applyFillUpdates = {};
+          const applyFinalValues = {};
+
+          for (const p of applyInfo.planes) {
+              const xmlRow = p.row + 1;
+              const cellMap = {};
+              for (let col of ['B','C','D','E','F','G','H','I']) {
+                  cellMap[col] = { type: 'empty', style: extractStyle(applySheetXml, xmlRow, col) };
+              }
+              applyClearUpdates[xmlRow] = cellMap;
+
+              const bVal = state.blueApplied[p.reg] || 0;
+              const dVal = bVal;
+
+              if (bVal > 0) {
+                  applyFillUpdates[xmlRow] = {
+                      B: { type: 'num', value: bVal, style: extractStyle(applySheetXml, xmlRow, 'B') },
+                      D: { type: 'num', value: dVal, style: extractStyle(applySheetXml, xmlRow, 'D') }
+                  };
+              }
+              applyFinalValues[p.reg] = { b: bVal, c: 0, d: dVal };
+          }
+
+          if (Object.keys(applyClearUpdates).length) applySheetXml = patchSheetXml(applySheetXml, applyClearUpdates);
+          if (Object.keys(applyFillUpdates).length) applySheetXml = patchSheetXml(applySheetXml, applyFillUpdates);
+
+          // 3. 更新当日汇总
+          const applySummaryUpdates = {};
+          for (const sec of ['托管机队', '中心机队']) {
+              let totalB = 0, totalD = 0;
+              for (const p of applyInfo.planes.filter(x => x.section === sec)) {
+                  const v = applyFinalValues[p.reg];
+                  if (v) { totalB += v.b; totalD += v.d; }
+              }
+              const sr = applyInfo.summaryRows[sec];
+              if (sr != null) {
+                  const xmlRow = sr + 1;
+                  applySummaryUpdates[xmlRow] = {
+                      B: { type: 'num', value: totalB, style: extractStyle(applySheetXml, xmlRow, 'B') },
+                      C: { type: 'empty', style: extractStyle(applySheetXml, xmlRow, 'C') },
+                      D: { type: 'num', value: totalD, style: extractStyle(applySheetXml, xmlRow, 'D') },
+                      E: { type: 'empty', style: extractStyle(applySheetXml, xmlRow, 'E') },
+                      F: { type: 'empty', style: extractStyle(applySheetXml, xmlRow, 'F') },
+                      G: { type: 'empty', style: extractStyle(applySheetXml, xmlRow, 'G') },
+                      H: { type: 'empty', style: extractStyle(applySheetXml, xmlRow, 'H') }
+                  };
+              }
+          }
+
+          // 4. 更新当月汇总
+          if (monthMode === 'add') {
+              for (const sec of ['托管机队', '中心机队']) {
+                  const mr = applyInfo.monthRows[sec];
+                  if (mr == null) continue;
+                  const oldB = Number(applyAoa[mr][1]) || 0;
+                  const oldD = Number(applyAoa[mr][3]) || 0;
+
+                  let addB = 0, addD = 0;
+                  for (const p of applyInfo.planes.filter(x => x.section === sec)) {
+                      const v = applyFinalValues[p.reg];
+                      if (v) { addB += v.b; addD += v.d; }
+                  }
+
+                  const xmlRow = mr + 1;
+                  applySummaryUpdates[xmlRow] = {
+                      B: { type: 'num', value: oldB + addB, style: extractStyle(applySheetXml, xmlRow, 'B') },
+                      D: { type: 'num', value: oldD + addD, style: extractStyle(applySheetXml, xmlRow, 'D') }
+                  };
+              }
+          }
+
+          if (Object.keys(applySummaryUpdates).length) applySheetXml = patchSheetXml(applySheetXml, applySummaryUpdates);
+          zip.file(applySheetPath, applySheetXml);
+      }
+    }
+  }
+
+  const outBuf = await zip.generateAsync({
+    type: 'uint8array',
+    compression: 'DEFLATE',
+    compressionOptions: { level: 6 },
+  });
+
+  return {
+    blob: new Blob([outBuf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }),
+    sobtStats: {
+      matched: Object.values(groups).reduce((a, g) => a + g.sobtMatched, 0),
+      missing: Object.values(groups).reduce((a, g) => a + g.sobtMissing, 0),
+    },
+    titleNote: titleChange ? titleChange.note : '',
+  };
+}
+
+/* ============================== 事件绑定 ============================== */
+function setupDrop(dropId, inputId, type) {
+  const drop = $(dropId), input = $(inputId);
+  drop.addEventListener('click', () => input.click());
+  drop.addEventListener('dragover', e => { e.preventDefault(); drop.classList.add('drag'); });
+  drop.addEventListener('dragleave', () => drop.classList.remove('drag'));
+  drop.addEventListener('drop', e => {
+    e.preventDefault();
+    drop.classList.remove('drag');
+    if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0], type);
+  });
+  input.addEventListener('change', e => {
+    if (e.target.files[0]) handleFile(e.target.files[0], type);
+  });
+}
+
+function showStatus(msg, type) {
+  const el = $('statusMsg');
+  el.textContent = msg;
+  el.className = 'status' + (type === 'ok' ? ' ok' : (type === 'err' ? ' err' : ''));
+}
+
+async function handleFile(file, type) {
+  try {
+    if (type === 'seg') {
+      if (!/\.(xlsx|xls|csv)$/i.test(file.name)) { alert('请上传 .xlsx/.xls/.csv'); return; }
+      const buf = await readFileAsArrayBuffer(file);
+      const wb = XLSX.read(buf, { type: 'array', cellDates: true });
+      state.segWb = wb;
+      state.segName = file.name;
+      state.segments = parseSegments(wb);
+      $('segNameBox').textContent = file.name;
+      $('dropSeg').classList.add('loaded');
+      buildDateFilter();
+    } else if (type === 'tpl') {
+      if (!/\.xlsx$/i.test(file.name)) { alert('模板必须 .xlsx'); return; }
+      const buf = await readFileAsArrayBuffer(file);
+      const wb = XLSX.read(buf, { type: 'array', cellDates: false });
+      scanTemplate(wb);
+      const zip = await JSZip.loadAsync(buf);
+      const sheetName = wb.SheetNames.find(n => n.includes('执行及准点')) || wb.SheetNames[0];
+      const sheetPath = await findSheetPath(zip, sheetName);
+      state.tplWb = wb;
+      state.tplBuf = buf;
+      state.tplName = file.name;
+      state.tplSheetPath = sheetPath;
+      $('tplNameBox').textContent = file.name;
+      $('dropTpl').classList.add('loaded');
+    } else if (type === 'word') {
+      if (!/\.docx$/i.test(file.name)) { alert('请上传 .docx（旧版 .doc 不支持）'); return; }
+      const buf = await readFileAsArrayBuffer(file);
+      const { records, blueApplied } = await parseWordDocx(buf);
+      state.wordRecords = records;
+      state.blueApplied = blueApplied;
+      state.wordName = file.name;
+      $('wordNameBox').textContent = file.name + `（${records.length} 条，带底色 ${Object.values(blueApplied).reduce((a,b)=>a+b,0)} 条）`;
+      $('dropWord').classList.add('loaded');
+    }
+    showStatus('');
+    refreshAll();
+  } catch (err) {
+    console.error(err);
+    alert('解析失败：' + err.message);
+  }
+}
+
+function buildDateFilter() {
+  const dates = [...new Set(state.segments.map(s => s.date).filter(Boolean))].sort();
+  const sel = $('dateFilter');
+  sel.innerHTML = '';
+  if (dates.length <= 1) {
+    const o = document.createElement('option');
+    o.value = dates[0] || 'all';
+    o.textContent = dates[0] || '全部';
+    sel.appendChild(o);
+  } else {
+    const all = document.createElement('option');
+    all.value = 'all';
+    all.textContent = '全部日期（' + dates.length + ' 天）';
+    sel.appendChild(all);
+    dates.slice().reverse().forEach(d => {
+      const o = document.createElement('option');
+      o.value = d;
+      o.textContent = d;
+      sel.appendChild(o);
+    });
+    sel.value = dates[dates.length - 1];
+  }
+}
+
+function refreshAll() {
+  const ready = !!state.segWb && !!state.tplWb;
+  $('optionsCard').hidden = !ready;
+  $('previewCard').hidden = !ready;
+  $('actions').hidden = !ready;
+  if (!ready) return;
+  render();
+}
+
+/* ============================== 下载按钮 ============================== */
+$('btnDownload').addEventListener('click', async () => {
+  const btn = $('btnDownload');
+  btn.disabled = true;
+  showStatus('生成中…');
+  try {
+    const result = await applyToTemplate();
+
+    const titleDate = $('titleDate').value;
+    const endDate = addOneDayStr(titleDate).replace(/-/g, '');
+    const fileName = `内地批复执行情况统计-${endDate} 0830.xlsx`;
+
+    const url = URL.createObjectURL(result.blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 3000);
+
+    let msg = '✅ 已下载 ' + fileName;
+    if (state.wordRecords.length) {
+      msg += `，SOBT 匹配 ${result.sobtStats.matched}/${result.sobtStats.matched + result.sobtStats.missing}`;
+    }
+    if (result.titleNote) msg += `（${result.titleNote}）`;
+    showStatus(msg, 'ok');
+  } catch (err) {
+    console.error(err);
+    showStatus('❌ ' + err.message, 'err');
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+$('dateFilter').addEventListener('change', render);
+$('optTz').addEventListener('change', render);
+$('optMode').addEventListener('change', render);
+
+/* ============================== 初始化 ============================== */
+(function initTitleDate() {
+  const today = new Date();
+  $('titleDate').value = `${today.getFullYear()}-${pad2(today.getMonth()+1)}-${pad2(today.getDate())}`;
+})();
+
+setupDrop('dropSeg', 'fileSeg', 'seg');
+setupDrop('dropTpl', 'fileTpl', 'tpl');
+setupDrop('dropWord', 'fileWord', 'word');
+</script>
+</body>
+</html>
+"""
+    components.html(H_HTML, height=1900, scrolling=True)
