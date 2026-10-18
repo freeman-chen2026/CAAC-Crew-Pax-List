@@ -856,6 +856,9 @@ with tab1:
         try:
             wb = load_workbook(template_bytes)
         except Exception as e:
+            if "Bad magic number" in str(e) or "BadZipFile" in str(e):
+                st.error("❌ 模板文件格式不正确。请确保模板为 **.xlsx** 格式（非 .xls）。")
+                st.info("💡 解决方法：用 Excel 打开该模板，选择“另存为”，将文件类型选为 **Excel工作簿（.xlsx）**，然后重新上传。")
             raise e
 
         ws = wb.active
@@ -952,16 +955,6 @@ with tab1:
                 doc_type_clean = parse_document_type("", doc_type) if (pd.notna(doc_type) and str(doc_type).strip()) else parse_document_type(pax.get("passport_no", ""), "")
                 safe_set_cell_value(ws, row_num, 5, doc_type_clean)
                 safe_set_cell_value(ws, row_num, 6, pax.get("passport_no", ""))
-
-        # ---------- 新增：自动打印居中（不动缩放/分页） ----------
-        try:
-            ws.page_setup.horizontalCentered = True
-            ws.page_setup.verticalCentered = True
-            ws.print_options.horizontalCentered = True
-            ws.print_options.verticalCentered = True
-        except Exception:
-            pass
-        # ---------- 新增结束 ----------
 
         output = BytesIO()
         wb.save(output); output.seek(0)
