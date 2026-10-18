@@ -52,8 +52,6 @@ tab1, tab2, tab3, tab4 = st.tabs([
 # 功能1：备案表生成
 # ================================================================
 with tab1:
-    st.markdown("上传 GD单 和模板，自动生成备案表（联系方式、执照号码及证件号码已内置）。")
-
     from copy import copy as _copy_style
     import json as _json
 
@@ -201,10 +199,7 @@ with tab1:
         reg_clean = str(reg).strip().upper() if reg else ""
         gd_type_str = str(gd_type).strip() if gd_type else ""
         if reg_clean and reg_clean in AIRCRAFT_TYPE_MAP:
-            mapped = AIRCRAFT_TYPE_MAP[reg_clean]
-            if gd_type_str and gd_type_str.upper() != mapped.upper():
-                st.info(f"✈️ 机型按注册号确定：{gd_type_str} → {mapped}（注册号 {reg_clean}）")
-            return mapped
+            return AIRCRAFT_TYPE_MAP[reg_clean]
         return gd_type_str
 
     def get_nation_name(code):
@@ -717,7 +712,6 @@ with tab1:
                     return True
         return False
 
-    # ---------- ★ 新增：乘客区自动扩展 ----------
     def _style_snapshot(cell):
         return {
             'font': _copy_style(cell.font),
@@ -737,7 +731,6 @@ with tab1:
         cell.alignment = _copy_style(snap['alignment'])
 
     def _find_first_content_row(ws, start_row, max_scan=300):
-        """从 start_row 向下找第一个有内容的行（返回行号，找不到返回 None）。"""
         max_col = ws.max_column or 10
         for r in range(start_row, start_row + max_scan):
             for c in range(1, max_col + 1):
@@ -747,11 +740,6 @@ with tab1:
         return None
 
     def _shift_images_down(ws, end_row, extra):
-        """insert_rows 之后调整图片/形状 anchor，让它们跟着内容整体下移。
-
-        ★ 只要图片的 from.row 或 to.row 有一个 ≥ 插入点，整张图片一起 +extra。
-        openpyxl 内部的行号是 0-based。
-        """
         if extra <= 0:
             return
         end_row_0 = end_row - 1
@@ -788,13 +776,6 @@ with tab1:
                     pass
 
     def _ensure_passenger_rows(ws, data_start_row, needed_count):
-        """确保乘客数据区至少有 needed_count 行；不够则在承诺行之前插入。
-
-        - 复制某一行（优先选有合并结构的行）的样式 + 行高 + 合并到新行
-        - 保存并恢复 end_row 及以下所有行的行高
-        - 只处理受影响的合并单元格，其余不动
-        - 图片整体下移，保持宽高比
-        """
         if needed_count <= 0:
             return data_start_row
 
@@ -891,7 +872,6 @@ with tab1:
                     pass
 
         return data_start_row
-    # ---------- ★ 新增结束 ----------
 
     def fill_template(template_bytes, data, crew_rows, passenger_list, route_display):
         try:
@@ -1001,20 +981,15 @@ with tab1:
         wb.save(output); output.seek(0)
         return output
 
-    # ---------- ★ 缓存：避免每次 rerun 都重跑一遍生成 ----------
     @st.cache_data(show_spinner=False, max_entries=16)
     def _cached_fill_template(template_bytes, data_json, crew_json, pax_json, route_display):
-        """把 fill_template 结果缓存。只有内容/输入变化才会重新生成。"""
         _data = _json.loads(data_json)
         _crew = _json.loads(crew_json)
         _pax = _json.loads(pax_json)
         buf = fill_template(template_bytes, _data, _crew, _pax, route_display)
         return buf.getvalue()
-    # ---------- ★ 缓存结束 ----------
 
-    # ---------- ★ 新增：Excel → PDF（仅在 Windows + Excel 环境生效） ----------
     def _convert_xlsx_to_pdf(xlsx_bytes):
-        """用本机 Excel 本体转 PDF，效果与 Ctrl+P 完全一致。"""
         import tempfile
         import os as _os
         import pythoncom
@@ -1048,12 +1023,7 @@ with tab1:
 
     @st.cache_data(show_spinner=False, max_entries=8)
     def _cached_xlsx_to_pdf(xlsx_bytes):
-        """PDF 生成缓存：Excel 内容不变时秒出。"""
         return _convert_xlsx_to_pdf(xlsx_bytes)
-    # ---------- ★ 新增结束 ----------
-
-    st.subheader("📂 上传文件")
-    st.info("⚠️ 注意：模板文件必须是 **.xlsx** 格式（非 .xls）。联系方式、执照号码及证件号码已内置，机型已内置，无需额外上传。")
 
     data_file = st.file_uploader(
         "上传 GD单（General Declaration）Excel（.xlsx）",
@@ -1071,14 +1041,6 @@ with tab1:
     if data_file and template_file:
         try:
             data, crew_list, passenger_list = parse_general_declaration(data_file)
-            st.success(f"✅ 解析成功：机组 {len(crew_list)} 人，乘客 {len(passenger_list)} 人")
-
-            if data.get("ac_type") or data.get("reg"):
-                st.caption(
-                    f"✈️ 注册号：**{data.get('reg', '')}** ｜ 机型：**{data.get('ac_type', '')}**"
-                    + (f"（GD单原始机型：{data.get('ac_type_raw', '')}）"
-                       if data.get('ac_type_raw') and data.get('ac_type_raw') != data.get('ac_type') else "")
-                )
 
             st.subheader("📋 本次机组信息（可编辑）")
             st.caption(
@@ -1178,9 +1140,6 @@ with tab1:
                 if not edited_crew_df.empty else []
             )
 
-            if passenger_list:
-                st.caption(f"👥 本次乘客共 **{len(passenger_list)}** 人，模板行数不足时会自动插入行。")
-
             st.markdown("---")
 
             from_code = data.get("from", ""); to_code = data.get("to", "")
@@ -1216,9 +1175,7 @@ with tab1:
                 else:
                     default_route = f"{from_code}-{to_code}" if from_code and to_code else ""
 
-            if matched_note:
-                st.success(matched_note)
-            elif flight_plan_file is not None and reg and from_code and to_code:
+            if not matched_note and flight_plan_file is not None and reg and from_code and to_code:
                 date_hint = f"{gd_date_parsed[0]}月{gd_date_parsed[1]}日" if gd_date_parsed else "未知日期"
                 st.info(
                     f"ℹ️ 航段数据中未找到 {reg} {from_code}→{to_code}（{date_hint}）的匹配记录，"
@@ -1251,7 +1208,6 @@ with tab1:
                 safe_file_name = "备案表"
             download_file_name = f"{safe_file_name}.xlsx"
 
-            # ★ 用缓存版本；内容不变时秒出，不再重复跑 fill_template
             try:
                 result_bytes = _cached_fill_template(
                     template_file.getvalue(),
@@ -1261,7 +1217,6 @@ with tab1:
                     route_display,
                 )
             except Exception:
-                # 缓存失败 fallback 到直调
                 result_bytes = fill_template(
                     template_file, data, crew_for_template, passenger_list, route_display
                 ).getvalue()
@@ -1273,7 +1228,6 @@ with tab1:
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             )
 
-            # ---------- ★ 新增：PDF 下载（仅 Windows + Excel 环境显示） ----------
             if _SUPPORTS_PDF:
                 try:
                     with st.spinner("正在生成 PDF（首次约 10-30 秒，之后有缓存会很快）..."):
@@ -1287,7 +1241,6 @@ with tab1:
                     )
                 except Exception as _pdf_err:
                     st.warning(f"⚠️ PDF 生成失败：{_pdf_err}")
-            # ---------- ★ 新增结束 ----------
 
             st.caption("⏳ 输入文件名之后稍等3秒钟后再点击下载")
 
