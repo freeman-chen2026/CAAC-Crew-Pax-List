@@ -2931,11 +2931,12 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
             parts.append(nation_label)
         return " ".join(parts)
 
+    # ★ 核心修改 1：重写正则，采用 middle 匹配，兼容所有机型 / 外机呼号格式
     PC_APPROVAL_RE = re.compile(
         r"^(?P<reg>[A-Z0-9\-]+)\s+"
-        r"(?P<second>[A-Z0-9]+)\s+"
-        r"(?P<dep>[A-Z]{4})\s*(?P<dep_time>\d{4})\s+"
-        r"(?P<arr_time>\d{4})\s*(?P<arr>[A-Z]{4})\s+"
+        r"(?P<middle>.*?)\s+"
+        r"(?P<dep>[A-Z]{4})\s*(?P<dep_time>\d{4,5})\s+"
+        r"(?P<arr_time>\d{4,5})\s*(?P<arr>[A-Z]{4})\s+"
         r"ON\s+(?P<date>\d{2}[A-Z]{3}\d{2,4})\s*"
         r"(?P<rest>.*)$",
         re.IGNORECASE,
@@ -2943,22 +2944,13 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
 
     def pc_parse_approval_line(text):
         text = text.strip()
-        dup_prefix = None
-
-        m_dup = re.match(r'^([A-Z0-9\-]+)\s+([A-Z0-9\-]+)\s+(\S.*)$', text)
-        if m_dup:
-            first = m_dup.group(1).upper()
-            second = m_dup.group(2).upper()
-            if first == second:
-                dup_prefix = m_dup.group(2)
-                text = f"{m_dup.group(1)} {m_dup.group(3)}"
-
+        
         m = PC_APPROVAL_RE.match(text)
         if not m:
             return None
 
         reg = m.group("reg").upper().replace("-", "")
-        second = m.group("second").upper()
+        middle = m.group("middle").strip()
         dep = m.group("dep").upper()
         arr = m.group("arr").upper()
         dep_raw = m.group("dep_time")
@@ -2966,16 +2958,29 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
         date_raw = m.group("date").upper()
         rest = m.group("rest").strip()
 
+        # 智能解析 middle (机号/呼号/机型)
+        middle_parts = [p.strip() for p in middle.split() if p.strip()]
+        ac_type = ""
+        flight_no = ""
+
         if pc_is_b_reg(reg):
-            ac_type = second
-            flight_no = ""
+            # 国内机，第二个词通常是机型
+            if middle_parts:
+                ac_type = middle_parts[-1]
         else:
-            if second == reg:
-                flight_no = second
-                ac_type = ""
-            else:
-                ac_type = second
-                flight_no = ""
+            # 外机处理逻辑
+            if len(middle_parts) == 1:
+                if middle_parts[0].upper() == reg:
+                    flight_no = middle_parts[0]
+                else:
+                    ac_type = middle_parts[0]
+            elif len(middle_parts) >= 2:
+                flight_no = middle_parts[0]
+                ac_type = middle_parts[1]
+
+        dup_prefix = None
+        if len(middle_parts) >= 2 and middle_parts[0] == middle_parts[1]:
+            dup_prefix = middle_parts[1]
 
         service, remark = "", ""
         sm = re.match(r"^(U/H|N/M)\s*(.*)$", rest, re.IGNORECASE)
@@ -2998,8 +3003,8 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
         result = {
             "raw": text,
             "reg": reg,
-            "type": ac_type,
-            "flight_no": flight_no,
+            "type": ac_type.upper(),
+            "flight_no": flight_no.upper(),
             "is_domestic": pc_is_b_reg(reg),
             "dep": dep,
             "dep_time_raw": dep_raw,
@@ -3615,11 +3620,9 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
                 new_r = pc_make_run_like(src_elem, text)
             p_elem.append(new_r)
 
-    # ★★★ 重写：更稳健的插入函数（蓝底红字） ★★★
     def pc_fill_after_on_date(paragraph, date_raw, service, nation,
                                need_service, need_nation,
                                color_hex=PC_RED, highlight=PC_HIGHLIGHT_ADDED):
-        """在 'ON <date>' 及其后可能存在的 U/H 或 N/M 之后插入缺失的 service/nation。"""
         if not (need_service or need_nation):
             return False
 
@@ -3639,16 +3642,13 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
         if not full_text:
             return False
 
-        # 1) 找到 "ON <date>" 结束位置
         m = re.search(r'ON\s+' + re.escape(date_raw), full_text, re.IGNORECASE)
         if not m:
             return False
         on_end = m.end()
 
-        # 2) 确定插入位置
         insert_pos = on_end
         if not need_service:
-            # 跳过已有的 service 标签（U/H 或 N/M）
             p = on_end
             while p < len(full_text) and full_text[p] in ' \t\xa0':
                 p += 1
@@ -3656,20 +3656,16 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
             if m_svc:
                 insert_pos = p + m_svc.end()
             else:
-                # 没有 service 标签，就插在 ON 日期之后
                 insert_pos = on_end
 
-        # 3) 跳过插入位置之后的空白
         skip_end = insert_pos
         while skip_end < len(full_text) and full_text[skip_end] in ' \t\xa0':
             skip_end += 1
 
-        # 4) 构造插入字符串
         insert_str = " " + " ".join(parts_to_add)
         if skip_end < len(full_text):
             insert_str += " "
 
-        # 5) 找到包含插入位置的 run
         def _find_run_at(position):
             cur = 0
             for r in runs:
@@ -3710,7 +3706,6 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
                 parent.insert(idx + 2, after_r)
             return True
 
-        # 不同 run 的情况
         target_run.text = target_run.text[:local_insert]
         skip_run.text = skip_run.text[local_skip:]
 
@@ -4010,7 +4005,8 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
             if approval.get("dup_prefix"):
                 dup_prefix_paras.append((p, approval["dup_prefix"]))
 
-            if not approval["is_domestic"] and approval["flight_no"]:
+            # ★ 核心修改 2：放宽外机跳过条件，只有未带机型才当成“未批已申请”跳过
+            if not approval["is_domestic"] and approval["flight_no"] and not approval["type"]:
                 unapproved_keys.add(
                     (approval["reg"], approval["dep"], approval["arr"])
                 )
@@ -4049,7 +4045,6 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
                 _exp_nation = nation_for_expected if nation_for_expected else "机组未定"
                 expected_line = pc_build_expected_line(excel_row, _exp_nation)
 
-            # ★ 收集要插入的国籍 / service
             if excel_row is not None and approval["is_domestic"]:
                 has_service = bool(approval["service"])
                 remark = approval["remark"] or ""
@@ -4251,7 +4246,6 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
             if info_note:
                 nationality_pending_paragraphs.add(raw_text)
 
-        # ★ 执行插入，并把 map 的 key 从旧文本改成新文本
         for rec in service_to_insert:
             para = rec["para"]
             old_text = rec["orig_key"]
@@ -4280,7 +4274,6 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
                         nationality_pending_paragraphs.discard(old_text)
                         nationality_pending_paragraphs.add(new_text)
 
-        # 应用颜色（map 的 key 已同步为最新文本）
         for p in pc_iter_doc_paragraphs(doc):
             raw_text = p.text.strip()
             red = approval_red_map.get(raw_text, [])
@@ -4293,7 +4286,6 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
                     highlight_overrides=[(PC_HIGHLIGHT_ADDED, highlight)] if highlight else None,
                 )
 
-        # 待取消 / 待变更 / 机组国籍待确认 的标记
         for p in pc_iter_doc_paragraphs(doc):
             raw_text = p.text.strip()
             has_cancel = "待取消" in raw_text
@@ -4313,7 +4305,6 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
                 if not has_nation:
                     pc_append_warn_text(p, "  机组国籍待确认")
 
-        # 重复前缀处理
         for p, dup_token in dup_prefix_paras:
             runs = list(p.runs)
             full_text = "".join(r.text for r in runs)
@@ -4332,7 +4323,6 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
                 strike=True,
             )
 
-        # 待申请行国籍与文本对比
         excel_route_keys = set()
         for r in excel_rows:
             if r["dep_date"] and r["dep"] and r["arr"]:
@@ -4354,6 +4344,18 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
                 continue
 
             reg_written = pc_parse_pending_reg(raw_text)
+            
+            # ★ 核心修改 3：标记已用 Excel，防止末尾重复报缺失
+            for r in excel_rows:
+                if (r["reg"] == reg_written and 
+                    r["dep"] == dep and 
+                    r["arr"] == arr and 
+                    r["dep_date"] and 
+                    r["dep_date"].month == month and 
+                    r["dep_date"].day == day):
+                    used_excel.add(r["_idx"])
+                    break
+
             if not pc_is_b_reg(reg_written):
                 continue
 
@@ -4380,7 +4382,6 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
                                   color_hex=PC_RED,
                                   highlight=PC_HIGHLIGHT_ADDED)
 
-        # 补申请：Excel 有，docx 没有
         pending_by_reg = {}
         for row in excel_rows:
             if not row["reg"]:
@@ -4614,7 +4615,6 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
             mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
             key="pc_download_btn",
         )
-
 
 # ================================================================
 # 功能5：内地批复执行情况统计表
