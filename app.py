@@ -1348,6 +1348,9 @@ code{background:#f0f0f0;padding:1px 5px;border-radius:3px;font-family:Consolas,m
 <div class="inner">
     <div class="upload-hint">📤 上传航段数据（北京时间，Excel）：</div>
     <input type="file" id="fileInput" accept=".xlsx,.xls">
+    <div style="margin-top:10px;">
+        <button id="filterDomesticBtn" class="small active">✈️ 纯内地计划（已隐藏，点击显示）</button>
+    </div>
     <div id="status"></div>
     <div id="result" style="display:none;">
         <div id="plans"></div>
@@ -1362,6 +1365,7 @@ code{background:#f0f0f0;padding:1px 5px;border-radius:3px;font-family:Consolas,m
 <div class="inner">
     <div class="filter-bar">
         <button id="filterWeekBtn">📅 只看未来一周</button>
+        <button id="filterDomesticBtn2" class="small active">✈️ 隐藏纯内地计划</button>
         <span id="filterStatus" class="hint"></span>
     </div>
     <div id="flightList"></div>
@@ -1665,6 +1669,7 @@ const SIG_FAREAST_FONT = "'Microsoft YaHei', '微软雅黑'";
 
 let flightRows = [];
 let showOnlyWeek = true;
+let hideDomestic = true; // ★ 默认隐藏纯内地计划
 
 function pad2(n){return String(n).padStart(2,'0');}
 function escapeHtml(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
@@ -1674,6 +1679,18 @@ function loadJSON(k){try{const r=localStorage.getItem(k);return r?JSON.parse(r):
 function saveJSON(k,v){try{localStorage.setItem(k,JSON.stringify(v));}catch(e){}}
 function loadHistory(){try{const r=localStorage.getItem(HISTORY_KEY);if(!r)return{records:[]};const o=JSON.parse(r);if(!o.records)o.records=[];return o;}catch(e){return{records:[]};}}
 function saveHistory(h){try{localStorage.setItem(HISTORY_KEY,JSON.stringify(h));}catch(e){}}
+
+/* =========================================================
+   ★ 内地机场判定逻辑
+   ========================================================= */
+function isDomesticAirport(icao){
+    if(!icao) return false;
+    const u = String(icao).trim().toUpperCase();
+    return u.startsWith('Z') && !u.startsWith('ZM');
+}
+function isPureDomesticFlight(dep, arr){
+    return isDomesticAirport(dep) && isDomesticAirport(arr);
+}
 
 /* =========================================================
    签名 HTML 生成（图片以 <img> 字面量存在 textarea 里）
@@ -1765,6 +1782,7 @@ function formatLabel(u){if(!u)return'';return pad2(u.day)+MONTHS[u.month-1]+' '+
 function buildWorldPlans(){
     const plans={};
     for(const r of flightRows){
+        if (hideDomestic && isPureDomesticFlight(r.dep, r.arr)) continue; // ★ 新增过滤
         if(!r.dep||!r.arr||!r.depDate||!r.depTime)continue;
         const du=toUTCLabel(r.depDate,r.depTime);
         const au=toUTCLabel(r.arrDate,r.arrTime);
@@ -1977,15 +1995,37 @@ function updateFilterBtn(){
 }
 function toggleFilterWeek(){showOnlyWeek=!showOnlyWeek;updateFilterBtn();renderMailList();}
 
+function updateDomesticBtn(){
+    const b1 = document.getElementById('filterDomesticBtn');
+    const b2 = document.getElementById('filterDomesticBtn2');
+    const txt = hideDomestic ? '✈️ 纯内地计划（已隐藏，点击显示）' : '✈️ 纯内地计划（已显示，点击隐藏）';
+    if(b1){ b1.textContent = txt; if(hideDomestic) b1.classList.add('active'); else b1.classList.remove('active'); }
+    if(b2){ b2.textContent = txt; if(hideDomestic) b2.classList.add('active'); else b2.classList.remove('active'); }
+}
+function toggleDomestic(){
+    hideDomestic = !hideDomestic;
+    updateDomesticBtn();
+    const np=buildWorldPlans();
+    const sp=sortWorldPlans(np);
+    renderWorldPlans(sp,{},true);
+    renderMailList();
+}
+
 function renderMailList(){
     const container=document.getElementById('flightList');
     if(flightRows.length===0){container.innerHTML='<div class="info">请先在上方世界时行程中上传航段数据</div>';document.getElementById('filterStatus').textContent='';return;}
+    
     let visibleRows=flightRows.map((row,idx)=>({row,idx}));
+    if (hideDomestic) {
+        visibleRows = visibleRows.filter(item => !isPureDomesticFlight(item.row.dep, item.row.arr)); // ★ 新增过滤
+    }
     if(showOnlyWeek){visibleRows=visibleRows.filter(item=>isWithinNextWeek(item.row.depDate));}
+    
     const fs=document.getElementById('filterStatus');
     if(showOnlyWeek){fs.textContent='（当前显示 '+visibleRows.length+' 条未来一周内的计划 / 共 '+flightRows.length+' 条）';}
     else{fs.textContent='（当前显示全部 '+flightRows.length+' 条）';}
-    if(visibleRows.length===0){container.innerHTML='<div class="info">未来一周内没有计划</div>';return;}
+    if(visibleRows.length===0){container.innerHTML='<div class="info">暂无符合条件的航班计划</div>';return;}
+    
     const groups={};
     visibleRows.forEach(item=>{
         const reg=item.row.reg;
@@ -2487,7 +2527,11 @@ window.addEventListener('DOMContentLoaded',()=>{
         const f=e.target.files[0];if(f)handleFile(f);
     });
     document.getElementById('filterWeekBtn').addEventListener('click',toggleFilterWeek);
+    document.getElementById('filterDomesticBtn').addEventListener('click',toggleDomestic);
+    document.getElementById('filterDomesticBtn2').addEventListener('click',toggleDomestic);
     updateFilterBtn();
+    updateDomesticBtn(); // 初始化按钮状态
+
     document.getElementById('clearHistoryBtn').addEventListener('click',()=>{
         if(!confirm('确定清除所有历史记录吗？（不影响已上传数据）'))return;
         saveHistory({records:[]});
