@@ -1032,7 +1032,7 @@ with tab1:
         type=["xlsx"], key="data"
     )
     template_file = st.file_uploader(
-        "上传总调模板：Jetops申请一览-",
+        "上传总调模板：Jetops申请一览（只能是总调的模板，华东区内计划需手搓）",
         type=["xlsx"], key="template"
     )
     flight_plan_file = st.file_uploader(
