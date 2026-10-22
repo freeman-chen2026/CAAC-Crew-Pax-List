@@ -1028,7 +1028,7 @@ with tab1:
         return _convert_xlsx_to_pdf(xlsx_bytes)
 
     data_file = st.file_uploader(
-        "上传 GD单（General Declaration）Excel（.xlsx）",
+        "上传 GD单（中文版Excel）（.xlsx）",
         type=["xlsx"], key="data"
     )
     template_file = st.file_uploader(
@@ -1036,7 +1036,7 @@ with tab1:
         type=["xlsx"], key="template"
     )
     flight_plan_file = st.file_uploader(
-        "（可选）上传飞行计划（航段数据导出）（北京时间），用于预填文件名",
+        "（可选）上传航段数据导出（从Jetops导出北京时间的未来计划），用于预填文件名",
         type=["xlsx"], key="flight_plan"
     )
 
