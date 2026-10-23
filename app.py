@@ -55,14 +55,13 @@ tab1, tab2, tab3, tab4, tab5 = st.tabs([
 with tab1:
     from copy import copy as _copy_style
     import json as _json
-    from openpyxl.cell.cell import MergedCell
 
     BUILTIN_CREW_DATA = [
         ("庚凡", "139 2463 9747", "430104197901184015", "430104197901184015"),
         ("张永一 / Yongyi ZHANG", "139 0125 9544", "110102196605202336", "110102196605202336"),
         ("马洪双 / Hongshuang MA", "156 2062 3177", "210726197306234110", "210726197306234110"),
-        ("梅峰 / Feng MEI", "135 0967 8127", "510107197911242636", "510107197911242636"),
-        ("王斌 / Bin WANG", "139 2527 2867", "610104197911058331", "610104197911058331"),
+        ("梅峰 / Feng MEI", "135 0967 8127", "17205/1 FCL", "510107197911242636"),
+        ("王斌 / Bin WANG", "139 2527 2867", "3340398", "610104197911058331"),
         ("王少雄 / Shaoxiong WANG", "186 8387 9841", "510105198609042555", "510105198609042555"),
         ("苗旺旺 / Wangwang MIAO", "138 1871 5251", "410781198608019797", "410781198608019797"),
         ("赵岩松 / Yansong ZHAO", "186 1161 8385", "410103197004017014", "410103197004017014"),
@@ -72,60 +71,60 @@ with tab1:
         ("尤欣 / Xin YOU", "139 1608 5072", "620102197604293015", "620102197604293015"),
         ("李亚民 / Yamin Li", "133 6632 0878", "350104197107184915", "350104197107184915"),
         ("赵镭 / Lei ZHAO", "138 0883 9660", "440301198204157271", "440301198204157271"),
-        ("彭罡", "186 1263 1888", "440111198403244812", "440111198403244812"),
+        ("彭罡", "186 1263 1888", "3240393", "440111198403244812"),
         ("胡君量 / Wan Leung WU / Kwan Leung WU", "132 6695 8816", "3025478", "124133200"),
         ("吴鹏", "136 1110 5901", "130103197602102115", "130103197602102115"),
         ("刘汇川", "188 5827 2791", "330103199003191618", "330103199003191618"),
-        ("于龙飞", "156 5288 0812", "210103198808123928", "210103198808123928"),
+        ("于龙飞", "156 5288 0812", "ZN00915", "210103198808123928"),
         ("林帅", "138 1156 6711", "110227198601130015", "110227198601130015"),
-        ("张佳妮 / Jiani ZHANG", "136 6169 9966", "31010619840115002X", "31010619840115002X"),
-        ("张欢乐 / Huanle ZHANG", "186 1652 1529", "330381198705292523", "330381198705292523"),
+        ("张佳妮 / Jiani ZHANG", "136 6169 9966", "10183", "31010619840115002X"),
+        ("张欢乐 / Huanle ZHANG", "186 1652 1529", "ZN00883", "330381198705292523"),
         ("昝昭君 / Zhaojun ZAN", "182 9570 0579", "14272419950203313X", "14272419950203313X"),
-        ("孙赫 / He SUN", "186 0102 1216", "410102197702243012", "410102197702243012"),
-        ("李晓龙 / Xiaolong LI", "138 2378 1747", "420104197906150015", "420104197906150015"),
-        ("李卉妍 / Huiyan LI", "138 5142 0321", "210106199007051542", "210106199007051542"),
+        ("孙赫 / He SUN", "186 0102 1216", "4070599", "410102197702243012"),
+        ("李晓龙 / Xiaolong LI", "138 2378 1747", "3781955", "420104197906150015"),
+        ("李卉妍 / Huiyan LI", "138 5142 0321", "10299", ""),
         ("熊立凌 / Liling Xiong", "135 3821 6276", "421003199203222631", "421003199203222631"),
         ("HEALY, Darran William / Darran William HEALY", "852 6891 2350", "3141079", ""),
         ("ROEDER, SIMONE ELKE / SIMONE ELKE ROEDER", "852 6263 4569", "4213276", ""),
         ("王凯珮 / HOI PUI, WONG", "852 6858 8410", "10068", "Z411582(2)"),
         ("马坚 / Jian MA", "189 1770 2918", "320103196607089512", "320103196607089512"),
-        ("卢江 / Jiang LU", "158 0045 6521", "420521198809280021", "420521198809280021"),
-        ("孟周聪 / Zhoucong Meng", "135 6434 5029", "310113198307243215", "310113198307243215"),
-        ("张帆 / Fan ZHANG", "138 0135 1294", "211002197306050057", "211002197306050057"),
+        ("卢江 / Jiang LU", "158 0045 6521", "10302", "420521198809280021"),
+        ("孟周聪 / Zhoucong Meng", "135 6434 5029", "10303", "310113198307243215"),
+        ("张帆 / Fan ZHANG", "138 0135 1294", "2552356", "211002197306050057"),
         ("魏思远 / Siyuan WEI", "133 2110 4588", "230102198911054315", "230102198911054315"),
         ("王晟磊 / Shenglei WANG", "150 2689 7493", "310109198409264012", "310109198409264012"),
         ("Nathon Andrew G, NORBERG / Nathon Andrew G NORBERG", "186 0019 4610", "3050802", "A04700868"),
         ("Keith Robert, SHERREN / Keith Robert SHERREN", "137 3540 9744", "2755204", "P024165FF"),
         ("Rodolfo, BONETTI / Rodolfo BONETTI", "132 6284 1083", "12660", ""),
-        ("危慧 / Hui WEI", "152 1349 1328", "43072119941115468X", "43072119941115468X"),
-        ("李辛欣 / Xinxin LI", "135 5008 8666", "510105198605023015", "510105198605023015"),
+        ("危慧 / Hui WEI", "152 1349 1328", "10137", "43072119941115468X"),
+        ("李辛欣 / Xinxin LI", "135 5008 8666", "4209424", "510105198605023015"),
         ("Herve Daniel, STAMM / Herve Daniel STAMM", "183 1709 0300", "2666622", "M578620(2)"),
-        ("樊婉程 / Wancheng FAN", "186 2017 4817", "440106199608180326", "440106199608180326"),
-        ("刘爽 / Shuang LIU", "138 0125 8789", "110108196308296450", "110108196308296450"),
-        ("刘凯 / Kai LIU", "135 2157 9157", "230103198103275511", "230103198103275511"),
-        ("詹佩佩 / Peipei ZHAN", "137 1440 5925", "440301198809275123", "440301198809275123"),
-        ("花佩 / Pei HUA", "186 2631 0634", "320281198911117761", "320281198911117761"),
-        ("翁英 / YING WENG", "130 6785 2000", "330106198801182024", "330106198801182024"),
+        ("樊婉程 / Wancheng FAN", "186 2017 4817", "ZN00434", "440106199608180326"),
+        ("刘爽 / Shuang LIU", "138 0125 8789", "4101498", "110108196308296450"),
+        ("刘凯 / Kai LIU", "135 2157 9157", "2833670", "230103198103275511"),
+        ("詹佩佩 / Peipei ZHAN", "137 1440 5925", "10283", "440301198809275123"),
+        ("花佩 / Pei HUA", "186 2631 0634", "ZN00495", "320281198911117761"),
+        ("翁英 / Ying WENG", "130 6785 2000", "ZN00905", "330106198801182024"),
         ("王莹 / Ying WANG", "159 1009 9069", "370125199004215621", "370125199004215621"),
         ("程佳俊 / Jiajun CHENG", "134 8010 3029", "511202198208161358", "511202198208161358"),
         ("蔡雨桐 / Yu Tong CHOI", "852 6426 7445", "10269", "V146532(5)"),
         ("俞凯 / Kai YU", "130 0579 0326", "120110196912180351", "120110196912180351"),
         ("杨杰 / Jie YANG", "186 1694 8903", "310104198411304413", "310104198411304413"),
         ("徐卓 / Zhuo XU", "139 1028 5510", "110105198906307113", "110105198906307113"),
-        ("丁燕栒 / Yanxun DING", "135 6035 3829", "440510199107260826", "440510199107260826"),
+        ("丁燕栒 / Yanxun DING", "135 6035 3829", "ZN00499", "440510199107260826"),
         ("万虹波 / Hongbo WAN", "133 1297 9906", "36050219860709003X", "36050219860709003X"),
-        ("王国勤 / Guoqin WANG", "138 1815 8715", "340822197610240215", "340822197610240215"),
-        ("李潇恩 / Xiaoen LI", "158 0599 1600", "510802199512100046", "510802199512100046"),
+        ("王国勤 / Guoqin WANG", "138 1815 8715", "2589322", "340822197610240215"),
+        ("李潇恩 / Xiaoen LI", "158 0599 1600", "ZN00468", "510802199512100046"),
         ("孙辉 / Hui Sun", "139 1626 9572", "310228197810012612", "310228197810012612"),
-        ("范蕾蕾 / Leilei FAN", "182 1000 6866", "37010319861027002X", "37010319861027002X"),
+        ("范蕾蕾 / Leilei FAN", "182 1000 6866", "ZN00347", "37010319861027002X"),
         ("张贺新 / Hexin ZHANG", "136 3773 1210", "420106197101020435", "420106197101020435"),
-        ("李庆宏 / Qinghong LI", "135 0909 0503", "441402199107140256", "441402199107140256"),
+        ("李庆宏 / Qinghong LI", "135 0909 0503", "17260/1 FCL", "441402199107140256"),
         ("Eduard Pascal, Roski / Eduard Pascal Roski", "49 170 1534666", "3863535", "C9TR22VZM"),
         ("Peter Robert, JACKSON / Peter Robert JACKSON", "186 8245 1935", "000044197906253001", "000044197906253001"),
-        ("廉卓群 / Zhuoqun LIAN", "133 5632 3949", "370402199702018029", "370402199702018029"),
+        ("廉卓群 / Zhuoqun LIAN", "133 5632 3949", "ZN00430", "370402199702018029"),
         ("孙浩 / Hao SUN", "136 7012 1990", "650103199102160037", "650103199102160037"),
-        ("姚艳阁 / Yange YAO", "156 0127 9399", "130922199601151224", "130922199601151224"),
-        ("茅邂文 / Xiewen MAO", "152 5181 7375", "320683199911098627", "320683199911098627"),
+        ("姚艳阁 / Yange YAO", "156 0127 9399", "10204", "130922199601151224"),
+        ("茅邂文 / Xiewen MAO", "152 5181 7375", "ZN00903", "320683199911098627"),
         ("宋炜 / Wei SONG", "136 3256 5565", "37060219820621211X", "37060219820621211X"),
         ("BEEBE, Thaddeus John / Thaddeus John BEEBE", "852 6930 1609", "2743899", "R909452(A)"),
         ("张哲 / Zhe ZHANG", "139 0247 5026", "650104196604163310", "650104196604163310"),
@@ -148,7 +147,7 @@ with tab1:
         ("谢依椿", "159 8942 4501", "441427198601221716", "441427198601221716"),
         ("廖关荣", "181 0755 9103", "360732199009095838", "360732199009095838"),
         ("林峰", "135 2260 7955", "150402198501122713", "150402198501122713"),
-        ("丘东", "136 0044 6505", "11010119650406453X", "11010119650406453X"),
+        ("丘东", "136 0044 6505", "11010119650406453x", "11010119650406453x"),
         ("王庆辉", "134 8013 9352", "350627198212052013", "350627198212052013"),
         ("姜磊", "135 1006 5318", "360502198312071333", "360502198312071333"),
         ("黄彦杰", "132 1157 2184", "450881199810196233", "450881199810196233"),
@@ -171,36 +170,22 @@ with tab1:
         ("Daniel, RICHTER", "374 9521 3832", "2556011", "C4W9RFH14"),
         ("郭春旭 / Guo Chunxu", "138 0136 1720", "110107197305150016", "110107197305150016"),
         ("黄海东", "138 0179 9315", "310105197506021215", "310105197506021215"),
-        ("王彦海 / Yanhai, Wang", "", "", ""),
-        ("沈志伟 / Chi Wai Calvin, SHIUM", "", "", ""),
-        ("Andrew Nigel, KING", "", "", ""),
-        ("杨华 / Hua, YANG", "", "", ""),
-        ("曾惠敏 / Irene, Tsang", "", "", ""),
-        ("Theng Theng, LEE", "", "", ""),
-        ("张晶晶 / Jingjing, ZHANG", "", "", ""),
-        ("黄茜 / Qian, HUANG", "", "", ""),
-        ("Wing Leong, YEUNG", "", "", ""),
-        ("Mohammad Amirrudin, Bin Ameir", "", "", ""),
-        ("黄振龙 / Zhenlong, Huang", "", "", ""),
-        ("杨哲瀚 / Zhehan, Yang", "", "", ""),
     ]
 
     CREW_COLUMNS = ["姓名", "联系方式", "执照号码", "证件号码"]
-    CREW_FILL_COLUMNS_GENERAL = ["职务", "姓名", "性别", "出生日期", "证件号码", "执照号码", "联系方式"]
-    CREW_FILL_COLUMNS_EAST = ["职务", "姓名", "性别", "出生日期", "国籍", "证件号码", "执照号码"]
+    CREW_FILL_COLUMNS = ["职务", "姓名", "性别", "出生日期", "证件号码", "执照号码", "联系方式"]
 
     NATION_MAP = {
-        "CHN": "中国", "HKG": "中国香港", "TWN": "中国台湾", "MAC": "中国澳门",
-        "DEU": "德国", "USA": "美国", "GBR": "英国", "FRA": "法国", "RUS": "俄罗斯",
-        "JPN": "日本", "KOR": "韩国", "SGP": "新加坡", "MYS": "马来西亚", "THA": "泰国",
-        "VNM": "越南", "PHL": "菲律宾", "IDN": "印度尼西亚", "IND": "印度", "AUS": "澳大利亚",
-        "CAN": "加拿大", "BRA": "巴西", "MEX": "墨西哥", "ZAF": "南非", "EGY": "埃及",
-        "NGA": "尼日利亚", "KEN": "肯尼亚", "TZA": "坦桑尼亚", "ZWE": "津巴布韦",
-        "NLD": "荷兰", "ITA": "意大利", "ESP": "西班牙", "PRT": "葡萄牙", "GRC": "希腊",
-        "TUR": "土耳其", "SAU": "沙特阿拉伯", "ARE": "阿联酋", "ISR": "以色列",
-        "IRN": "伊朗", "PAK": "巴基斯坦", "BGD": "孟加拉", "NPL": "尼泊尔",
-        "LKA": "斯里兰卡", "MMR": "缅甸", "KHM": "柬埔寨", "LAO": "老挝", "MNG": "蒙古",
-        "PRK": "朝鲜", "HUN": "匈牙利",
+        "CHN": "中国", "HKG": "香港", "DEU": "德国", "USA": "美国", "GBR": "英国",
+        "FRA": "法国", "RUS": "俄罗斯", "JPN": "日本", "KOR": "韩国", "SGP": "新加坡",
+        "MYS": "马来西亚", "THA": "泰国", "VNM": "越南", "PHL": "菲律宾", "IDN": "印度尼西亚",
+        "IND": "印度", "AUS": "澳大利亚", "CAN": "加拿大", "BRA": "巴西", "MEX": "墨西哥",
+        "ZAF": "南非", "EGY": "埃及", "NGA": "尼日利亚", "KEN": "肯尼亚", "TZA": "坦桑尼亚",
+        "ZWE": "津巴布韦", "NLD": "荷兰", "ITA": "意大利", "ESP": "西班牙", "PRT": "葡萄牙",
+        "GRC": "希腊", "TUR": "土耳其", "SAU": "沙特阿拉伯", "ARE": "阿联酋", "ISR": "以色列",
+        "IRN": "伊朗", "PAK": "巴基斯坦", "BGD": "孟加拉", "NPL": "尼泊尔", "LKA": "斯里兰卡",
+        "MMR": "缅甸", "KHM": "柬埔寨", "LAO": "老挝", "MNG": "蒙古", "PRK": "朝鲜",
+        "TWN": "中国台湾", "MAC": "澳门"
     }
 
     AIRCRAFT_TYPE_MAP = {
@@ -220,7 +205,7 @@ with tab1:
         return gd_type_str
 
     def get_nation_name(code):
-        code = str(code).strip().upper()
+        code = code.strip().upper()
         return NATION_MAP.get(code, code)
 
     def extract_chinese_name(full_name):
@@ -273,54 +258,50 @@ with tab1:
                     result = val
         return result
 
-    def find_contact(crew_name): return _find_crew_field(crew_name, "联系方式")
-    def find_license(crew_name): return _find_crew_field(crew_name, "执照号码")
-    def find_id(crew_name): return _find_crew_field(crew_name, "证件号码")
+    def find_contact(crew_name):
+        return _find_crew_field(crew_name, "联系方式")
+
+    def find_license(crew_name):
+        return _find_crew_field(crew_name, "执照号码")
+
+    def find_id(crew_name):
+        return _find_crew_field(crew_name, "证件号码")
 
     def is_18digit_id_card(val):
-        if not val: return False
-        s = re.sub(r'\s+', '', str(val)).upper()
-        return bool(re.match(r'^[0-9]{17}[0-9X]$', s))
+        if not val:
+            return False
+        s = re.sub(r'\s+', '', str(val))
+        return bool(re.match(r'^[0-9]{17}[0-9Xx]$', s))
 
     def resolve_crew_id_and_license(crew_name, fallback_passport=""):
         id_val = find_id(crew_name)
         license_val = find_license(crew_name)
-        if id_val and license_val:
-            return id_val, license_val
         if is_18digit_id_card(id_val):
             return id_val, id_val
-        if not id_val and is_18digit_id_card(fallback_passport):
-            return fallback_passport, fallback_passport
         return (id_val if id_val else fallback_passport), license_val
 
     def parse_document_type(passport_no, doc_type):
         doc_type_str = str(doc_type).strip() if pd.notna(doc_type) else ""
         if doc_type_str:
-            if "中华人民共和国居民身份证" in doc_type_str: return "身份证"
-            if "港澳居民来往内地通行证" in doc_type_str: return "回乡证"
+            if "中华人民共和国居民身份证" in doc_type_str:
+                return "身份证"
+            if "港澳居民来往内地通行证" in doc_type_str:
+                return "回乡证"
             return doc_type_str
         pn = str(passport_no).strip() if pd.notna(passport_no) else ""
         pn = re.sub(r'\s+', '', pn)
-        if re.match(r'^[0-9]{15}$', pn) or re.match(r'^[0-9]{17}[0-9Xx]$', pn): return "身份证"
-        return "护照"
+        if re.match(r'^[0-9]{15}$', pn) or re.match(r'^[0-9]{17}[0-9Xx]$', pn):
+            return "身份证"
+        else:
+            return "护照"
 
     def safe_set_cell_value(ws, row, col, value):
-        cell = ws.cell(row=row, column=col)
-        if isinstance(cell, MergedCell):
-            for merged_range in ws.merged_cells.ranges:
-                if merged_range.min_row <= row <= merged_range.max_row and \
-                   merged_range.min_col <= col <= merged_range.max_col:
-                    target = ws.cell(row=merged_range.min_row, column=merged_range.min_col)
-                    if not isinstance(target, MergedCell):
-                        target.value = value
-                    return
-        else:
-            cell.value = value
-
-    def safe_set_cell_font(ws, row, col, font):
-        cell = ws.cell(row=row, column=col)
-        if not isinstance(cell, MergedCell):
-            cell.font = font
+        for merged_range in ws.merged_cells.ranges:
+            if merged_range.min_row <= row <= merged_range.max_row and \
+               merged_range.min_col <= col <= merged_range.max_col:
+                ws.cell(row=merged_range.min_row, column=merged_range.min_col).value = value
+                return
+        ws.cell(row=row, column=col).value = value
 
     def get_value_right(ws, row, start_col):
         for col in range(start_col, start_col + 10):
@@ -336,54 +317,66 @@ with tab1:
                 hour = int(time_part[:2]); minute = int(time_part[2:])
             elif len(time_part) == 3:
                 hour = int(time_part[:1]); minute = int(time_part[1:])
-            else: return "0000"
+            else:
+                return "0000"
             day = int(re.search(r'\d+', date_str).group()) if re.search(r'\d+', date_str) else 1
-            month_map = {"Jan":1,"Feb":2,"Mar":3,"Apr":4,"May":5,"Jun":6,"Jul":7,"Aug":8,"Sep":9,"Oct":10,"Nov":11,"Dec":12}
+            month_map = {"Jan":1,"Feb":2,"Mar":3,"Apr":4,"May":5,"Jun":6,
+                         "Jul":7,"Aug":8,"Sep":9,"Oct":10,"Nov":11,"Dec":12}
             month_str = re.search(r'[A-Za-z]{3}', date_str).group() if re.search(r'[A-Za-z]{3}', date_str) else "Jan"
             month = month_map.get(month_str[:3], 1)
             dt_beijing = datetime(2026, month, day, hour, minute) + timedelta(hours=8)
             return dt_beijing.strftime("%H%M")
-        except: return "0000"
+        except:
+            return "0000"
 
     def parse_date_display(date_str):
         try:
             day = re.search(r'\d+', date_str).group()
             month_str = re.search(r'[A-Za-z]{3}', date_str).group()
-            month_map = {"Jan":1,"Feb":2,"Mar":3,"Apr":4,"May":5,"Jun":6,"Jul":7,"Aug":8,"Sep":9,"Oct":10,"Nov":11,"Dec":12}
+            month_map = {"Jan":1,"Feb":2,"Mar":3,"Apr":4,"May":5,"Jun":6,
+                         "Jul":7,"Aug":8,"Sep":9,"Oct":10,"Nov":11,"Dec":12}
             month = month_map.get(month_str[:3], 1)
             return f"{month}月{int(day)}日"
-        except: return date_str
+        except:
+            return date_str
 
     def get_beijing_date_display(utc_time_str, date_str):
-        if not utc_time_str or not date_str: return parse_date_display(date_str)
+        if not utc_time_str or not date_str:
+            return parse_date_display(date_str)
         try:
             time_part = utc_time_str.replace('Z', '').strip()
             if len(time_part) == 4:
                 hour = int(time_part[:2]); minute = int(time_part[2:])
             elif len(time_part) == 3:
                 hour = int(time_part[:1]); minute = int(time_part[1:])
-            else: return parse_date_display(date_str)
+            else:
+                return parse_date_display(date_str)
             day = int(re.search(r'\d+', date_str).group())
             month_str = re.search(r'[A-Za-z]{3}', date_str).group()
-            month_map = {"Jan":1,"Feb":2,"Mar":3,"Apr":4,"May":5,"Jun":6,"Jul":7,"Aug":8,"Sep":9,"Oct":10,"Nov":11,"Dec":12}
+            month_map = {"Jan":1,"Feb":2,"Mar":3,"Apr":4,"May":5,"Jun":6,
+                         "Jul":7,"Aug":8,"Sep":9,"Oct":10,"Nov":11,"Dec":12}
             month = month_map.get(month_str[:3], 1)
             dt_beijing = datetime(2026, month, day, hour, minute) + timedelta(hours=8)
             return f"{dt_beijing.month}月{dt_beijing.day}日"
-        except: return parse_date_display(date_str)
+        except:
+            return parse_date_display(date_str)
 
     def strip_single_letter_prefix(text):
-        if text and re.match(r'^[A-Za-z]\s+', text): return re.sub(r'^[A-Za-z]\s+', '', text)
+        if text and re.match(r'^[A-Za-z]\s+', text):
+            return re.sub(r'^[A-Za-z]\s+', '', text)
         return text
 
     def parse_no_time_route(input_text, date_display):
         input_text = strip_single_letter_prefix(input_text)
-        if not input_text or not input_text.strip(): return None
+        if not input_text or not input_text.strip():
+            return None
         text = input_text.strip()
         lines = [line.strip() for line in text.split('\n') if line.strip()]
         if len(lines) >= 2:
             first_line = lines[0]; second_line = lines[1]
             flight_number = first_line.split()[0] if first_line.split() else None
-            if not flight_number: return None
+            if not flight_number:
+                return None
             parts = re.split(r'\s*[-—–]\s*', second_line)
             if len(parts) >= 2:
                 dep_airport = parts[0].strip(); arr_airport = parts[1].strip()
@@ -391,8 +384,13 @@ with tab1:
                     return f"{date_display} {flight_number} {dep_airport}-{arr_airport}"
         else:
             flight_number = text.split()[0] if text.split() else None
-            if not flight_number: return None
-            time_pattern = (r'(?<![A-Za-z0-9])(\d{1,2}:\d{2}|\d{4})(?![A-Za-z0-9])'r'\s*[-—–]\s*'r'(\d{1,2}:\d{2}|\d{4})(?![A-Za-z0-9])')
+            if not flight_number:
+                return None
+            time_pattern = (
+                r'(?<![A-Za-z0-9])(\d{1,2}:\d{2}|\d{4})(?![A-Za-z0-9])'
+                r'\s*[-—–]\s*'
+                r'(\d{1,2}:\d{2}|\d{4})(?![A-Za-z0-9])'
+            )
             remaining = re.sub(time_pattern, '', text).strip()
             remaining = re.sub(r'\s*\+\s*\d+\s*', '', remaining).strip()
             airport_parts = re.split(r'\s*[-—–]\s*', remaining)
@@ -408,20 +406,30 @@ with tab1:
 
     def parse_with_time_route(input_text, date_display):
         input_text = strip_single_letter_prefix(input_text)
-        if not input_text or not input_text.strip(): return input_text
+        if not input_text or not input_text.strip():
+            return input_text
         text = input_text.strip()
-        time_pattern = (r'(?<![A-Za-z0-9])(\d{1,2}:\d{2}|\d{4})(?![A-Za-z0-9])'r'\s*[-—–]\s*'r'(\d{1,2}:\d{2}|\d{4})(?![A-Za-z0-9])')
+        time_pattern = (
+            r'(?<![A-Za-z0-9])(\d{1,2}:\d{2}|\d{4})(?![A-Za-z0-9])'
+            r'\s*[-—–]\s*'
+            r'(\d{1,2}:\d{2}|\d{4})(?![A-Za-z0-9])'
+        )
         time_match = re.search(time_pattern, text)
         if time_match:
             dep_time = time_match.group(1).replace(':', ''); arr_time = time_match.group(2).replace(':', '')
             remaining = re.sub(time_pattern, '', text).strip()
         else:
-            time_pattern2 = (r'(?<![A-Za-z0-9])(\d{1,2}:\d{2}|\d{4})(?![A-Za-z0-9])'r'\s+'r'(\d{1,2}:\d{2}|\d{4})(?![A-Za-z0-9])')
+            time_pattern2 = (
+                r'(?<![A-Za-z0-9])(\d{1,2}:\d{2}|\d{4})(?![A-Za-z0-9])'
+                r'\s+'
+                r'(\d{1,2}:\d{2}|\d{4})(?![A-Za-z0-9])'
+            )
             time_match2 = re.search(time_pattern2, text)
             if time_match2:
                 dep_time = time_match2.group(1).replace(':', ''); arr_time = time_match2.group(2).replace(':', '')
                 remaining = re.sub(time_pattern2, '', text).strip()
-            else: return input_text
+            else:
+                return input_text
         remaining = re.sub(r'\s*\+\s*\d+\s*', '', remaining).strip()
         airport_pattern = r'(.+?)\s*[-—–]\s*(.+)'
         airport_match = re.search(airport_pattern, remaining)
@@ -443,16 +451,21 @@ with tab1:
             for cell in row:
                 if cell.value and isinstance(cell.value, str):
                     val = cell.value.strip()
-                    if "OPERATOR:" in val: data["operator"] = get_value_right(ws, cell.row, cell.column+1)
+                    if "OPERATOR:" in val:
+                        data["operator"] = get_value_right(ws, cell.row, cell.column+1)
                     elif "REG NO./FLT NO.:" in val:
                         reg_val = get_value_right(ws, cell.row, cell.column+1)
                         parts = reg_val.split()
                         data["reg"] = parts[0] if parts else reg_val
                         data["flt"] = parts[0] if parts else reg_val
-                        if len(parts) > 1: data["flt"] = parts[1]
-                    elif "AC TYPE:" in val: data["ac_type_raw"] = get_value_right(ws, cell.row, cell.column+1)
-                    elif "FROM:" in val: data["from"] = get_value_right(ws, cell.row, cell.column+1)
-                    elif "TO:" in val: data["to"] = get_value_right(ws, cell.row, cell.column+1)
+                        if len(parts) > 1:
+                            data["flt"] = parts[1]
+                    elif "AC TYPE:" in val:
+                        data["ac_type_raw"] = get_value_right(ws, cell.row, cell.column+1)
+                    elif "FROM:" in val:
+                        data["from"] = get_value_right(ws, cell.row, cell.column+1)
+                    elif "TO:" in val:
+                        data["to"] = get_value_right(ws, cell.row, cell.column+1)
                     elif "DATE/TIME:" in val:
                         date_time = get_value_right(ws, cell.row, cell.column+1)
                         data["date_time"] = date_time
@@ -460,41 +473,66 @@ with tab1:
                             parts = date_time.split()
                             data["utc_time"] = parts[0] if len(parts) > 0 else ""
                             data["date_str"] = parts[1] if len(parts) > 1 else ""
-        data["ac_type"] = get_aircraft_type(data.get("reg", ""), data.get("ac_type_raw", ""))
+        data["ac_type"] = get_aircraft_type(
+            data.get("reg", ""), data.get("ac_type_raw", "")
+        )
 
         crew_data = []; passenger_data = []; section = None
         for row in ws.iter_rows(min_row=1):
             for cell in row:
                 if cell.value and isinstance(cell.value, str):
                     val = cell.value.strip()
-                    if "CREW MANIFEST" in val: section = 'crew'; break
-                    elif "PASSENGER MANIFEST" in val: section = 'passenger'; break
-                    elif "CARGO MANIFEST" in val or "DECLARATION OF HEALTH" in val: section = None; break
+                    if "CREW MANIFEST" in val:
+                        section = 'crew'; break
+                    elif "PASSENGER MANIFEST" in val:
+                        section = 'passenger'; break
+                    elif "CARGO MANIFEST" in val or "DECLARATION OF HEALTH" in val:
+                        section = None; break
             if section == 'crew':
                 first_cell = row[0]
                 if first_cell.value and isinstance(first_cell.value, (int, float)) and len(row) >= 7:
                     name_cell = row[1]
                     if name_cell.value and isinstance(name_cell.value, str):
-                        crew_data.append({"name": name_cell.value.strip(),"dob": row[2].value if row[2].value else "","gender": row[3].value if row[3].value else "","nationality": row[4].value if row[4].value else "","doc_type": row[5].value if row[5].value else "","passport_no": row[6].value if row[6].value else ""})
+                        crew_data.append({
+                            "name": name_cell.value.strip(),
+                            "dob": row[2].value if row[2].value else "",
+                            "gender": row[3].value if row[3].value else "",
+                            "nationality": row[4].value if row[4].value else "",
+                            "doc_type": row[5].value if row[5].value else "",
+                            "passport_no": row[6].value if row[6].value else "",
+                        })
             elif section == 'passenger':
                 first_cell = row[0]
                 if first_cell.value and isinstance(first_cell.value, (int, float)) and len(row) >= 7:
                     name_cell = row[1]
                     if name_cell.value and isinstance(name_cell.value, str):
-                        passenger_data.append({"name": name_cell.value.strip(),"dob": row[2].value if row[2].value else "","gender": row[3].value if row[3].value else "","nationality": row[4].value if row[4].value else "","doc_type": row[5].value if row[5].value else "","passport_no": row[6].value if row[6].value else ""})
+                        passenger_data.append({
+                            "name": name_cell.value.strip(),
+                            "dob": row[2].value if row[2].value else "",
+                            "gender": row[3].value if row[3].value else "",
+                            "nationality": row[4].value if row[4].value else "",
+                            "doc_type": row[5].value if row[5].value else "",
+                            "passport_no": row[6].value if row[6].value else "",
+                        })
         return data, crew_data, passenger_data
 
     def _parse_hhmm(val):
-        if val is None: return None
+        if val is None:
+            return None
         try:
-            if isinstance(val, float) and pd.isna(val): return None
-        except: pass
+            if isinstance(val, float) and pd.isna(val):
+                return None
+        except Exception:
+            pass
         if hasattr(val, 'strftime'):
-            try: return val.strftime('%H:%M')
-            except: pass
+            try:
+                return val.strftime('%H:%M')
+            except Exception:
+                pass
         s = str(val).strip()
         m = re.match(r'^(\d{1,2}):(\d{2})', s)
-        if m: return f"{int(m.group(1)):02d}:{m.group(2)}"
+        if m:
+            return f"{int(m.group(1)):02d}:{m.group(2)}"
         return None
 
     def parse_route_plan(file_bytes):
@@ -510,57 +548,93 @@ with tab1:
             return None
 
     def _parse_gd_date(date_str):
-        if not date_str: return None
+        if not date_str:
+            return None
         m = re.match(r'(\d{1,2})\s*([A-Za-z]{3})', str(date_str).strip())
-        if not m: return None
-        try: day = int(m.group(1))
-        except: return None
-        month_map = {"Jan":1,"Feb":2,"Mar":3,"Apr":4,"May":5,"Jun":6,"Jul":7,"Aug":8,"Sep":9,"Oct":10,"Nov":11,"Dec":12}
+        if not m:
+            return None
+        try:
+            day = int(m.group(1))
+        except Exception:
+            return None
+        month_map = {"Jan":1,"Feb":2,"Mar":3,"Apr":4,"May":5,"Jun":6,
+                     "Jul":7,"Aug":8,"Sep":9,"Oct":10,"Nov":11,"Dec":12}
         month = month_map.get(m.group(2).capitalize()[:3])
-        if not month: return None
+        if not month:
+            return None
         return (month, day)
 
     def _extract_row_date(row_date):
-        if row_date is None: return None
+        if row_date is None:
+            return None
         try:
-            if isinstance(row_date, float) and pd.isna(row_date): return None
-        except: pass
+            if isinstance(row_date, float) and pd.isna(row_date):
+                return None
+        except Exception:
+            pass
         if hasattr(row_date, 'year'):
-            try: return datetime(row_date.year, row_date.month, row_date.day)
-            except: pass
+            try:
+                return datetime(row_date.year, row_date.month, row_date.day)
+            except Exception:
+                pass
         s = str(row_date).strip()
         m = re.match(r'(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})', s)
         if m:
-            try: return datetime(int(m.group(1)), int(m.group(2)), int(m.group(3)))
-            except: return None
+            try:
+                return datetime(int(m.group(1)), int(m.group(2)), int(m.group(3)))
+            except Exception:
+                return None
         m = re.match(r'(\d{4})(\d{2})(\d{2})', s)
         if m:
-            try: return datetime(int(m.group(1)), int(m.group(2)), int(m.group(3)))
-            except: return None
+            try:
+                return datetime(int(m.group(1)), int(m.group(2)), int(m.group(3)))
+            except Exception:
+                return None
         return None
 
     def find_matching_flight(df, reg, from_airport, to_airport, gd_date=None):
-        if df is None or df.empty: return None
+        if df is None or df.empty:
+            return None
         required = ['飞机注册号', '出发地', '到达地', '计划出发', '预计到达', '出发城市', '到达城市']
-        if not all(c in df.columns for c in required): return None
-        mask = ((df['飞机注册号'].astype(str).str.strip() == str(reg).strip()) &(df['出发地'].astype(str).str.strip().str.upper() == str(from_airport).strip().upper()) &(df['到达地'].astype(str).str.strip().str.upper() == str(to_airport).strip().upper()))
+        if not all(c in df.columns for c in required):
+            return None
+
+        mask = (
+            (df['飞机注册号'].astype(str).str.strip() == str(reg).strip()) &
+            (df['出发地'].astype(str).str.strip().str.upper() == str(from_airport).strip().upper()) &
+            (df['到达地'].astype(str).str.strip().str.upper() == str(to_airport).strip().upper())
+        )
         matched = df[mask]
-        if matched.empty: return None
-        if gd_date is None or '出发日期' not in matched.columns: return matched.iloc[0]
+        if matched.empty:
+            return None
+
+        if gd_date is None or '出发日期' not in matched.columns:
+            return matched.iloc[0]
+
         gd_month, gd_day = gd_date
+
         def _same_month_day(row_date):
             dt = _extract_row_date(row_date)
             return dt is not None and dt.month == gd_month and dt.day == gd_day
+
         exact = matched[matched['出发日期'].apply(_same_month_day)]
-        if not exact.empty: return exact.iloc[0]
+        if not exact.empty:
+            return exact.iloc[0]
+
         def _nearby_month_day(row_date):
             dt = _extract_row_date(row_date)
-            if dt is None: return False
-            try: target = datetime(dt.year, gd_month, gd_day)
-            except: return False
+            if dt is None:
+                return False
+            try:
+                target = datetime(dt.year, gd_month, gd_day)
+            except Exception:
+                return False
             return abs((dt - target).days) <= 1
+
         nearby = matched[matched['出发日期'].apply(_nearby_month_day)]
-        if not nearby.empty: return nearby.iloc[0]
+        if not nearby.empty:
+            return nearby.iloc[0]
+
         return None
 
     def build_route_from_flight(flight_row):
@@ -569,8 +643,11 @@ with tab1:
         arr_time = _parse_hhmm(flight_row.get('预计到达'))
         dep_city = str(flight_row.get('出发城市', '') or '').strip()
         arr_city = str(flight_row.get('到达城市', '') or '').strip()
-        if not (reg and dep_time and arr_time and dep_city and arr_city): return None
-        return f"F {reg} {dep_time.replace(':', '')} - {arr_time.replace(':', '')}  {dep_city} - {arr_city}"
+        if not (reg and dep_time and arr_time and dep_city and arr_city):
+            return None
+        dep_time_clean = dep_time.replace(':', '')
+        arr_time_clean = arr_time.replace(':', '')
+        return f"F {reg} {dep_time_clean} - {arr_time_clean}  {dep_city} - {arr_city}"
 
     def _style_name_cell(ws, row, col, text):
         target_row, target_col = row, col
@@ -580,31 +657,74 @@ with tab1:
                 target_row = merged_range.min_row
                 target_col = merged_range.min_col
                 break
+
         cell = ws.cell(row=target_row, column=target_col)
-        if isinstance(cell, MergedCell): return
         text_str = str(text) if text is not None else ""
+
         new_align = _copy_style(cell.alignment)
         new_align.wrap_text = True
         cell.alignment = new_align
+
         n = len(text_str)
-        if n <= 12: return
-        if n <= 17: new_size = 10
-        elif n <= 25: new_size = 9
-        elif n <= 35: new_size = 8
-        else: new_size = 7
+        if n <= 12:
+            return
+
+        if n <= 17:
+            new_size = 10
+        elif n <= 25:
+            new_size = 9
+        elif n <= 35:
+            new_size = 8
+        else:
+            new_size = 7
+
         new_font = _copy_style(cell.font)
         new_font.size = new_size
         cell.font = new_font
+
         min_h = new_size * 2 + 4
         rd = ws.row_dimensions[target_row]
         current_h = rd.height
-        if current_h is None or current_h < min_h: rd.height = min_h
+        if current_h is None or current_h < min_h:
+            rd.height = min_h
+
+    def _fill_crew_row_by_data(ws, label_keyword, crew_row):
+        for row in ws.iter_rows(min_row=1, max_row=50):
+            for cell in row:
+                if cell.value and isinstance(cell.value, str) and label_keyword in cell.value:
+                    row_num = cell.row
+                    name_text = crew_row.get("姓名", "")
+                    safe_set_cell_value(ws, row_num, 2, name_text)
+                    safe_set_cell_value(ws, row_num, 3, crew_row.get("性别", ""))
+                    safe_set_cell_value(ws, row_num, 4, crew_row.get("出生日期", ""))
+                    safe_set_cell_value(ws, row_num, 5, crew_row.get("证件号码", ""))
+                    safe_set_cell_value(ws, row_num, 6, crew_row.get("执照号码", ""))
+                    safe_set_cell_value(ws, row_num, 7, crew_row.get("联系方式", ""))
+                    _style_name_cell(ws, row_num, 2, name_text)
+                    return True
+        return False
+
+    def _fill_empty_crew_row(ws, label_keyword):
+        for row in ws.iter_rows(min_row=1, max_row=50):
+            for cell in row:
+                if cell.value and isinstance(cell.value, str) and label_keyword in cell.value:
+                    row_num = cell.row
+                    for c in range(2, 8):
+                        safe_set_cell_value(ws, row_num, c, "无" if c == 2 else "")
+                    return True
+        return False
 
     def _style_snapshot(cell):
-        return {'font': _copy_style(cell.font),'border': _copy_style(cell.border),'fill': _copy_style(cell.fill),'number_format': cell.number_format,'protection': _copy_style(cell.protection),'alignment': _copy_style(cell.alignment)}
+        return {
+            'font': _copy_style(cell.font),
+            'border': _copy_style(cell.border),
+            'fill': _copy_style(cell.fill),
+            'number_format': cell.number_format,
+            'protection': _copy_style(cell.protection),
+            'alignment': _copy_style(cell.alignment),
+        }
 
     def _style_apply(cell, snap):
-        if isinstance(cell, MergedCell): return
         cell.font = _copy_style(snap['font'])
         cell.border = _copy_style(snap['border'])
         cell.fill = _copy_style(snap['fill'])
@@ -617,7 +737,8 @@ with tab1:
         for r in range(start_row, start_row + max_scan):
             for c in range(1, max_col + 1):
                 v = ws.cell(r, c).value
-                if v is not None and str(v).strip(): return r
+                if v is not None and str(v).strip():
+                    return r
         return None
 
     def _shift_images_down(ws, end_row, extra):
@@ -628,8 +749,10 @@ with tab1:
             anchor = getattr(img, 'anchor', None)
             if anchor is None:
                 continue
+
             frm = getattr(anchor, '_from', None)
             to = getattr(anchor, 'to', None)
+
             need_shift = False
             if frm is not None:
                 r = getattr(frm, 'row', None)
@@ -639,25 +762,40 @@ with tab1:
                 r = getattr(to, 'row', None)
                 if r is not None and r >= end_row_0:
                     need_shift = True
+
             if not need_shift:
                 continue
+
             if frm is not None:
-                try: frm.row = frm.row + extra
-                except: pass
+                try:
+                    frm.row = frm.row + extra
+                except Exception:
+                    pass
             if to is not None:
-                try: to.row = to.row + extra
-                except: pass
+                try:
+                    to.row = to.row + extra
+                except Exception:
+                    pass
 
     def _ensure_passenger_rows(ws, data_start_row, needed_count):
-        if needed_count <= 0: return data_start_row
+        if needed_count <= 0:
+            return data_start_row
+
         from openpyxl.utils import get_column_letter
+
         end_row = _find_first_content_row(ws, data_start_row)
-        if end_row is None: return data_start_row
+        if end_row is None:
+            return data_start_row
+
         existing_rows = end_row - data_start_row
-        if needed_count <= existing_rows: return data_start_row
+        if needed_count <= existing_rows:
+            return data_start_row
+
         extra = needed_count - existing_rows
         template_row = end_row - 1
+
         max_col = ws.max_column or 10
+
         merge_template_row = template_row
         for r in range(template_row, data_start_row - 1, -1):
             hit = False
@@ -668,40 +806,59 @@ with tab1:
             if hit:
                 merge_template_row = r
                 break
-        template_styles = {c: _style_snapshot(ws.cell(template_row, c)) for c in range(1, max_col + 1)}
+
+        template_styles = {
+            c: _style_snapshot(ws.cell(template_row, c))
+            for c in range(1, max_col + 1)
+        }
         template_height = ws.row_dimensions[template_row].height
+
         template_merges = []
         for mr in list(ws.merged_cells.ranges):
             if mr.min_row == merge_template_row and mr.max_row == merge_template_row:
                 template_merges.append((mr.min_col, mr.max_col))
+
         max_row = ws.max_row
         saved_heights = {}
         for r in range(end_row, max_row + 1):
             h = ws.row_dimensions[r].height
             if h is not None:
                 saved_heights[r] = h
+
         affected = []
         for mr in list(ws.merged_cells.ranges):
             if mr.min_row >= end_row or mr.min_row < end_row <= mr.max_row:
                 affected.append((mr.min_row, mr.min_col, mr.max_row, mr.max_col))
-                try: ws.unmerge_cells(str(mr))
-                except: pass
+                try:
+                    ws.unmerge_cells(str(mr))
+                except Exception:
+                    pass
+
         ws.insert_rows(end_row, extra)
+
         _shift_images_down(ws, end_row, extra)
+
         for min_r, min_c, max_r, max_c in affected:
             if min_r >= end_row:
                 new_min_r, new_max_r = min_r + extra, max_r + extra
             else:
                 new_min_r, new_max_r = min_r, max_r + extra
-            rng = (f"{get_column_letter(min_c)}{new_min_r}:{get_column_letter(max_c)}{new_max_r}")
-            try: ws.merge_cells(rng)
-            except: pass
+            rng = (f"{get_column_letter(min_c)}{new_min_r}:"
+                   f"{get_column_letter(max_c)}{new_max_r}")
+            try:
+                ws.merge_cells(rng)
+            except Exception:
+                pass
+
         for r in list(ws.row_dimensions.keys()):
             if r >= end_row:
-                try: del ws.row_dimensions[r]
-                except: pass
+                try:
+                    del ws.row_dimensions[r]
+                except Exception:
+                    pass
         for old_r, h in saved_heights.items():
             ws.row_dimensions[old_r + extra].height = h
+
         for i in range(extra):
             new_row = end_row + i
             for c, snap in template_styles.items():
@@ -709,77 +866,24 @@ with tab1:
             if template_height:
                 ws.row_dimensions[new_row].height = template_height
             for min_c, max_c in template_merges:
-                rng = (f"{get_column_letter(min_c)}{new_row}:{get_column_letter(max_c)}{new_row}")
-                try: ws.merge_cells(rng)
-                except: pass
+                rng = (f"{get_column_letter(min_c)}{new_row}:"
+                       f"{get_column_letter(max_c)}{new_row}")
+                try:
+                    ws.merge_cells(rng)
+                except Exception:
+                    pass
+
         return data_start_row
 
-    def fill_template_east_china(template_bytes, data, crew_rows, passenger_list, route_display):
+    def fill_template(template_bytes, data, crew_rows, passenger_list, route_display):
         try:
             wb = load_workbook(template_bytes)
-        except Exception:
-            raise RuntimeError("❌ 模板文件解析失败。请确保你上传的是真正的 `.xlsx` 格式（请用 Excel 打开文件，选择“另存为”，格式选 Excel 工作簿(*.xlsx)），而不是直接修改后缀名。")
-        ws = wb.active
+        except Exception as e:
+            if "Bad magic number" in str(e) or "BadZipFile" in str(e):
+                st.error("❌ 模板文件格式不正确。请确保模板为 **.xlsx** 格式（非 .xls）。")
+                st.info("💡 解决方法：用 Excel 打开该模板，选择“另存为”，将文件类型选为 **Excel工作簿（.xlsx）**，然后重新上传。")
+            raise e
 
-        safe_set_cell_value(ws, 6, 2, "调机" if not passenger_list else "商务")
-        safe_set_cell_value(ws, 10, 2, data.get("ac_type", ""))
-        safe_set_cell_value(ws, 10, 3, data.get("reg", ""))
-        safe_set_cell_value(ws, 10, 4, data.get("flt", ""))
-        safe_set_cell_value(ws, 10, 5, route_display if route_display else "")
-
-        role_map = {}
-        for cr in crew_rows:
-            role = str(cr.get("职务", "")).strip()
-            if role and role not in role_map: role_map[role] = cr
-
-        roles_pos = {"机长": 15, "副驾驶": 16, "乘务": 17, "机务": 18}
-        for role_name, row_num in roles_pos.items():
-            cr = role_map.get(role_name)
-            if cr and str(cr.get("姓名", "")).strip() not in ("", "无"):
-                name_val = str(cr.get("姓名", "")).strip()
-                safe_set_cell_value(ws, row_num, 2, name_val)
-                _style_name_cell(ws, row_num, 2, name_val)
-                safe_set_cell_value(ws, row_num, 3, cr.get("性别", ""))
-                safe_set_cell_value(ws, row_num, 4, cr.get("出生日期", ""))
-                safe_set_cell_value(ws, row_num, 5, cr.get("国籍", ""))
-                safe_set_cell_font(ws, row_num, 5, Font(name='宋体', size=16))
-                safe_set_cell_value(ws, row_num, 6, cr.get("证件号码", ""))
-                safe_set_cell_font(ws, row_num, 6, Font(name='宋体', size=16))
-                safe_set_cell_value(ws, row_num, 7, cr.get("执照号码", ""))
-                safe_set_cell_font(ws, row_num, 7, Font(name='宋体', size=12))
-            else:
-                for c in range(2, 8):
-                    safe_set_cell_value(ws, row_num, c, "无" if c == 2 else "")
-
-        if passenger_list:
-            start_row = 23
-            passenger_start_row = _ensure_passenger_rows(ws, start_row, len(passenger_list))
-            for i, pax in enumerate(passenger_list):
-                row_num = passenger_start_row + i
-                pax_name = extract_chinese_name(pax["name"])
-                try: ws.merge_cells(start_row=row_num, start_column=6, end_row=row_num, end_column=7)
-                except Exception: pass
-                safe_set_cell_value(ws, row_num, 1, pax_name)
-                safe_set_cell_value(ws, row_num, 2, pax.get("gender", ""))
-                safe_set_cell_value(ws, row_num, 3, pax.get("dob", ""))
-                safe_set_cell_value(ws, row_num, 4, get_nation_name(pax.get("nationality", "")))
-                doc_type = pax.get("doc_type", "")
-                doc_type_clean = parse_document_type("", doc_type) if (pd.notna(doc_type) and str(doc_type).strip()) else parse_document_type(pax.get("passport_no", ""), "")
-                safe_set_cell_value(ws, row_num, 5, doc_type_clean)
-                safe_set_cell_value(ws, row_num, 6, pax.get("passport_no", ""))
-                for col_idx in range(1, 7):
-                    safe_set_cell_font(ws, row_num, col_idx, Font(name='宋体', size=16))
-                _style_name_cell(ws, row_num, 1, pax_name)
-
-        output = BytesIO()
-        wb.save(output); output.seek(0)
-        return output
-
-    def fill_template_general(template_bytes, data, crew_rows, passenger_list, route_display):
-        try:
-            wb = load_workbook(template_bytes)
-        except Exception:
-            raise RuntimeError("❌ 模板文件解析失败。请确保你上传的是真正的 `.xlsx` 格式（请用 Excel 打开文件，选择“另存为”，格式选 Excel 工作簿(*.xlsx)），而不是直接修改后缀名。")
         ws = wb.active
 
         if not passenger_list:
@@ -788,52 +892,82 @@ with tab1:
                     if cell.value and isinstance(cell.value, str) and "飞行目的" in cell.value:
                         safe_set_cell_value(ws, cell.row + 1, 2, "调机")
                         break
+                else:
+                    continue
+                break
 
         info_row = None
         for row in ws.iter_rows(min_row=1, max_row=20):
             for cell in row:
-                if cell.value and isinstance(cell.value, str) and cell.value.strip() in ["机型", "注册号", "航班号", "航班行程"]:
-                    info_row = cell.row; break
+                if cell.value and isinstance(cell.value, str):
+                    if cell.value.strip() in ["机型", "注册号", "航班号", "航班行程"]:
+                        info_row = cell.row; break
             if info_row: break
-
         if info_row:
             data_row = info_row + 1
             safe_set_cell_value(ws, data_row, 2, data.get("ac_type", ""))
             safe_set_cell_value(ws, data_row, 3, data.get("reg", ""))
             safe_set_cell_value(ws, data_row, 4, data.get("flt", ""))
-            route_col = 5
-            for cell in ws[info_row]:
-                if cell.value and "行程" in str(cell.value):
-                    route_col = cell.column
-                    break
-            safe_set_cell_value(ws, data_row, route_col, route_display if route_display else "")
+            safe_set_cell_value(ws, data_row, 5, route_display if route_display else "")
 
         role_map = {}
         for cr in crew_rows:
             role = str(cr.get("职务", "")).strip()
-            if role and role not in role_map: role_map[role] = cr
+            name = str(cr.get("姓名", "")).strip()
+            if role and name and role not in role_map:
+                role_map[role] = cr
 
-        roles_pos = {"机长": 13, "副驾驶": 14, "乘务": 15, "机务": 16}
-        for role_name, row_num in roles_pos.items():
-            cr = role_map.get(role_name)
-            if cr and str(cr.get("姓名", "")).strip() not in ("", "无"):
-                name_text = cr.get("姓名", "")
-                safe_set_cell_value(ws, row_num, 2, name_text)
-                safe_set_cell_value(ws, row_num, 3, cr.get("性别", ""))
-                safe_set_cell_value(ws, row_num, 4, cr.get("出生日期", ""))
-                safe_set_cell_value(ws, row_num, 5, cr.get("证件号码", ""))
-                safe_set_cell_value(ws, row_num, 6, cr.get("执照号码", ""))
-                safe_set_cell_value(ws, row_num, 7, cr.get("联系方式", ""))
-                _style_name_cell(ws, row_num, 2, name_text)
-            else:
-                for c in range(2, 8): safe_set_cell_value(ws, row_num, c, "无" if c == 2 else "")
+        def _is_valid(row):
+            if row is None:
+                return False
+            name = str(row.get("姓名", "")).strip()
+            return name != "" and name != "无"
 
-        if passenger_list:
-            start_row = 19
-            passenger_start_row = _ensure_passenger_rows(ws, start_row, len(passenger_list))
+        if _is_valid(role_map.get("机长")):
+            _fill_crew_row_by_data(ws, "机长", role_map["机长"])
+        else:
+            _fill_empty_crew_row(ws, "机长")
+
+        if _is_valid(role_map.get("副驾驶")):
+            _fill_crew_row_by_data(ws, "副驾驶", role_map["副驾驶"])
+        else:
+            _fill_empty_crew_row(ws, "副驾驶")
+
+        if _is_valid(role_map.get("乘务")):
+            _fill_crew_row_by_data(ws, "乘务", role_map["乘务"])
+        else:
+            _fill_empty_crew_row(ws, "乘务")
+
+        if _is_valid(role_map.get("机务")):
+            _fill_crew_row_by_data(ws, "机务", role_map["机务"])
+        else:
+            _fill_empty_crew_row(ws, "机务")
+
+        passenger_start_row = None
+        for row in ws.iter_rows(min_row=1, max_row=100):
+            for cell in row:
+                if cell.value and isinstance(cell.value, str):
+                    val = cell.value.strip()
+                    if "姓名" in val and "性别" in val and "出生日期" in val:
+                        passenger_start_row = cell.row + 1; break
+            if passenger_start_row: break
+        if passenger_start_row is None:
+            for row in ws.iter_rows(min_row=1, max_row=100):
+                for cell in row:
+                    if cell.value and isinstance(cell.value, str) and "乘客信息" in cell.value:
+                        passenger_start_row = cell.row + 2; break
+                if passenger_start_row: break
+
+        if passenger_start_row and passenger_list:
+            passenger_start_row = _ensure_passenger_rows(
+                ws, passenger_start_row, len(passenger_list)
+            )
+
+        if passenger_start_row:
             for i, pax in enumerate(passenger_list):
                 row_num = passenger_start_row + i
-                for col in range(1, 7): safe_set_cell_value(ws, row_num, col, None)
+                for col in range(1, 7):
+                    safe_set_cell_value(ws, row_num, col, None)
                 pax_name = extract_chinese_name(pax["name"])
                 safe_set_cell_value(ws, row_num, 1, pax_name)
                 _style_name_cell(ws, row_num, 1, pax_name)
@@ -849,17 +983,20 @@ with tab1:
         wb.save(output); output.seek(0)
         return output
 
-    def fill_template(template_bytes, data, crew_rows, passenger_list, route_display, is_east_china):
-        if is_east_china:
-            return fill_template_east_china(template_bytes, data, crew_rows, passenger_list, route_display)
-        else:
-            return fill_template_general(template_bytes, data, crew_rows, passenger_list, route_display)
+    @st.cache_data(show_spinner=False, max_entries=16)
+    def _cached_fill_template(template_bytes, data_json, crew_json, pax_json, route_display):
+        _data = _json.loads(data_json)
+        _crew = _json.loads(crew_json)
+        _pax = _json.loads(pax_json)
+        buf = fill_template(template_bytes, _data, _crew, _pax, route_display)
+        return buf.getvalue()
 
     def _convert_xlsx_to_pdf(xlsx_bytes):
         import tempfile
         import os as _os
         import pythoncom
         import win32com.client as win32
+
         pythoncom.CoInitialize()
         try:
             with tempfile.TemporaryDirectory() as tmpdir:
@@ -867,6 +1004,7 @@ with tab1:
                 pdf_path = _os.path.join(tmpdir, "input.pdf")
                 with open(xlsx_path, "wb") as f:
                     f.write(xlsx_bytes)
+
                 excel = win32.DispatchEx("Excel.Application")
                 excel.Visible = False
                 excel.DisplayAlerts = False
@@ -876,8 +1014,10 @@ with tab1:
                     wb.Close(SaveChanges=False)
                 finally:
                     excel.Quit()
+
                 if not _os.path.exists(pdf_path):
                     raise RuntimeError("Excel 转换后找不到 PDF 文件")
+
                 with open(pdf_path, "rb") as f:
                     return f.read()
         finally:
@@ -887,117 +1027,120 @@ with tab1:
     def _cached_xlsx_to_pdf(xlsx_bytes):
         return _convert_xlsx_to_pdf(xlsx_bytes)
 
-    data_file = st.file_uploader("上传 GD单（中文版Excel）（.xlsx）", type=["xlsx"], key="data")
-    template_file = st.file_uploader("上传模板（支持总调模板 或 华东、中南模板，系统将自动识别）", type=["xlsx"], key="template")
-    flight_plan_file = st.file_uploader("（可选）上传航段数据导出（北京时间），用于预填文件名", type=["xlsx"], key="flight_plan")
+    data_file = st.file_uploader(
+        "上传 GD单（中文版Excel）（.xlsx）",
+        type=["xlsx"], key="data"
+    )
+    template_file = st.file_uploader(
+        "上传总调模板：Jetops申请一览（只能是总调的模板，华东区内计划需手搓）",
+        type=["xlsx"], key="template"
+    )
+    flight_plan_file = st.file_uploader(
+        "（可选）上传航段数据导出（从Jetops导出北京时间的未来计划），用于预填文件名",
+        type=["xlsx"], key="flight_plan"
+    )
 
     if data_file and template_file:
         try:
-            is_east_china = False
-            file_name = template_file.name.lower()
-            if "华东" in file_name:
-                is_east_china = True
-            elif "总调" in file_name:
-                is_east_china = False
-            else:
-                try:
-                    wb_temp = load_workbook(template_file)
-                    ws_temp = wb_temp.active
-                    for r in range(1, 30):
-                        if ws_temp.cell(r, 1).value == "职务" and ws_temp.cell(r, 2).value == "姓名":
-                            e_val = str(ws_temp.cell(r, 5).value or "")
-                            if "国籍" in e_val:
-                                is_east_china = True
-                            else:
-                                is_east_china = False
-                            break
-                except: pass
-
-            show_cols = CREW_FILL_COLUMNS_EAST if is_east_china else CREW_FILL_COLUMNS_GENERAL
-
             data, crew_list, passenger_list = parse_general_declaration(data_file)
 
             st.subheader("📋 本次机组信息（可编辑）")
-            st.caption("系统已从内置名单匹配出**将要写入的证件号码 / 执照号码 / 联系方式**，如有出入可直接在表格里修改（也可改姓名、性别、出生日期或调整职务）。改完下方下载按钮生成的就是最新数据。")
+            st.caption(
+                "系统已从内置名单匹配出**将要写入的证件号码 / 执照号码 / 联系方式**，"
+                "如有出入可直接在表格里修改（也可改姓名、性别、出生日期或调整职务）。"
+                "改完下方下载按钮生成的就是最新数据。"
+            )
 
             role_order = ["机长", "副驾驶", "乘务", "机务"]
             role_rows = {r: None for r in role_order}
             overflow_rows = []
-            has_unknown_nation = False
 
             for idx, crew in enumerate(crew_list):
                 name_cn = extract_chinese_name(crew["name"])
-                id_val, lic_val = resolve_crew_id_and_license(crew["name"], crew.get("passport_no", ""))
+                id_fill, license_fill = resolve_crew_id_and_license(
+                    crew["name"], crew.get("passport_no", "")
+                )
                 contact = find_contact(crew["name"])
 
-                raw_nat = str(crew.get("nationality", "")).strip().upper()
-                if raw_nat and raw_nat in NATION_MAP:
-                    nation = NATION_MAP[raw_nat]
-                elif raw_nat:
-                    nation = f"待核实({raw_nat})"
-                    has_unknown_nation = True
-                else:
-                    if is_18digit_id_card(id_val):
-                        nation = "中国"
-                    else:
-                        nation = "待核实"
-                        has_unknown_nation = True
-
-                if idx == 0: preferred_role = "机长"
-                elif idx == 1: preferred_role = "副驾驶"
+                if idx == 0:
+                    preferred_role = "机长"
+                elif idx == 1:
+                    preferred_role = "副驾驶"
                 else:
                     gender = str(crew.get("gender", "")).strip()
                     preferred_role = "乘务" if gender in ["女", "Female", "F"] else "机务"
 
                 row = {
-                    "职务": preferred_role, "姓名": name_cn,
-                    "性别": crew.get("gender", ""), "出生日期": crew.get("dob", ""),
-                    "证件号码": id_val, "执照号码": lic_val,
-                    "联系方式": contact, "国籍": nation,
+                    "职务": preferred_role,
+                    "姓名": name_cn,
+                    "性别": crew.get("gender", ""),
+                    "出生日期": crew.get("dob", ""),
+                    "证件号码": id_fill,
+                    "执照号码": license_fill,
+                    "联系方式": contact,
                 }
-                if role_rows.get(preferred_role) is None: role_rows[preferred_role] = row
-                else: overflow_rows.append(row)
+
+                if role_rows.get(preferred_role) is None:
+                    role_rows[preferred_role] = row
+                else:
+                    overflow_rows.append(row)
 
             initial_rows = []
             for role in role_order:
-                if role_rows[role] is not None: initial_rows.append(role_rows[role])
+                if role_rows[role] is not None:
+                    initial_rows.append(role_rows[role])
                 else:
-                    initial_rows.append({"职务": role, "姓名": "无", "性别": "", "出生日期": "", "证件号码": "", "执照号码": "", "联系方式": "", "国籍": ""})
+                    initial_rows.append({
+                        "职务": role,
+                        "姓名": "无",
+                        "性别": "",
+                        "出生日期": "",
+                        "证件号码": "",
+                        "执照号码": "",
+                        "联系方式": "",
+                    })
             initial_rows.extend(overflow_rows)
 
             if overflow_rows:
-                overflow_desc = "、".join(f"{r['姓名']}（当前标为「{r['职务']}」）" for r in overflow_rows)
-                st.warning(f"⚠️ **本次机组共 {len(crew_list)} 人**，而模板机组区通常只有 4 行。以下人员**不会自动写入模板**：\n\n**{overflow_desc}**")
-
-            if has_unknown_nation and is_east_china:
-                st.error("⚠️ **警告：部分机组人员的国籍未能自动识别，请在下方表格中手动修改！**")
+                overflow_desc = "、".join(
+                    f"{r['姓名']}（当前标为「{r['职务']}」）" for r in overflow_rows
+                )
+                st.warning(
+                    f"⚠️ **本次机组共 {len(crew_list)} 人**，而模板机组区只有 **4 行**"
+                    f"（机长 / 副驾驶 / 乘务 / 机务）。以下人员**不会自动写入模板**：\n\n"
+                    f"**{overflow_desc}**\n\n"
+                    f"如需写入模板，请下载后在 Excel 中手动插入行。"
+                )
 
             crew_signature = "|".join([c.get("name", "") for c in crew_list])
             editor_key = f"crew_fill_editor_{abs(hash(crew_signature)) % (10**8)}"
-            df_fill = pd.DataFrame(initial_rows, columns=show_cols)
 
-            col_config = {
-                "职务": st.column_config.SelectboxColumn("职务", options=["机长", "副驾驶", "乘务", "机务"], width="small"),
-                "姓名": st.column_config.TextColumn("姓名", width="medium"),
-                "性别": st.column_config.TextColumn("性别", width="small"),
-                "出生日期": st.column_config.TextColumn("出生日期", width="medium"),
-                "证件号码": st.column_config.TextColumn("证件号码", width="medium"),
-                "执照号码": st.column_config.TextColumn("执照号码", width="medium"),
-            }
-            if is_east_china:
-                col_config["国籍"] = st.column_config.TextColumn("国籍", width="small")
-            else:
-                col_config["联系方式"] = st.column_config.TextColumn("联系方式", width="medium")
-
+            df_fill = pd.DataFrame(initial_rows, columns=CREW_FILL_COLUMNS)
             edited_crew_df = st.data_editor(
-                df_fill, 
-                num_rows="dynamic", 
-                width="stretch", 
-                height=280, 
-                key=editor_key, 
-                column_config=col_config
+                df_fill,
+                num_rows="dynamic",
+                use_container_width=True,
+                height=280,
+                key=editor_key,
+                column_config={
+                    "职务": st.column_config.SelectboxColumn(
+                        "职务",
+                        options=["机长", "副驾驶", "乘务", "机务"],
+                        width="small",
+                    ),
+                    "姓名": st.column_config.TextColumn("姓名", width="medium"),
+                    "性别": st.column_config.TextColumn("性别", width="small"),
+                    "出生日期": st.column_config.TextColumn("出生日期", width="medium"),
+                    "证件号码": st.column_config.TextColumn("证件号码", width="medium"),
+                    "执照号码": st.column_config.TextColumn("执照号码", width="medium"),
+                    "联系方式": st.column_config.TextColumn("联系方式", width="medium"),
+                },
             )
-            crew_for_template = edited_crew_df.fillna("").astype(str).to_dict("records") if not edited_crew_df.empty else []
+
+            crew_for_template = (
+                edited_crew_df.fillna("").astype(str).to_dict("records")
+                if not edited_crew_df.empty else []
+            )
 
             st.markdown("---")
 
@@ -1012,7 +1155,9 @@ with tab1:
             if flight_plan_file is not None and reg and from_code and to_code:
                 route_df = parse_route_plan(flight_plan_file)
                 if route_df is not None:
-                    matched_flight = find_matching_flight(route_df, reg, from_code, to_code, gd_date=gd_date_parsed)
+                    matched_flight = find_matching_flight(
+                        route_df, reg, from_code, to_code, gd_date=gd_date_parsed
+                    )
                     if matched_flight is not None:
                         built = build_route_from_flight(matched_flight)
                         if built:
@@ -1020,7 +1165,10 @@ with tab1:
                             flight_no = str(matched_flight.get('航班号', '') or '').strip()
                             row_date = _extract_row_date(matched_flight.get('出发日期'))
                             date_hint = row_date.strftime("%m-%d") if row_date else "?"
-                            matched_note = f"✅ 已从航段数据自动匹配到飞行计划（航班号 {flight_no}，{from_code} → {to_code}，{date_hint}），已预填到下方输入框"
+                            matched_note = (
+                                f"✅ 已从航段数据自动匹配到飞行计划（航班号 {flight_no}，"
+                                f"{from_code} → {to_code}，{date_hint}），已预填到下方输入框"
+                            )
 
             if not default_route:
                 if date_str and from_code and to_code:
@@ -1031,7 +1179,10 @@ with tab1:
 
             if not matched_note and flight_plan_file is not None and reg and from_code and to_code:
                 date_hint = f"{gd_date_parsed[0]}月{gd_date_parsed[1]}日" if gd_date_parsed else "未知日期"
-                st.info(f"ℹ️ 航段数据中未找到 {reg} {from_code}→{to_code}（{date_hint}）的匹配记录，已使用 GD单 信息生成默认值。")
+                st.info(
+                    f"ℹ️ 航段数据中未找到 {reg} {from_code}→{to_code}（{date_hint}）的匹配记录，"
+                    f"已使用 GD单 信息生成默认值。"
+                )
 
             raw_route = st.text_input(
                 "从Jetops复制航班信息并适当调整起落时间 比如： F B652S 08:00 - 14:00  柬埔寨金边 德崇 - 日本东京 羽田",
@@ -1039,23 +1190,43 @@ with tab1:
             ).strip()
 
             with_time = parse_with_time_route(raw_route, date_display)
-            route_display = with_time if (with_time != raw_route and with_time is not None) else (raw_route if raw_route else default_route)
+            if with_time != raw_route and with_time is not None:
+                route_display = with_time
+            else:
+                route_display = raw_route if raw_route else default_route
 
             no_time = parse_no_time_route(raw_route, date_display)
-            file_name_base = no_time if no_time is not None else (f"{date_display} {reg} {from_code}-{to_code}" if reg and from_code and to_code else route_display)
+            if no_time is not None:
+                file_name_base = no_time
+            else:
+                reg_fallback = data.get("reg", "")
+                if reg_fallback and from_code and to_code:
+                    file_name_base = f"{date_display} {reg_fallback} {from_code}-{to_code}"
+                else:
+                    file_name_base = route_display
 
-            safe_file_name = re.sub(r'[\\/*?:"<>|]', "_", file_name_base).strip() or "备案表"
+            safe_file_name = re.sub(r'[\\/*?:"<>|]', "_", file_name_base).strip()
+            if not safe_file_name:
+                safe_file_name = "备案表"
             download_file_name = f"{safe_file_name}.xlsx"
 
             try:
-                result_bytes = fill_template(template_file, data, crew_for_template, passenger_list, route_display, is_east_china).getvalue()
-            except Exception as e:
-                st.error(f"❌ 生成失败：{e}")
-                st.stop()
+                result_bytes = _cached_fill_template(
+                    template_file.getvalue(),
+                    _json.dumps(data, ensure_ascii=False, default=str),
+                    _json.dumps(crew_for_template, ensure_ascii=False, default=str),
+                    _json.dumps(passenger_list, ensure_ascii=False, default=str),
+                    route_display,
+                )
+            except Exception:
+                result_bytes = fill_template(
+                    template_file, data, crew_for_template, passenger_list, route_display
+                ).getvalue()
 
             st.download_button(
                 label="⬇️ 下载填充后的备案表",
-                data=result_bytes, file_name=download_file_name,
+                data=result_bytes,
+                file_name=download_file_name,
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             )
 
@@ -1077,7 +1248,7 @@ with tab1:
 
         except Exception as e:
             st.error(f"❌ 处理失败：{e}")
-            st.stop()
+            st.exception(e)
     else:
         st.info("👆 请同时上传 GD单 和 模板文件。")
 # ================================================================
