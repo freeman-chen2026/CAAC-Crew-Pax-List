@@ -2797,7 +2797,6 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
             parts.append(nation_label)
         return " ".join(parts)
 
-    # ★ 核心修改 1：重写正则，采用 middle 匹配，兼容所有机型 / 外机呼号格式
     PC_APPROVAL_RE = re.compile(
         r"^(?P<reg>[A-Z0-9\-]+)\s+"
         r"(?P<middle>.*?)\s+"
@@ -2810,7 +2809,7 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
 
     def pc_parse_approval_line(text):
         text = text.strip()
-        
+
         m = PC_APPROVAL_RE.match(text)
         if not m:
             return None
@@ -2824,17 +2823,14 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
         date_raw = m.group("date").upper()
         rest = m.group("rest").strip()
 
-        # 智能解析 middle (机号/呼号/机型)
         middle_parts = [p.strip() for p in middle.split() if p.strip()]
         ac_type = ""
         flight_no = ""
 
         if pc_is_b_reg(reg):
-            # 国内机，第二个词通常是机型
             if middle_parts:
                 ac_type = middle_parts[-1]
         else:
-            # 外机处理逻辑
             if len(middle_parts) == 1:
                 if middle_parts[0].upper() == reg:
                     flight_no = middle_parts[0]
@@ -3518,7 +3514,7 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
             p = on_end
             while p < len(full_text) and full_text[p] in ' \t\xa0':
                 p += 1
-            m_svc = re.match(r'(U/H|N/M)', full_text[p:], re.IGNORECASE)
+            m_svc = re.match(r'(U/H|N/M|FERRY|BUSINESS)', full_text[p:], re.IGNORECASE)
             if m_svc:
                 insert_pos = p + m_svc.end()
             else:
@@ -3871,7 +3867,6 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
             if approval.get("dup_prefix"):
                 dup_prefix_paras.append((p, approval["dup_prefix"]))
 
-            # ★ 核心修改 2：放宽外机跳过条件，只有未带机型才当成“未批已申请”跳过
             if not approval["is_domestic"] and approval["flight_no"] and not approval["type"]:
                 unapproved_keys.add(
                     (approval["reg"], approval["dep"], approval["arr"])
@@ -3911,17 +3906,23 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
                 _exp_nation = nation_for_expected if nation_for_expected else "机组未定"
                 expected_line = pc_build_expected_line(excel_row, _exp_nation)
 
-            if excel_row is not None and approval["is_domestic"]:
+            # ★★★ 本次修改 ①：去掉 is_domestic 限制，让外机也进入补 service 流程 ★★★
+            if excel_row is not None:
                 has_service = bool(approval["service"])
                 remark = approval["remark"] or ""
                 has_nation = ("中国籍" in remark) or ("外籍" in remark)
 
                 need_service = not has_service
-                need_nation = not has_nation
+                # ★★★ 本次修改 ②：国籍只给国内机补 ★★★
+                need_nation = (not has_nation) and approval["is_domestic"]
 
                 if need_service or need_nation:
                     _ferry = pc_is_ferry_use(excel_row["use"])
-                    _svc = "N/M" if _ferry else "U/H"
+                    # ★★★ 本次修改 ③：外机用 FERRY / BUSINESS，国内机保持 N/M / U/H ★★★
+                    if approval["is_domestic"]:
+                        _svc = "N/M" if _ferry else "U/H"
+                    else:
+                        _svc = "FERRY" if _ferry else "BUSINESS"
 
                     _nation = ""
                     if need_nation:
@@ -4210,14 +4211,13 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
                 continue
 
             reg_written = pc_parse_pending_reg(raw_text)
-            
-            # ★ 核心修改 3：标记已用 Excel，防止末尾重复报缺失
+
             for r in excel_rows:
-                if (r["reg"] == reg_written and 
-                    r["dep"] == dep and 
-                    r["arr"] == arr and 
-                    r["dep_date"] and 
-                    r["dep_date"].month == month and 
+                if (r["reg"] == reg_written and
+                    r["dep"] == dep and
+                    r["arr"] == arr and
+                    r["dep_date"] and
+                    r["dep_date"].month == month and
                     r["dep_date"].day == day):
                     used_excel.add(r["_idx"])
                     break
