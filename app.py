@@ -928,7 +928,7 @@ with tab1:
     # 页面逻辑
     # ================================================================
     data_file = st.file_uploader("上传 GD单（中文版Excel）（.xlsx）", type=["xlsx"], key="data")
-    template_file = st.file_uploader("上传模板（支持总调模板 或 华东、中南模板，系统将自动识别）", type=["xlsx"], key="template")
+    template_file = st.file_uploader("上传模板（支持总调模板 或 华东、中南模板，系统将自动识别,但是需要手动添加盖章）", type=["xlsx"], key="template")
     flight_plan_file = st.file_uploader("（可选）上传航段数据导出（北京时间），用于预填文件名", type=["xlsx"], key="flight_plan")
 
     if data_file and template_file:
