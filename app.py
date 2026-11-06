@@ -49,9 +49,6 @@ tab1, tab2, tab3, tab4, tab5 = st.tabs([
     "📊 功能5：内地批复执行情况统计表",
 ])
 
-# ================================================================
-# 功能1：备案表生成（支持总调 / 华东中南模板）
-# ================================================================
 with tab1:
     from copy import copy as _copy_style
     from openpyxl.styles import Font
@@ -269,6 +266,61 @@ with tab1:
         "N7777U": "GLEX", "N777ZH": "GLF6", "N88AY": "GLF5", "T7178HT": "GL7T",
         "T7CJK": "GLEX", "VPCSZ": "GL7T", "VPCVA": "GLF6", "B652Q": "GLF4",
         "B652S": "GLF4", "B65AP": "GLF4",
+    }
+
+    # ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
+    # 华东机场四字码 → 中文城市名（仅用于华东模板的下载文件名）
+    # 规则：
+    #   - 一般取 "城市/机场" 里的城市名（斜杠前）
+    #   - 上海三场特殊处理，取机场名（虹桥 / 龙华 / 浦东）
+    #   - 不在表内的机场原样输出四字码（如境外机场 VHHH 保持 VHHH）
+    # ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
+    EAST_CHINA_AIRPORT_MAP = {
+        # 上海三场：取斜杠后的机场名
+        "ZSSS": "虹桥",
+        "ZSSL": "龙华",
+        "ZSPD": "浦东",
+        # 其他华东机场：取城市名
+        "ZSAQ": "安庆",
+        "ZSBB": "蚌埠",
+        "ZSCG": "常州",
+        "ZGOW": "揭阳",
+        "ZSJH": "池州",
+        "ZSFZ": "福州",
+        "ZSGZ": "赣州",
+        "ZSRJ": "赣州",
+        "ZSHC": "杭州",
+        "ZSOF": "合肥",
+        "ZSSH": "淮安",
+        "ZSTX": "黄山",
+        "ZSGS": "井冈山",
+        "ZSJD": "景德镇",
+        "ZSJJ": "九江",
+        "ZSLO": "连城",
+        "ZSLG": "连云港",
+        "ZSLQ": "台州",
+        "ZGMX": "梅州",
+        "ZSCN": "南昌",
+        "ZSNJ": "南京",
+        "ZSNT": "南通",
+        "ZSNB": "宁波",
+        "ZSJU": "衢州",
+        "ZSQZ": "泉州",
+        "ZSAM": "厦门",
+        "ZSSZ": "苏州",
+        "ZSWZ": "温州",
+        "ZSWX": "无锡",
+        "ZSWU": "芜湖",
+        "ZSWY": "武夷山",
+        "ZSXZ": "徐州",
+        "ZSYN": "盐城",
+        "ZSYA": "扬州",
+        "ZSYC": "宜春",
+        "ZSYW": "义乌",
+        "ZSZS": "舟山",
+        "ZSSR": "上饶",
+        "ZSSM": "三明",
+        "ZSWA": "芜湖",
     }
 
     def get_aircraft_type(reg, gd_type=""):
@@ -925,6 +977,45 @@ with tab1:
             return fill_template_general(template_bytes, data, crew_rows, passenger_list, route_display)
 
     # ================================================================
+    # XLSX → PDF（仅 Windows + 有 Excel + 有 pywin32 时可用）
+    # ================================================================
+    def _convert_xlsx_to_pdf(xlsx_bytes):
+        import tempfile
+        import os as _os
+        import pythoncom
+        import win32com.client as win32
+
+        pythoncom.CoInitialize()
+        try:
+            with tempfile.TemporaryDirectory() as tmpdir:
+                xlsx_path = _os.path.join(tmpdir, "input.xlsx")
+                pdf_path = _os.path.join(tmpdir, "input.pdf")
+                with open(xlsx_path, "wb") as f:
+                    f.write(xlsx_bytes)
+
+                excel = win32.DispatchEx("Excel.Application")
+                excel.Visible = False
+                excel.DisplayAlerts = False
+                try:
+                    wb = excel.Workbooks.Open(xlsx_path)
+                    wb.ExportAsFixedFormat(0, pdf_path)
+                    wb.Close(SaveChanges=False)
+                finally:
+                    excel.Quit()
+
+                if not _os.path.exists(pdf_path):
+                    raise RuntimeError("Excel 转换后找不到 PDF 文件")
+
+                with open(pdf_path, "rb") as f:
+                    return f.read()
+        finally:
+            pythoncom.CoUninitialize()
+
+    @st.cache_data(show_spinner=False, max_entries=8)
+    def _cached_xlsx_to_pdf(xlsx_bytes):
+        return _convert_xlsx_to_pdf(xlsx_bytes)
+
+    # ================================================================
     # 页面逻辑
     # ================================================================
     data_file = st.file_uploader("上传 GD单（中文版Excel）（.xlsx）", type=["xlsx"], key="data")
@@ -1093,8 +1184,20 @@ with tab1:
             with_time = parse_with_time_route(raw_route, date_display)
             route_display = with_time if (with_time != raw_route and with_time is not None) else (raw_route if raw_route else default_route)
 
-            no_time = parse_no_time_route(raw_route, date_display)
-            file_name_base = no_time if no_time is not None else (f"{date_display} {reg} {from_code}-{to_code}" if reg and from_code and to_code else route_display)
+            # ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
+            # 文件名生成（华东 / 总调 分开）
+            #  - 华东模板：公务飞行计划信息备案表（日期 机号 机号 起点-终点）
+            #    起点/终点优先按 EAST_CHINA_AIRPORT_MAP 映射为中文城市名，
+            #    上海三场固定为 虹桥 / 龙华 / 浦东；表外的机场原样输出四字码
+            #  - 总调模板：沿用原来的命名逻辑（保持不变）
+            # ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
+            if is_east_china and date_display and reg and from_code and to_code:
+                from_cn = EAST_CHINA_AIRPORT_MAP.get(str(from_code).strip().upper(), from_code)
+                to_cn = EAST_CHINA_AIRPORT_MAP.get(str(to_code).strip().upper(), to_code)
+                file_name_base = f"公务飞行计划信息备案表（{date_display} {reg} {reg} {from_cn}-{to_cn}）"
+            else:
+                no_time = parse_no_time_route(raw_route, date_display)
+                file_name_base = no_time if no_time is not None else (f"{date_display} {reg} {from_code}-{to_code}" if reg and from_code and to_code else route_display)
 
             safe_file_name = re.sub(r'[\\/*?:"<>|]', "_", file_name_base).strip() or "备案表"
             download_file_name = f"{safe_file_name}.xlsx"
@@ -1110,6 +1213,22 @@ with tab1:
                 data=result_bytes, file_name=download_file_name,
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             )
+
+            # ★ PDF 下载：仅 Windows + Excel + pywin32 环境生效，文件名与 xlsx 共用
+            if _SUPPORTS_PDF:
+                try:
+                    with st.spinner("正在生成 PDF..."):
+                        pdf_bytes = _cached_xlsx_to_pdf(result_bytes)
+                    pdf_file_name = download_file_name.replace(".xlsx", ".pdf")
+                    st.download_button(
+                        label="⬇️ 下载 PDF 版本",
+                        data=pdf_bytes,
+                        file_name=pdf_file_name,
+                        mime="application/pdf",
+                    )
+                except Exception as _pdf_err:
+                    st.warning(f"PDF 生成失败：{_pdf_err}")
+
             st.caption("⏳ 输入文件名之后稍等3秒钟后再点击下载")
 
         except Exception as e:
@@ -1117,6 +1236,14 @@ with tab1:
             st.stop()
     else:
         st.info("👆 请同时上传 GD单 和 模板文件。")
+
+
+
+
+
+
+
+
 # ================================================================
 # 功能2：世界时行程 + 飞越&香港邮件（签名内嵌到 textarea）
 # ================================================================
