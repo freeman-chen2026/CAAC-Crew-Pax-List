@@ -2679,6 +2679,35 @@ window.addEventListener('DOMContentLoaded',()=>{const s=loadInput();if(s)ie.valu
     components.html(G_HTML, height=900, scrolling=True)
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 # ================================================================
 # 功能4：批复核对
 # ================================================================
@@ -4173,18 +4202,9 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
                 red_parts.append(approval["service"])
                 highlight_parts.append(approval["service"])
 
-            if text_flight is not None:
-                text_ferry = text_flight.get("is_ferry", False)
-                if excel_ferry and not text_ferry:
-                    diffs.append("文本漏 F 标记")
-                    if approval["service"] and approval["service"] not in red_parts:
-                        red_parts.append(approval["service"])
-                        highlight_parts.append(approval["service"])
-                elif not excel_ferry and text_ferry:
-                    diffs.append("文本多标 F 标记")
-                    if approval["service"] and approval["service"] not in red_parts:
-                        red_parts.append(approval["service"])
-                        highlight_parts.append(approval["service"])
+            # ★★★ 本次修改 ④：删除"文本漏/多 F 标记"检查 ★★★
+            # 理由：service 正确性以 Excel「用途」字段为唯一依据；文本仅用于核对机组国籍。
+            # 原代码中检查 text_flight["is_ferry"] 与 excel_ferry 是否一致的一段已移除。
 
             if approval["is_domestic"]:
                 if text_flight:
@@ -4612,6 +4632,33 @@ W272,"Andrew Nigel, KING",Andrew.king@aero.bombardier.com
             mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
             key="pc_download_btn",
         )
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 # ================================================================
 # 功能5：内地批复执行情况统计表
