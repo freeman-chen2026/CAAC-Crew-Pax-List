@@ -5129,34 +5129,31 @@ async function parseWordDocx(buf) {
     while ((tm = tRegex.exec(pXml)) !== null) text += tm[1];
     text = decodeXmlEntities(text).trim();
     
-    // ★ 只识别【青绿色】底色
-    let isColored = false;
+    // ★ 修改：只识别【加粗】作为标记
+    let isBold = false;
     
-    // 1. 检查高亮色（Word自带的“文本突出显示颜色”里的青绿色系）
-    const hlMatch = pXml.match(/<w:highlight\b[^>]*?w:val="([^"]+)"/);
-    if (hlMatch) {
-        const color = hlMatch[1].toLowerCase();
-        if (['green', 'cyan', 'darkgreen', 'darkcyan', 'brightgreen'].includes(color)) {
-            isColored = true;
+    // 遍历段落内的每一个文本块 <w:r>
+    const runRegex = /<w:r\b[^>]*>([\s\S]*?)<\/w:r>/g;
+    let rMatch;
+    while ((rMatch = runRegex.exec(pXml)) !== null) {
+        const runXml = rMatch[1];
+        let runText = '';
+        const rtRegex = /<w:t\b[^>]*>([\s\S]*?)<\/w:t>/g;
+        let rtMatch;
+        while ((rtMatch = rtRegex.exec(runXml)) !== null) {
+            runText += rtMatch[1];
         }
-    }
-    
-    // 2. 检查底纹色（自定义填充的青绿色/浅绿色 Hex 色值）
-    if (!isColored) {
-        const shdRegex = /<w:shd\b[^>]*?w:fill="([^"]+)"/g;
-        let shdMatch;
-        // 兼容各种常用的青绿、深绿、浅绿、青蓝色值
-        const greenRegex = /^(00B050|00B0F0|92D050|00FF00|00FFFF|C6EFCE|A9D08E|33CCCC|66CCCC|00CCFF|CCFFFF|00FFCC|00CC99|99FF99|CCFFCC|00FF99|00CC66|33CC33|66FF66|00FA9A|90EE90|32CD32)$/i;
-        while ((shdMatch = shdRegex.exec(pXml)) !== null) {
-            const fill = shdMatch[1].toUpperCase();
-            if (greenRegex.test(fill)) {
-                isColored = true;
-                break;
-            }
+        runText = decodeXmlEntities(runText).trim();
+
+        // 如果这个文本块有实际文字，并且包含加粗标签 <w:b>
+        // （兼容 <w:b/>, <w:b w:val="true"/>, <w:b w:val="1"/>）
+        if (runText && /<w:b(?:\s+w:val="(?:true|1)")?\s*\/?>/i.test(runXml)) {
+            isBold = true;
+            break;
         }
     }
 
-    if (text) paragraphs.push({ text, isColored });
+    if (text) paragraphs.push({ text, isMarked: isBold });
   }
 
   // 必须严格包含：机号 机型 四字码起飞时间 到达时间四字码 ON 日期
@@ -5166,7 +5163,7 @@ async function parseWordDocx(buf) {
 
   for (const p of paragraphs) {
     const text = p.text;
-    const isColored = p.isColored;
+    const isMarked = p.isMarked;
 
     // 严格校验：只处理完全符合标准航班格式的段落
     const m = text.match(flightRe);
@@ -5176,8 +5173,8 @@ async function parseWordDocx(buf) {
     if (!month) continue;
     const reg = m[1].toUpperCase();
 
-    // 只有在完全符合航班格式的前提下，带有底色的才计入申请批复
-    if (isColored) {
+    // 只有完全符合航班格式，且带加粗标记的才计入申请批复
+    if (isMarked) {
         blueApplied[reg] = (blueApplied[reg] || 0) + 1;
     }
 
@@ -5421,7 +5418,7 @@ function render() {
       <div class="chip bad"><b>${totalLate}</b><span>非准点</span></div>
       <div class="chip info"><b>${totalSobt}</b><span>SOBT 已匹配</span></div>
       ${totalNoSobt ? `<div class="chip"><b>${totalNoSobt}</b><span>无 SOBT（按 ETD）</span></div>` : ''}
-      ${totalBlue ? `<div class="chip info"><b>${totalBlue}</b><span>带底色批复计划</span></div>` : ''}
+      ${totalBlue ? `<div class="chip info"><b>${totalBlue}</b><span>带加粗批复计划</span></div>` : ''}
     </div>`;
 
   if (!regs.length) {
@@ -5493,7 +5490,7 @@ function render() {
   // 第二页：申请情况预览
   let applyHtml = '';
   if (Object.keys(blueList).length > 0) {
-    applyHtml = `<div class="section-title">第二页：申请情况预览（带底色计划）</div>
+    applyHtml = `<div class="section-title">第二页：申请情况预览（加粗标记计划）</div>
       <table class="pt">
         <thead><tr><th>飞机</th><th>正常批复架次</th><th>总批复架次</th></tr></thead>
         <tbody>`;
@@ -5787,7 +5784,7 @@ async function applyToTemplate() {
           const titleChange2 = await patchTitleDate(zip, applySheetXml, applyAoa, '申请情况日度汇总', newDateText);
           if (titleChange2 && titleChange2.sheetXml) applySheetXml = titleChange2.sheetXml;
 
-          // 2. 清除并填入蓝底数据
+          // 2. 清除并填入数据
           const applyClearUpdates = {};
           const applyFillUpdates = {};
           const applyFinalValues = {};
@@ -5937,7 +5934,7 @@ async function handleFile(file, type) {
       state.wordRecords = records;
       state.blueApplied = blueApplied;
       state.wordName = file.name;
-      $('wordNameBox').textContent = file.name + `（${records.length} 条，带底色 ${Object.values(blueApplied).reduce((a,b)=>a+b,0)} 条）`;
+      $('wordNameBox').textContent = file.name + `（${records.length} 条，带加粗 ${Object.values(blueApplied).reduce((a,b)=>a+b,0)} 条）`;
       $('dropWord').classList.add('loaded');
     }
     showStatus('');
