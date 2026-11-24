@@ -1024,7 +1024,7 @@ with tab1:
     # ================================================================
     data_file = st.file_uploader("上传 GD单（中文版Excel）（.xlsx）", type=["xlsx"], key="data")
     template_file = st.file_uploader("上传模板（支持总调模板 或 华东中南模板，系统将自动识别,华东中南模板需手动添加盖章，模板已存共享盘：\航班计划申请\公务飞行计划信息备案表\备案表模板）", type=["xlsx"], key="template")
-    flight_plan_file = st.file_uploader("（可选）上传航段数据导出（北京时间），用于预填文件名", type=["xlsx"], key="flight_plan")
+    flight_plan_file = st.file_uploader("（可选）上传航段数据导出（北京时间），用于预填文件名//涉及TCI088需手动调整表格内Callsign以及文件名（文件名写的是航班号，非注册号，不能有横杠-）", type=["xlsx"], key="flight_plan")
 
     if data_file and template_file:
         try:
